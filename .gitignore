@@ -22,3 +22,10 @@ logs
 .env
 .env.*
 !.env.example
+
+# App data (sqlite)
+data/*
+!data/.gitkeep
+
+# Vitest
+coverage
