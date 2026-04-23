@@ -1,29 +1,29 @@
-export type SlashCommand =
-  | { kind: 'say', body: string }
-  | { kind: 'whisper', target: string, body: string }
-  | { kind: 'emote', body: string }
-  | { kind: 'ooc', body: string }
-  | { kind: 'shout', body: string }
-  | { kind: 'roll', expr: string, hidden: boolean }
-  | { kind: 'dm', target: string, body: string }
-  | { kind: 'npc', npcName: string, body: string }
-  | { kind: 'announce', body: string }
-  | { kind: 'mute', target: string, minutes: number | null }
-  | { kind: 'unmute', target: string }
-  | { kind: 'kick', target: string, reason: string | null }
-  | { kind: 'ban', target: string, reason: string | null }
-  | { kind: 'unban', target: string }
-  | { kind: 'move', target: string, areaId: string }
-  | { kind: 'close', areaId: string }
-  | { kind: 'open', areaId: string }
-  | { kind: 'weather', areaId: string | null, code: string, intensity: number | null }
-  | { kind: 'weather', areaId: string | null, clear: true }
-  | { kind: 'setname', areaId: string, newName: string }
-  | { kind: 'status', areaId: string, status: string }
+export type SlashCommand
+  = | { kind: 'say', body: string }
+    | { kind: 'whisper', target: string, body: string }
+    | { kind: 'emote', body: string }
+    | { kind: 'ooc', body: string }
+    | { kind: 'shout', body: string }
+    | { kind: 'roll', expr: string, hidden: boolean }
+    | { kind: 'dm', target: string, body: string }
+    | { kind: 'npc', npcName: string, body: string }
+    | { kind: 'announce', body: string }
+    | { kind: 'mute', target: string, minutes: number | null }
+    | { kind: 'unmute', target: string }
+    | { kind: 'kick', target: string, reason: string | null }
+    | { kind: 'ban', target: string, reason: string | null }
+    | { kind: 'unban', target: string }
+    | { kind: 'move', target: string, areaId: string }
+    | { kind: 'close', areaId: string }
+    | { kind: 'open', areaId: string }
+    | { kind: 'weather', areaId: string | null, code: string, intensity: number | null }
+    | { kind: 'weather', areaId: string | null, clear: true }
+    | { kind: 'setname', areaId: string, newName: string }
+    | { kind: 'status', areaId: string, status: string }
 
-export type ParseResult =
-  | { ok: true, command: SlashCommand }
-  | { ok: false, error: string }
+export type ParseResult
+  = | { ok: true, command: SlashCommand }
+    | { ok: false, error: string }
 
 function err(error: string): ParseResult {
   return { ok: false, error }

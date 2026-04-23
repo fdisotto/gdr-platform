@@ -44,7 +44,11 @@ const footer = '\n]\n'
 
 const next = header + body + footer
 const current = (() => {
-  try { return readFileSync(OUT, 'utf8') } catch { return '' }
+  try {
+    return readFileSync(OUT, 'utf8')
+  } catch {
+    return ''
+  }
 })()
 
 if (current !== next) {

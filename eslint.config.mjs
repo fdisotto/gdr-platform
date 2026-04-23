@@ -2,5 +2,12 @@
 import withNuxt from './.nuxt/eslint.config.mjs'
 
 export default withNuxt(
-  // Your custom configs here
+  {
+    ignores: [
+      // File generato che embede SQL drizzle (contiene tab originali)
+      'server/db/migrations.generated.ts',
+      // Migration SQL (drizzle usa tab per default)
+      'server/db/migrations/**/*.sql'
+    ]
+  }
 )

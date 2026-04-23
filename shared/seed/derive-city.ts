@@ -1,4 +1,4 @@
-import { AREAS, AREA_IDS, type AreaId } from '~~/shared/map/areas'
+import { AREAS, type AreaId } from '~~/shared/map/areas'
 import { mulberry32, seedFromString } from '~~/shared/seed/prng'
 
 export type AreaStatus = 'intact' | 'infested' | 'ruined' | 'closed'
@@ -27,20 +27,20 @@ const CITY_NAMES = [
 const CITY_SUFFIXES = ['— Quarantena', '— Zona 3', '— Settore C', '— Focolaio 7', '']
 
 const AREA_NAME_VARIANTS: Partial<Record<AreaId, string[]>> = {
-  piazza:       ['Piazza del Mercato', 'Piazza dei Martiri', 'Piazza Grande'],
-  giardino:     ['Parco dei Caduti', 'Orto Abbandonato', 'Giardino delle Statue'],
+  piazza: ['Piazza del Mercato', 'Piazza dei Martiri', 'Piazza Grande'],
+  giardino: ['Parco dei Caduti', 'Orto Abbandonato', 'Giardino delle Statue'],
   supermercato: ['Alimentari Lucia', 'Discount Stella', 'Centro Spesa'],
-  ospedale:     ['Clinica San Giuda', 'Ambulatorio Nord', 'Pronto Soccorso'],
-  chiesa:       ['Chiesa di Santa Morte', 'Duomo Vecchio', 'Cappella del Sangue'],
-  polizia:      ['Caserma Alfa', 'Posto di Blocco', 'Comando Locale'],
-  scuola:       ['Liceo Dante', 'Elementari Manzoni', 'Istituto Tecnico'],
-  rifugio:      ['Bunker 47', 'Rifugio Militare', 'Sotterraneo'],
-  benzinaio:    ['Esso Abbandonato', 'Stazione Q8', 'Pompa Rossa'],
-  case:         ['Quartiere Est', 'Vicolo dei Gatti', 'Condominio Alto'],
-  fogne:        ['Galleria Pluviale', 'Collettore Sud', 'Condotto Nero'],
-  porto:        ['Darsena', 'Molo Vecchio', 'Scali Est'],
-  radio:        ['Stazione Radio 104', 'Antenna Mastodonte', 'Ripetitore'],
-  ponte:        ['Ponte della Morte', 'Viadotto Crollato', 'Passerella']
+  ospedale: ['Clinica San Giuda', 'Ambulatorio Nord', 'Pronto Soccorso'],
+  chiesa: ['Chiesa di Santa Morte', 'Duomo Vecchio', 'Cappella del Sangue'],
+  polizia: ['Caserma Alfa', 'Posto di Blocco', 'Comando Locale'],
+  scuola: ['Liceo Dante', 'Elementari Manzoni', 'Istituto Tecnico'],
+  rifugio: ['Bunker 47', 'Rifugio Militare', 'Sotterraneo'],
+  benzinaio: ['Esso Abbandonato', 'Stazione Q8', 'Pompa Rossa'],
+  case: ['Quartiere Est', 'Vicolo dei Gatti', 'Condominio Alto'],
+  fogne: ['Galleria Pluviale', 'Collettore Sud', 'Condotto Nero'],
+  porto: ['Darsena', 'Molo Vecchio', 'Scali Est'],
+  radio: ['Stazione Radio 104', 'Antenna Mastodonte', 'Ripetitore'],
+  ponte: ['Ponte della Morte', 'Viadotto Crollato', 'Passerella']
 }
 
 function pick<T>(rng: () => number, list: readonly T[]): T {

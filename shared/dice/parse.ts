@@ -8,9 +8,9 @@ export interface DiceExpr {
   modifier: number
 }
 
-export type ParseResult =
-  | { ok: true, expr: DiceExpr }
-  | { ok: false, error: string }
+export type ParseResult
+  = | { ok: true, expr: DiceExpr }
+    | { ok: false, error: string }
 
 const TERM_RE = /^(\d+)d(\d+)$/
 

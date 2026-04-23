@@ -3,7 +3,9 @@ import { createTestDb, type Db } from '~~/server/db/client'
 import { createParty, findParty, verifyMaster } from '~~/server/services/parties'
 
 let db: Db
-beforeEach(() => { db = createTestDb() })
+beforeEach(() => {
+  db = createTestDb()
+})
 
 describe('parties service', () => {
   it('createParty genera seed uuid, cityName, masterToken in chiaro e master player', async () => {

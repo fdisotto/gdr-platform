@@ -14,14 +14,14 @@ export interface WeatherState {
 }
 
 const LABELS: Record<WeatherCode, string> = {
-  clear:   'Cielo limpido',
-  overcast:'Cielo coperto',
-  fog:     'Nebbia persistente',
-  rain:    'Pioggia sottile',
+  clear: 'Cielo limpido',
+  overcast: 'Cielo coperto',
+  fog: 'Nebbia persistente',
+  rain: 'Pioggia sottile',
   ashfall: 'Pioggia di cenere',
-  redSky:  'Cielo rosso',
-  storm:   'Tempesta',
-  night:   'Notte fonda'
+  redSky: 'Cielo rosso',
+  storm: 'Tempesta',
+  night: 'Notte fonda'
 }
 
 type Season = 'winter' | 'spring' | 'summer' | 'autumn'
@@ -45,36 +45,36 @@ function dayPartOf(date: Date): DayPart {
 // Peso base per combinazione stagione+dayPart. Valori più alti = più probabile.
 const BASE_WEIGHTS: Record<Season, Record<DayPart, Record<WeatherCode, number>>> = {
   winter: {
-    day:   { clear: 2, overcast: 4, fog: 4, rain: 1, ashfall: 0, redSky: 0, storm: 0, night: 0 },
-    dusk:  { clear: 1, overcast: 3, fog: 5, rain: 1, ashfall: 0, redSky: 1, storm: 0, night: 2 },
+    day: { clear: 2, overcast: 4, fog: 4, rain: 1, ashfall: 0, redSky: 0, storm: 0, night: 0 },
+    dusk: { clear: 1, overcast: 3, fog: 5, rain: 1, ashfall: 0, redSky: 1, storm: 0, night: 2 },
     night: { clear: 0, overcast: 2, fog: 5, rain: 0, ashfall: 0, redSky: 0, storm: 0, night: 6 }
   },
   spring: {
-    day:   { clear: 5, overcast: 3, fog: 1, rain: 2, ashfall: 0, redSky: 0, storm: 1, night: 0 },
-    dusk:  { clear: 3, overcast: 3, fog: 2, rain: 2, ashfall: 0, redSky: 2, storm: 1, night: 1 },
+    day: { clear: 5, overcast: 3, fog: 1, rain: 2, ashfall: 0, redSky: 0, storm: 1, night: 0 },
+    dusk: { clear: 3, overcast: 3, fog: 2, rain: 2, ashfall: 0, redSky: 2, storm: 1, night: 1 },
     night: { clear: 1, overcast: 2, fog: 2, rain: 1, ashfall: 0, redSky: 0, storm: 1, night: 5 }
   },
   summer: {
-    day:   { clear: 4, overcast: 2, fog: 0, rain: 1, ashfall: 2, redSky: 3, storm: 2, night: 0 },
-    dusk:  { clear: 2, overcast: 2, fog: 0, rain: 1, ashfall: 2, redSky: 4, storm: 2, night: 1 },
+    day: { clear: 4, overcast: 2, fog: 0, rain: 1, ashfall: 2, redSky: 3, storm: 2, night: 0 },
+    dusk: { clear: 2, overcast: 2, fog: 0, rain: 1, ashfall: 2, redSky: 4, storm: 2, night: 1 },
     night: { clear: 1, overcast: 1, fog: 1, rain: 1, ashfall: 1, redSky: 1, storm: 1, night: 5 }
   },
   autumn: {
-    day:   { clear: 2, overcast: 4, fog: 3, rain: 4, ashfall: 1, redSky: 0, storm: 1, night: 0 },
-    dusk:  { clear: 1, overcast: 3, fog: 4, rain: 3, ashfall: 1, redSky: 1, storm: 1, night: 1 },
+    day: { clear: 2, overcast: 4, fog: 3, rain: 4, ashfall: 1, redSky: 0, storm: 1, night: 0 },
+    dusk: { clear: 1, overcast: 3, fog: 4, rain: 3, ashfall: 1, redSky: 1, storm: 1, night: 1 },
     night: { clear: 0, overcast: 2, fog: 4, rain: 2, ashfall: 0, redSky: 0, storm: 0, night: 6 }
   }
 }
 
 // Bias moltiplicativi per area.
 const AREA_BIAS: Partial<Record<AreaId, Partial<Record<WeatherCode, number>>>> = {
-  fogne:   { fog: 2.0, overcast: 1.3, clear: 0.5 },
-  radio:   { clear: 1.5, storm: 1.4, fog: 0.7 },
-  porto:   { fog: 1.6, rain: 1.3, storm: 1.2 },
-  ospedale:{ overcast: 1.3 },
-  chiesa:  { fog: 1.3, redSky: 1.2 },
+  fogne: { fog: 2.0, overcast: 1.3, clear: 0.5 },
+  radio: { clear: 1.5, storm: 1.4, fog: 0.7 },
+  porto: { fog: 1.6, rain: 1.3, storm: 1.2 },
+  ospedale: { overcast: 1.3 },
+  chiesa: { fog: 1.3, redSky: 1.2 },
   rifugio: { night: 1.5, fog: 1.2, clear: 0.5 },
-  ponte:   { storm: 1.3 }
+  ponte: { storm: 1.3 }
 }
 
 function weightedPick(rng: () => number, weights: Record<string, number>): string {

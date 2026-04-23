@@ -22,7 +22,7 @@ describe('HelloEvent', () => {
 
 describe('MESSAGE_KINDS', () => {
   it('contiene tutti i 10 kind', () => {
-    const expected = ['say','whisper','emote','ooc','roll','shout','dm','npc','announce','system']
+    const expected = ['say', 'whisper', 'emote', 'ooc', 'roll', 'shout', 'dm', 'npc', 'announce', 'system']
     for (const k of expected) expect(MESSAGE_KINDS).toContain(k)
   })
 })
