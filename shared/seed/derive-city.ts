@@ -44,7 +44,7 @@ const AREA_NAME_VARIANTS: Partial<Record<AreaId, string[]>> = {
 }
 
 function pick<T>(rng: () => number, list: readonly T[]): T {
-  return list[Math.floor(rng() * list.length)]
+  return list[Math.floor(rng() * list.length)]!
 }
 
 function pickStatus(rng: () => number): AreaStatus {

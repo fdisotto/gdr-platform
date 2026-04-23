@@ -84,7 +84,7 @@ function weightedPick(rng: () => number, weights: Record<string, number>): strin
   for (const [k, w] of entries) {
     if ((r -= w) <= 0) return k
   }
-  return entries[entries.length - 1][0]
+  return entries[entries.length - 1]![0]
 }
 
 export function computeWeather(seed: string, areaId: AreaId, serverTimeMs: number): WeatherState {
