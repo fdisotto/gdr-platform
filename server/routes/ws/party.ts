@@ -1,10 +1,13 @@
-import { HelloEvent, type StateInitEvent, type TimeTickEvent } from '~~/shared/protocol/ws'
+import { HelloEvent, ChatSendEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent } from '~~/shared/protocol/ws'
 import { useDb } from '~~/server/utils/db'
 import { findPlayerBySession, listOnlinePlayers, touchPlayer } from '~~/server/services/players'
 import { partyMustExist } from '~~/server/services/parties'
 import { listAreasState } from '~~/server/services/areas'
-import { listAreaMessages, type MessageRow } from '~~/server/services/messages'
+import { listAreaMessages, insertMessage, type MessageRow } from '~~/server/services/messages'
 import { registry, sendJson } from '~~/server/ws/state'
+import { pickFanoutRecipients } from '~~/server/ws/fanout'
+import { chatRateLimiter } from '~~/server/ws/state'
+import { isAreaId } from '~~/shared/map/areas'
 
 const TIME_TICK_INTERVAL_MS = 60_000
 
@@ -66,13 +69,85 @@ export default defineWebSocketHandler({
       return
     }
 
-    // Task 7 aggiungerà chat:send.
+    if (parsed.type === 'chat:send') {
+      await handleChatSend(peer, parsed)
+      return
+    }
   },
 
   close(peer: Peer) {
     registry.unregister(peer)
   }
 })
+
+async function handleChatSend(peer: Peer, raw: unknown) {
+  const res = ChatSendEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'chat_send_malformed' })
+    return
+  }
+  const conn = registry.all().find(c => c.ws === peer)
+  if (!conn) {
+    sendJson(peer, { type: 'error', code: 'session_invalid' })
+    return
+  }
+
+  // Plan 2: solo say/emote/ooc permessi.
+  if (!['say', 'emote', 'ooc'].includes(res.data.kind)) {
+    sendJson(peer, { type: 'error', code: 'forbidden', detail: `kind_${res.data.kind}_not_yet_implemented` })
+    return
+  }
+
+  const rateKey = `${conn.partySeed}:${conn.playerId}`
+  if (!chatRateLimiter.tryHit(rateKey)) {
+    sendJson(peer, { type: 'error', code: 'rate_limited' })
+    return
+  }
+
+  const areaId = res.data.areaId ?? conn.areaId
+  if (!isAreaId(areaId)) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'unknown_area' })
+    return
+  }
+  if (areaId !== conn.areaId) {
+    sendJson(peer, { type: 'error', code: 'forbidden', detail: 'not_in_area' })
+    return
+  }
+
+  const db = useDb()
+  const partyPlayers = listOnlinePlayers(db, conn.partySeed)
+  const me = partyPlayers.find(p => p.id === conn.playerId)
+  if (!me) {
+    sendJson(peer, { type: 'error', code: 'session_invalid' })
+    return
+  }
+
+  const stored = insertMessage(db, {
+    partySeed: conn.partySeed,
+    kind: res.data.kind,
+    authorPlayerId: conn.playerId,
+    authorDisplay: me.nickname,
+    areaId,
+    body: res.data.body
+  })
+
+  const broadcast: MessageNewEvent = { type: 'message:new', message: stored }
+  const payload = JSON.stringify(broadcast)
+
+  const roleById = new Map(partyPlayers.map(p => [p.id, p.role]))
+  const roleAware = registry.listParty(conn.partySeed).map(c => ({
+    ...c,
+    role: (roleById.get(c.playerId) ?? 'user') as 'user' | 'master'
+  }))
+  const recipients = pickFanoutRecipients(roleAware, {
+    kind: res.data.kind as 'say' | 'emote' | 'ooc',
+    areaId,
+    authorPlayerId: conn.playerId
+  })
+  for (const r of recipients) {
+    try { r.ws.send(payload) } catch { /* skip */ }
+  }
+}
 
 async function handleHello(peer: Peer, seed: string, sessionToken: string) {
   try {
