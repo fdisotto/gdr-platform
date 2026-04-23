@@ -94,3 +94,10 @@ export function rotateSessionToken(db: Db, playerId: string): string {
   db.update(players).set({ sessionToken: token }).where(eq(players.id, playerId)).run()
   return token
 }
+
+export function findMaster(db: Db, seed: string): PlayerRow | null {
+  const rows = db.select().from(players)
+    .where(and(eq(players.partySeed, seed), eq(players.role, 'master')))
+    .all()
+  return (rows[0] as PlayerRow | undefined) ?? null
+}
