@@ -29,7 +29,8 @@ export default defineNuxtConfig({
   nitro: {
     alias: {
       '~~': fileURLToPath(new URL('./', import.meta.url))
-    }
+    },
+    experimental: { websocket: true }
   },
 
   eslint: {
