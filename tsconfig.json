@@ -1,15 +1,12 @@
 {
   "extends": "./.nuxt/tsconfig.json",
   "compilerOptions": {
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "~~/*": ["./*"],
       "~/*": ["./app/*"]
     },
     "types": ["vitest/globals"]
-  },
-  "include": [
-    "shared/**/*",
-    "tests/**/*"
-  ]
+  }
 }

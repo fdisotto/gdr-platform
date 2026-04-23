@@ -3,21 +3,21 @@ import { fileURLToPath } from 'node:url'
 export default defineNuxtConfig({
   modules: [
     '@nuxt/eslint',
-    '@nuxt/ui'
+    '@nuxt/ui',
+    '@pinia/nuxt'
   ],
 
   devtools: { enabled: true },
 
   css: ['~/assets/css/main.css'],
 
-  alias: {
-    '~~': fileURLToPath(new URL('./', import.meta.url))
+  colorMode: {
+    preference: 'dark',
+    fallback: 'dark'
   },
 
-  nitro: {
-    alias: {
-      '~~': fileURLToPath(new URL('./', import.meta.url))
-    }
+  alias: {
+    '~~': fileURLToPath(new URL('./', import.meta.url))
   },
 
   routeRules: {
@@ -25,6 +25,12 @@ export default defineNuxtConfig({
   },
 
   compatibilityDate: '2025-01-15',
+
+  nitro: {
+    alias: {
+      '~~': fileURLToPath(new URL('./', import.meta.url))
+    }
+  },
 
   eslint: {
     config: {
