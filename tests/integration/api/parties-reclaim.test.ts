@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { setup, $fetch } from '@nuxt/test-utils/e2e'
 import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 
 const rootDir = fileURLToPath(new URL('../../..', import.meta.url))
 
@@ -8,6 +9,14 @@ await setup({
   rootDir,
   dev: false,
   server: true,
+  build: false,
+  nuxtConfig: {
+    nitro: {
+      output: {
+        dir: resolve(rootDir, '.output')
+      }
+    }
+  },
   env: { DATABASE_URL: ':memory:' }
 })
 

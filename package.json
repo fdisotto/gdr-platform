@@ -3,17 +3,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "nuxt build",
-    "dev": "nuxt dev",
+    "build": "pnpm db:bundle && nuxt build",
+    "dev": "pnpm db:bundle && nuxt dev",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "lint": "eslint .",
-    "typecheck": "nuxt typecheck",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "typecheck": "pnpm db:bundle && nuxt typecheck",
+    "test": "pnpm db:bundle && vitest run",
+    "test:watch": "pnpm db:bundle && vitest",
+    "test:coverage": "pnpm db:bundle && vitest run --coverage",
+    "db:generate": "drizzle-kit generate && pnpm db:bundle",
+    "db:migrate": "drizzle-kit migrate",
+    "db:bundle": "tsx scripts/bundle-migrations.ts"
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.102",
@@ -36,6 +37,7 @@
     "@vitest/coverage-v8": "^4.1.5",
     "drizzle-kit": "^0.31.10",
     "eslint": "^10.2.0",
+    "tsx": "^4.21.0",
     "typescript": "^6.0.2",
     "vitest": "^4.1.5",
     "vue-tsc": "^3.2.6"

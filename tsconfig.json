@@ -8,5 +8,8 @@
       "~/*": ["./app/*"]
     },
     "types": ["vitest/globals"]
-  }
+  },
+  "include": [
+    "types/**/*.d.ts"
+  ]
 }
