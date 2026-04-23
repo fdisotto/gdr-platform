@@ -21,10 +21,13 @@ i dettagli autoritativi.
 ### Fuori scope (non anticipare, non astrarre preventivamente):
 
 - Registrazione / login / OAuth / password reset.
+- **Profilo utente persistente** (anagrafica, caratteristiche del personaggio,
+  abilità, inventario, xp/livelli). Previsto post-MVP collegato all'auth —
+  vedi sezione 14 dello spec. **Non aggiungere tabelle/campi/componenti
+  "pronti" per questi concetti nei Plan 1–5.**
 - Dashboard amministrative, analytics, report.
 - Multi-party **attiva** in contemporanea per utente.
 - Multi-mappa, multi-city, mappa generata proceduralmente.
-- Character sheet, inventario, sistema regole.
 - Voice / video chat.
 - Mobile-first redesign.
 

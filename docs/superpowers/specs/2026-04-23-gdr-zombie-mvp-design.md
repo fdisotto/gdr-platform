@@ -499,11 +499,11 @@ Prima di dichiarare un task completo: `pnpm lint && pnpm typecheck && vitest run
 
 ## 14. Note su estensioni future (riferimento, NON implementare)
 
-- Auth con email/password + OAuth → sostituisce il nickname in localStorage, abilita ban cross-device, multi-device, multi-party per utente.
-- Dashboard amministrativa (moderatori globali, metriche party, report abusi).
-- Mappa multi-area / multi-città / zoom di dettaglio → migrazione rendering da SVG inline a Leaflet.
-- Character sheet strutturati + sistema regole (salute, inventario, tiro base + abilità).
-- Voice chat realtime (WebRTC).
-- Mobile-first redesign con gesture.
+- **Auth** con email/password + OAuth → sostituisce il nickname in localStorage, abilita ban cross-device, multi-device, multi-party per utente.
+- **Profilo utente persistente** (collegato all'auth): anagrafica, avatar, caratteristiche del personaggio (forza, destrezza, costituzione, ecc.), abilità (stealth, medicina, elettronica, ecc.), inventario, stato salute, xp/livelli. Tabelle nuove `user_profiles`, `character_sheets`, `abilities`, `inventory_items`, con relazione `players.user_id → users.id`. I tiri di dado si arricchiscono di modificatori da caratteristica/abilità (es. `/roll stealth` usa automaticamente il modificatore dell'abilità del personaggio).
+- **Dashboard amministrativa** (moderatori globali, metriche party, report abusi).
+- **Mappa multi-area / multi-città / zoom di dettaglio** → migrazione rendering da SVG inline a Leaflet.
+- **Voice chat realtime** (WebRTC).
+- **Mobile-first redesign** con gesture.
 
-Queste sono citate solo per allineamento: lo spec MVP non pre-costruisce astrazioni per supportarle.
+Queste sono citate solo per allineamento: lo spec MVP non pre-costruisce astrazioni per supportarle. **Non introdurre tabelle, campi o componenti "pronti" per profilo/caratteristiche/abilità in Plan 1–5.**
