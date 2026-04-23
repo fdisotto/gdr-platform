@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { HelloEvent, MESSAGE_KINDS, ServerErrorEvent } from '~~/shared/protocol/ws'
+import { HelloEvent, MESSAGE_KINDS, ServerErrorEvent, ChatSendEvent, MessageNewEvent, TimeTickEvent, StateInitEvent } from '~~/shared/protocol/ws'
 
 describe('HelloEvent', () => {
   it('accetta seed uuid e sessionToken', () => {
@@ -31,6 +31,64 @@ describe('ServerErrorEvent', () => {
   it('accetta code e detail', () => {
     expect(ServerErrorEvent.safeParse({
       type: 'error', code: 'not_found', detail: 'party X'
+    }).success).toBe(true)
+  })
+})
+
+describe('ChatSendEvent', () => {
+  it('accetta say con body', () => {
+    expect(ChatSendEvent.safeParse({
+      type: 'chat:send', kind: 'say', body: 'ciao', areaId: 'piazza'
+    }).success).toBe(true)
+  })
+  it('rifiuta body vuoto', () => {
+    expect(ChatSendEvent.safeParse({
+      type: 'chat:send', kind: 'say', body: '', areaId: 'piazza'
+    }).success).toBe(false)
+  })
+  it('rifiuta body oltre 2000 char', () => {
+    expect(ChatSendEvent.safeParse({
+      type: 'chat:send', kind: 'say', body: 'x'.repeat(2001), areaId: 'piazza'
+    }).success).toBe(false)
+  })
+  it('rifiuta kind non tra say/emote/ooc/whisper/shout/roll/dm', () => {
+    expect(ChatSendEvent.safeParse({
+      type: 'chat:send', kind: 'system', body: 'x', areaId: 'piazza'
+    }).success).toBe(false)
+  })
+})
+
+describe('MessageNewEvent', () => {
+  it('accetta shape corretta', () => {
+    expect(MessageNewEvent.safeParse({
+      type: 'message:new',
+      message: {
+        id: 'x', partySeed: 'p', kind: 'say',
+        authorPlayerId: 'a', authorDisplay: 'A',
+        areaId: 'piazza', targetPlayerId: null, body: 'ciao',
+        rollPayload: null, createdAt: 1, deletedAt: null,
+        deletedBy: null, editedAt: null
+      }
+    }).success).toBe(true)
+  })
+})
+
+describe('TimeTickEvent', () => {
+  it('accetta serverTime', () => {
+    expect(TimeTickEvent.safeParse({ type: 'time:tick', serverTime: 12345 }).success).toBe(true)
+  })
+})
+
+describe('StateInitEvent', () => {
+  it('accetta snapshot base', () => {
+    expect(StateInitEvent.safeParse({
+      type: 'state:init',
+      me: { id: 'a', nickname: 'A', role: 'user', currentAreaId: 'piazza' },
+      party: { seed: 'uuid', cityName: 'City', createdAt: 1, lastActivityAt: 1 },
+      players: [],
+      areasState: [],
+      messagesByArea: {},
+      serverTime: 1
     }).success).toBe(true)
   })
 })
