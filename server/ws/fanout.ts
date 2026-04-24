@@ -1,4 +1,5 @@
 import type { ConnectionInfo } from '~~/server/ws/connections'
+import { ADJACENCY, type AreaId } from '~~/shared/map/areas'
 
 export type RoleAware = ConnectionInfo & { role: 'user' | 'master' }
 
@@ -29,8 +30,12 @@ function shouldReceive(c: RoleAware, spec: FanoutSpec): boolean {
     case 'dm':
       return spec.targetPlayerId != null
         && (c.playerId === spec.targetPlayerId || c.playerId === spec.authorPlayerId)
-    case 'shout':
-      return spec.areaId != null && c.areaId === spec.areaId
+    case 'shout': {
+      if (spec.areaId == null) return false
+      if (c.areaId === spec.areaId) return true
+      const neigh = ADJACENCY[spec.areaId as AreaId] ?? []
+      return (neigh as readonly string[]).includes(c.areaId)
+    }
     case 'roll':
       return spec.areaId != null && c.areaId === spec.areaId
     case 'npc':

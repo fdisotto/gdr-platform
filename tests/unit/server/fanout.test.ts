@@ -47,3 +47,25 @@ describe('pickFanoutRecipients', () => {
     expect(result.map(c => c.playerId)).toEqual(['master'])
   })
 })
+
+describe('shout fanout', () => {
+  it('shout arriva in area origine + aree adiacenti + master', () => {
+    const connections = [
+      conn('alice', 'piazza', 'user'),      // origine
+      conn('bob', 'chiesa', 'user'),        // adiacente a piazza
+      conn('carla', 'rifugio', 'user'),     // non adiacente
+      conn('master', 'scuola', 'master')
+    ]
+    const result = pickFanoutRecipients(connections, { kind: 'shout', areaId: 'piazza' })
+    expect(result.map(c => c.playerId).sort()).toEqual(['alice', 'bob', 'master'])
+  })
+
+  it('shout non raggiunge area remota', () => {
+    const connections = [
+      conn('alice', 'piazza', 'user'),
+      conn('carla', 'rifugio', 'user')
+    ]
+    const result = pickFanoutRecipients(connections, { kind: 'shout', areaId: 'piazza' })
+    expect(result.map(c => c.playerId)).toEqual(['alice'])
+  })
+})

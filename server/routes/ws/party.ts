@@ -108,8 +108,8 @@ async function handleChatSend(peer: Peer, raw: unknown) {
     return
   }
 
-  // Plan 2: solo say/emote/ooc permessi.
-  if (!['say', 'emote', 'ooc'].includes(res.data.kind)) {
+  // Plan 2: solo say/emote/ooc permessi. Plan 3: aggiunta shout.
+  if (!['say', 'emote', 'ooc', 'shout'].includes(res.data.kind)) {
     sendJson(peer, { type: 'error', code: 'forbidden', detail: `kind_${res.data.kind}_not_yet_implemented` })
     return
   }
@@ -156,7 +156,7 @@ async function handleChatSend(peer: Peer, raw: unknown) {
     role: (roleById.get(c.playerId) ?? 'user') as 'user' | 'master'
   }))
   const recipients = pickFanoutRecipients(roleAware, {
-    kind: res.data.kind as 'say' | 'emote' | 'ooc',
+    kind: res.data.kind as 'say' | 'emote' | 'ooc' | 'shout',
     areaId,
     authorPlayerId: conn.playerId
   })
