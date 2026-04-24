@@ -67,6 +67,19 @@ export function findPlayerBySession(db: Db, seed: string, sessionToken: string):
   return (rows[0] as PlayerRow | undefined) ?? null
 }
 
+// v2a: lookup del player della party a partire dall'utenza autenticata,
+// usato dal WS /ws/party dopo aver risolto l'identità dal cookie.
+// Ignora righe kickate.
+export function findPlayerByUserInParty(db: Db, seed: string, userId: string): PlayerRow | null {
+  const rows = db.select().from(players)
+    .where(and(eq(players.partySeed, seed), eq(players.userId, userId)))
+    .all()
+  const row = rows[0] as PlayerRow | undefined
+  if (!row) return null
+  if (row.isKicked) return null
+  return row
+}
+
 export function findPlayerByNickname(db: Db, seed: string, nickname: string): PlayerRow | null {
   const rows = db.select().from(players)
     .where(and(

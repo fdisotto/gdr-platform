@@ -1,10 +1,18 @@
 import { describe, it, expect } from 'vitest'
-import { setup, $fetch, url as nuxtUrl } from '@nuxt/test-utils/e2e'
+import { setup } from '@nuxt/test-utils/e2e'
 import { fileURLToPath } from 'node:url'
-import { resolve } from 'node:path'
-import WebSocket from 'ws'
+import { resolve, join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { registerApproveLogin, uniqueUsername } from '../helpers/e2e-auth'
+import {
+  openWsWithCookie, nextMessageMatching,
+  createPartyApi, joinPartyApi
+} from '../helpers/ws-helpers'
 
 const rootDir = fileURLToPath(new URL('../../..', import.meta.url))
+const tmpDir = mkdtempSync(join(tmpdir(), 'gdr-ws-chatadv-'))
+const dbPath = join(tmpDir, 'gdr.sqlite')
 
 await setup({
   rootDir,
@@ -14,62 +22,26 @@ await setup({
   nuxtConfig: {
     nitro: { output: { dir: resolve(rootDir, '.output') } }
   },
-  env: { DATABASE_URL: ':memory:' }
+  env: { DATABASE_URL: dbPath }
 })
-
-function base(): string {
-  return nuxtUrl('/')
-}
-
-async function openWs(seed: string, sessionToken: string): Promise<WebSocket> {
-  const urlStr = base().replace(/^http/, 'ws').replace(/\/$/, '') + '/ws/party'
-  const ws = new WebSocket(urlStr)
-  await new Promise<void>((resolve, reject) => {
-    ws.once('open', () => resolve())
-    ws.once('error', e => reject(e))
-  })
-  ws.send(JSON.stringify({ type: 'hello', seed, sessionToken }))
-  return ws
-}
-
-function nextMessageMatching(ws: WebSocket, predicate: (m: Record<string, unknown>) => boolean, timeoutMs = 3000) {
-  return new Promise<Record<string, unknown>>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      ws.off('message', onMsg)
-      reject(new Error('timeout'))
-    }, timeoutMs)
-    function onMsg(data: WebSocket.RawData) {
-      try {
-        const m = JSON.parse(String(data)) as Record<string, unknown>
-        if (predicate(m)) {
-          ws.off('message', onMsg)
-          clearTimeout(timer)
-          resolve(m)
-        }
-      } catch { /* skip */ }
-    }
-    ws.on('message', onMsg)
-  })
-}
 
 describe('chat:send whisper/dm/roll', () => {
   it('whisper tra due player stessa area: entrambi + master', async () => {
-    const create = await $fetch('/api/parties', {
-      method: 'POST', body: { masterNickname: 'MM' }
-    }) as { seed: string, sessionToken: string }
-    const joinA = await $fetch(`/api/parties/${create.seed}/join`, {
-      method: 'POST', body: { nickname: 'Anna' }
-    }) as { sessionToken: string, playerId: string }
-    const joinB = await $fetch(`/api/parties/${create.seed}/join`, {
-      method: 'POST', body: { nickname: 'Bea' }
-    }) as { sessionToken: string, playerId: string }
+    const { cookie: masterCookie } = await registerApproveLogin(dbPath, uniqueUsername('m'))
+    const { cookie: annaCookie } = await registerApproveLogin(dbPath, uniqueUsername('a'))
+    const { cookie: beaCookie } = await registerApproveLogin(dbPath, uniqueUsername('b'))
+    const seed = await createPartyApi(masterCookie, 'MM')
+    await joinPartyApi(annaCookie, seed, 'Anna')
+    await joinPartyApi(beaCookie, seed, 'Bea')
 
-    const wsM = await openWs(create.seed, create.sessionToken)
+    const wsM = await openWsWithCookie(seed, masterCookie)
     await nextMessageMatching(wsM, m => m.type === 'state:init')
-    const wsA = await openWs(create.seed, joinA.sessionToken)
-    await nextMessageMatching(wsA, m => m.type === 'state:init')
-    const wsB = await openWs(create.seed, joinB.sessionToken)
-    await nextMessageMatching(wsB, m => m.type === 'state:init')
+    const wsA = await openWsWithCookie(seed, annaCookie)
+    const aInit = await nextMessageMatching(wsA, m => m.type === 'state:init')
+    void aInit
+    const wsB = await openWsWithCookie(seed, beaCookie)
+    const bInit = await nextMessageMatching(wsB, m => m.type === 'state:init')
+    const beaId = (bInit as { me: { id: string } }).me.id
 
     wsA.send(JSON.stringify({
       type: 'chat:send', kind: 'whisper', body: 'segreto',
@@ -83,7 +55,7 @@ describe('chat:send whisper/dm/roll', () => {
     ])
     expect((mA.message as { kind: string }).kind).toBe('whisper')
     expect((mB.message as { body: string }).body).toBe('segreto')
-    expect((mM.message as { targetPlayerId: string }).targetPlayerId).toBe(joinB.playerId)
+    expect((mM.message as { targetPlayerId: string }).targetPlayerId).toBe(beaId)
 
     wsM.close()
     wsA.close()
@@ -91,19 +63,16 @@ describe('chat:send whisper/dm/roll', () => {
   })
 
   it('whisper rifiutato se target in altra area', async () => {
-    const create = await $fetch('/api/parties', {
-      method: 'POST', body: { masterNickname: 'MM2' }
-    }) as { seed: string, sessionToken: string }
-    const joinA = await $fetch(`/api/parties/${create.seed}/join`, {
-      method: 'POST', body: { nickname: 'Anna' }
-    }) as { sessionToken: string }
-    const joinB = await $fetch(`/api/parties/${create.seed}/join`, {
-      method: 'POST', body: { nickname: 'Bea' }
-    }) as { sessionToken: string }
+    const { cookie: masterCookie } = await registerApproveLogin(dbPath, uniqueUsername('m'))
+    const { cookie: annaCookie } = await registerApproveLogin(dbPath, uniqueUsername('a'))
+    const { cookie: beaCookie } = await registerApproveLogin(dbPath, uniqueUsername('b'))
+    const seed = await createPartyApi(masterCookie, 'MM2')
+    await joinPartyApi(annaCookie, seed, 'Anna')
+    await joinPartyApi(beaCookie, seed, 'Bea')
 
-    const wsA = await openWs(create.seed, joinA.sessionToken)
+    const wsA = await openWsWithCookie(seed, annaCookie)
     await nextMessageMatching(wsA, m => m.type === 'state:init')
-    const wsB = await openWs(create.seed, joinB.sessionToken)
+    const wsB = await openWsWithCookie(seed, beaCookie)
     await nextMessageMatching(wsB, m => m.type === 'state:init')
 
     // B si muove in chiesa
@@ -123,19 +92,16 @@ describe('chat:send whisper/dm/roll', () => {
   })
 
   it('dm funziona cross-area', async () => {
-    const create = await $fetch('/api/parties', {
-      method: 'POST', body: { masterNickname: 'MM3' }
-    }) as { seed: string, sessionToken: string }
-    const joinA = await $fetch(`/api/parties/${create.seed}/join`, {
-      method: 'POST', body: { nickname: 'Anna' }
-    }) as { sessionToken: string, playerId: string }
-    const joinB = await $fetch(`/api/parties/${create.seed}/join`, {
-      method: 'POST', body: { nickname: 'Bea' }
-    }) as { sessionToken: string, playerId: string }
+    const { cookie: masterCookie } = await registerApproveLogin(dbPath, uniqueUsername('m'))
+    const { cookie: annaCookie } = await registerApproveLogin(dbPath, uniqueUsername('a'))
+    const { cookie: beaCookie } = await registerApproveLogin(dbPath, uniqueUsername('b'))
+    const seed = await createPartyApi(masterCookie, 'MM3')
+    await joinPartyApi(annaCookie, seed, 'Anna')
+    await joinPartyApi(beaCookie, seed, 'Bea')
 
-    const wsA = await openWs(create.seed, joinA.sessionToken)
+    const wsA = await openWsWithCookie(seed, annaCookie)
     await nextMessageMatching(wsA, m => m.type === 'state:init')
-    const wsB = await openWs(create.seed, joinB.sessionToken)
+    const wsB = await openWsWithCookie(seed, beaCookie)
     await nextMessageMatching(wsB, m => m.type === 'state:init')
 
     // B va in case
@@ -156,11 +122,10 @@ describe('chat:send whisper/dm/roll', () => {
   })
 
   it('roll parsa 2d6 server-side e pubblica risultato', async () => {
-    const create = await $fetch('/api/parties', {
-      method: 'POST', body: { masterNickname: 'MM4' }
-    }) as { seed: string, sessionToken: string }
+    const { cookie: masterCookie } = await registerApproveLogin(dbPath, uniqueUsername('m'))
+    const seed = await createPartyApi(masterCookie, 'MM4')
 
-    const wsM = await openWs(create.seed, create.sessionToken)
+    const wsM = await openWsWithCookie(seed, masterCookie)
     await nextMessageMatching(wsM, m => m.type === 'state:init')
 
     wsM.send(JSON.stringify({
@@ -180,11 +145,10 @@ describe('chat:send whisper/dm/roll', () => {
   })
 
   it('roll con expr invalido rifiutato', async () => {
-    const create = await $fetch('/api/parties', {
-      method: 'POST', body: { masterNickname: 'MM5' }
-    }) as { seed: string, sessionToken: string }
+    const { cookie: masterCookie } = await registerApproveLogin(dbPath, uniqueUsername('m'))
+    const seed = await createPartyApi(masterCookie, 'MM5')
 
-    const ws = await openWs(create.seed, create.sessionToken)
+    const ws = await openWsWithCookie(seed, masterCookie)
     await nextMessageMatching(ws, m => m.type === 'state:init')
 
     ws.send(JSON.stringify({
@@ -196,4 +160,10 @@ describe('chat:send whisper/dm/roll', () => {
 
     ws.close()
   })
+})
+
+process.on('exit', () => {
+  try {
+    rmSync(tmpDir, { recursive: true, force: true })
+  } catch { /* ignore */ }
 })

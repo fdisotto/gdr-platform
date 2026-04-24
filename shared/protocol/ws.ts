@@ -9,10 +9,11 @@ export type MessageKind = typeof MESSAGE_KINDS[number]
 // Zod v4: top-level z.uuid() per stringhe UUID
 const UuidSeed = z.uuid()
 
+// v2a: il WS /ws/party autentica via cookie gdr_session letto all'upgrade.
+// HelloEvent non porta più sessionToken — serve solo per indicare la party.
 export const HelloEvent = z.object({
   type: z.literal('hello'),
-  seed: UuidSeed,
-  sessionToken: z.string().min(1).max(256)
+  seed: UuidSeed
 })
 export type HelloEvent = z.infer<typeof HelloEvent>
 

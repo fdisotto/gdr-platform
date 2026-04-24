@@ -1,6 +1,8 @@
 import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent, MasterDeleteMessageEvent, MasterEditMessageEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, MasterFetchActionsEvent, MasterFetchBansEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type PlayerMutedEvent, type KickedEvent, type WeatherUpdatedEvent, type MasterActionsSnapshotEvent, type MasterBansSnapshotEvent } from '~~/shared/protocol/ws'
 import { useDb } from '~~/server/utils/db'
-import { findPlayerBySession, listOnlinePlayers, touchPlayer, updatePlayerArea, setMute, kickPlayer, findPlayerById, type PlayerRow } from '~~/server/services/players'
+import { findPlayerByUserInParty, listOnlinePlayers, touchPlayer, updatePlayerArea, setMute, kickPlayer, findPlayerById, type PlayerRow } from '~~/server/services/players'
+import { findSession, extendSession, revokeSession } from '~~/server/services/sessions'
+import { findUserById } from '~~/server/services/users'
 import { addBan, removeBan, listBans } from '~~/server/services/bans'
 import { logMasterAction, listMasterActions } from '~~/server/services/master-actions'
 import { setOverride, clearOverride, listOverrides } from '~~/server/services/weather-overrides'
@@ -39,6 +41,21 @@ function ensureTimeTickBroadcaster() {
 type Peer = {
   send(data: string): void
   close(code?: number, reason?: string): void
+  // v2a: nitro crossws espone l'upgrade request su peer.request; leggiamo
+  // il cookie gdr_session da lì per autenticare il WS.
+  request?: { headers: { get(name: string): string | null } }
+}
+
+const SESSION_COOKIE_NAME = 'gdr_session'
+
+// Estrae il valore del cookie gdr_session dall'upgrade request del peer.
+// Ritorna null se header cookie mancante o cookie non presente.
+function extractSessionCookie(peer: Peer): string | null {
+  const raw = peer.request?.headers.get('cookie')
+  if (!raw) return null
+  const re = new RegExp(`(?:^|;\\s*)${SESSION_COOKIE_NAME}=([^;]+)`)
+  const m = raw.match(re)
+  return m ? decodeURIComponent(m[1]!) : null
 }
 
 export default defineWebSocketHandler({
@@ -74,7 +91,7 @@ export default defineWebSocketHandler({
         sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'hello_malformed' })
         return
       }
-      await handleHello(peer, res.data.seed, res.data.sessionToken)
+      await handleHello(peer, res.data.seed)
       return
     }
 
@@ -1210,14 +1227,37 @@ async function handleMasterFetchBans(peer: Peer, raw: unknown) {
   sendJson(peer, event)
 }
 
-async function handleHello(peer: Peer, seed: string, sessionToken: string) {
+async function handleHello(peer: Peer, seed: string) {
   try {
     const db = useDb()
     const party = partyMustExist(db, seed)
-    const player = findPlayerBySession(db, seed, sessionToken)
-    if (!player || player.isKicked) {
-      sendJson(peer, { type: 'error', code: 'session_invalid' })
-      peer.close(4001, 'session_invalid')
+
+    // v2a: autenticazione via cookie gdr_session letto all'upgrade.
+    const token = extractSessionCookie(peer)
+    if (!token) {
+      sendJson(peer, { type: 'error', code: 'session_expired' })
+      peer.close(4001, 'session_expired')
+      return
+    }
+    const session = findSession(db, token)
+    if (!session || !session.userId) {
+      sendJson(peer, { type: 'error', code: 'session_expired' })
+      peer.close(4001, 'session_expired')
+      return
+    }
+    extendSession(db, token)
+    const user = findUserById(db, session.userId)
+    if (!user || user.status !== 'approved') {
+      revokeSession(db, token)
+      sendJson(peer, { type: 'error', code: 'session_expired' })
+      peer.close(4001, 'session_expired')
+      return
+    }
+
+    const player = findPlayerByUserInParty(db, seed, user.id)
+    if (!player) {
+      sendJson(peer, { type: 'error', code: 'not_member' })
+      peer.close(4003, 'not_member')
       return
     }
 

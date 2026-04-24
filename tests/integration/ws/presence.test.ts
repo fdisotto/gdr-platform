@@ -1,10 +1,18 @@
 import { describe, it, expect } from 'vitest'
-import { setup, $fetch, url as nuxtUrl } from '@nuxt/test-utils/e2e'
+import { setup } from '@nuxt/test-utils/e2e'
 import { fileURLToPath } from 'node:url'
-import { resolve } from 'node:path'
-import WebSocket from 'ws'
+import { resolve, join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { registerApproveLogin, uniqueUsername } from '../helpers/e2e-auth'
+import {
+  openWsWithCookie, nextMessageMatching,
+  createPartyApi, joinPartyApi
+} from '../helpers/ws-helpers'
 
 const rootDir = fileURLToPath(new URL('../../..', import.meta.url))
+const tmpDir = mkdtempSync(join(tmpdir(), 'gdr-ws-presence-'))
+const dbPath = join(tmpDir, 'gdr.sqlite')
 
 await setup({
   rootDir,
@@ -18,61 +26,20 @@ await setup({
       }
     }
   },
-  env: { DATABASE_URL: ':memory:' }
+  env: { DATABASE_URL: dbPath }
 })
-
-function base(): string {
-  return nuxtUrl('/')
-}
-
-async function openWs(seed: string, sessionToken: string): Promise<WebSocket> {
-  const rawBase = base()
-  const urlStr = rawBase.replace(/^http/, 'ws').replace(/\/$/, '') + '/ws/party'
-  const ws = new WebSocket(urlStr)
-  await new Promise<void>((resolve, reject) => {
-    ws.once('open', () => resolve())
-    ws.once('error', e => reject(e))
-  })
-  ws.send(JSON.stringify({ type: 'hello', seed, sessionToken }))
-  return ws
-}
-
-function nextMessageMatching(ws: WebSocket, predicate: (m: Record<string, unknown>) => boolean, timeoutMs = 3000): Promise<Record<string, unknown>> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      ws.off('message', onMsg)
-      reject(new Error('timeout waiting for message'))
-    }, timeoutMs)
-    function onMsg(data: WebSocket.RawData) {
-      try {
-        const m = JSON.parse(String(data)) as Record<string, unknown>
-        if (predicate(m)) {
-          ws.off('message', onMsg)
-          clearTimeout(timer)
-          resolve(m)
-        }
-      } catch { /* ignore */ }
-    }
-    ws.on('message', onMsg)
-  })
-}
 
 describe('presence player:joined / player:left', () => {
   it('il master riceve player:joined quando un user entra', async () => {
-    const create = await $fetch('/api/parties', {
-      method: 'POST',
-      body: { masterNickname: 'MM' }
-    }) as { seed: string, sessionToken: string }
+    const { cookie: masterCookie } = await registerApproveLogin(dbPath, uniqueUsername('mpj'))
+    const { cookie: annaCookie } = await registerApproveLogin(dbPath, uniqueUsername('apj'))
+    const seed = await createPartyApi(masterCookie, 'MM')
 
-    const masterWs = await openWs(create.seed, create.sessionToken)
+    const masterWs = await openWsWithCookie(seed, masterCookie)
     await nextMessageMatching(masterWs, m => m.type === 'state:init')
 
-    const join = await $fetch(`/api/parties/${create.seed}/join`, {
-      method: 'POST',
-      body: { nickname: 'Anna' }
-    }) as { sessionToken: string, playerId: string }
-
-    const annaWs = await openWs(create.seed, join.sessionToken)
+    await joinPartyApi(annaCookie, seed, 'Anna')
+    const annaWs = await openWsWithCookie(seed, annaCookie)
     await nextMessageMatching(annaWs, m => m.type === 'state:init')
 
     const joined = await nextMessageMatching(masterWs, m => m.type === 'player:joined')
@@ -83,26 +50,29 @@ describe('presence player:joined / player:left', () => {
   })
 
   it('i player rimanenti ricevono player:left quando uno chiude', async () => {
-    const create = await $fetch('/api/parties', {
-      method: 'POST',
-      body: { masterNickname: 'MM2' }
-    }) as { seed: string, sessionToken: string }
-    const join = await $fetch(`/api/parties/${create.seed}/join`, {
-      method: 'POST',
-      body: { nickname: 'Luca' }
-    }) as { sessionToken: string, playerId: string }
+    const { cookie: masterCookie } = await registerApproveLogin(dbPath, uniqueUsername('mpl'))
+    const { cookie: lucaCookie } = await registerApproveLogin(dbPath, uniqueUsername('lpl'))
+    const seed = await createPartyApi(masterCookie, 'MM2')
+    await joinPartyApi(lucaCookie, seed, 'Luca')
 
-    const masterWs = await openWs(create.seed, create.sessionToken)
+    const masterWs = await openWsWithCookie(seed, masterCookie)
     await nextMessageMatching(masterWs, m => m.type === 'state:init')
-    const lucaWs = await openWs(create.seed, join.sessionToken)
-    await nextMessageMatching(lucaWs, m => m.type === 'state:init')
+    const lucaWs = await openWsWithCookie(seed, lucaCookie)
+    const lucaInit = await nextMessageMatching(lucaWs, m => m.type === 'state:init')
+    const lucaPlayerId = (lucaInit as { me: { id: string } }).me.id
     // master consuma il player:joined dell'ingresso di Luca
     await nextMessageMatching(masterWs, m => m.type === 'player:joined')
 
     lucaWs.close()
     const left = await nextMessageMatching(masterWs, m => m.type === 'player:left')
-    expect((left as { playerId: string }).playerId).toBe(join.playerId)
+    expect((left as { playerId: string }).playerId).toBe(lucaPlayerId)
 
     masterWs.close()
   })
+})
+
+process.on('exit', () => {
+  try {
+    rmSync(tmpDir, { recursive: true, force: true })
+  } catch { /* ignore */ }
 })
