@@ -11,7 +11,17 @@ export const ERROR_CODES = [
   'master_only',
   'session_invalid',
   'session_superseded',
-  'bad_roll_expr'
+  'bad_roll_expr',
+  // v2a auth
+  'invalid_credentials',
+  'account_pending',
+  'account_banned',
+  'username_taken',
+  'weak_password',
+  'invalid_username',
+  'must_reset_first',
+  'session_expired',
+  'not_member'
 ] as const
 
 export type ErrorCode = typeof ERROR_CODES[number]

@@ -27,4 +27,16 @@ describe('ERROR_CODES', () => {
     const x: ErrorCode = 'not_found'
     expect(x).toBe('not_found')
   })
+
+  it('include i codici v2a auth', () => {
+    const authCodes: ErrorCode[] = [
+      'invalid_credentials', 'account_pending', 'account_banned',
+      'username_taken', 'weak_password', 'invalid_username',
+      'must_reset_first', 'session_expired', 'not_member'
+    ]
+    for (const code of authCodes) {
+      expect(ERROR_CODES).toContain(code)
+      expect(isErrorCode(code)).toBe(true)
+    }
+  })
 })
