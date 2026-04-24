@@ -178,7 +178,7 @@ describe('chat:send whisper/dm/roll', () => {
     await nextMessageMatching(wsM, m => m.type === 'state:init')
 
     wsM.send(JSON.stringify({
-      type: 'chat:send', kind: 'roll', body: '', rollExpr: '2d6',
+      type: 'chat:send', kind: 'roll', body: '2d6', rollExpr: '2d6',
       areaId: 'piazza'
     }))
 
@@ -202,7 +202,7 @@ describe('chat:send whisper/dm/roll', () => {
     await nextMessageMatching(ws, m => m.type === 'state:init')
 
     ws.send(JSON.stringify({
-      type: 'chat:send', kind: 'roll', body: '', rollExpr: 'gabba',
+      type: 'chat:send', kind: 'roll', body: 'gabba', rollExpr: 'gabba',
       areaId: 'piazza'
     }))
     const err = await nextMessageMatching(ws, m => m.type === 'error')
