@@ -27,6 +27,10 @@ function shouldReceive(c: RoleAware, spec: FanoutSpec): boolean {
     case 'ooc':
       return spec.areaId != null && c.areaId === spec.areaId
     case 'whisper':
+      if (spec.targetPlayerId == null) return false
+      if (c.playerId === spec.authorPlayerId) return true
+      // target riceve solo se nella stessa area del mittente
+      return c.playerId === spec.targetPlayerId && spec.areaId != null && c.areaId === spec.areaId
     case 'dm':
       return spec.targetPlayerId != null
         && (c.playerId === spec.targetPlayerId || c.playerId === spec.authorPlayerId)

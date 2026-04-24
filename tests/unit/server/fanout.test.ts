@@ -69,3 +69,62 @@ describe('shout fanout', () => {
     expect(result.map(c => c.playerId)).toEqual(['alice'])
   })
 })
+
+describe('whisper fanout', () => {
+  it('whisper: mittente + target (stessa area) + master', () => {
+    const connections = [
+      conn('alice', 'piazza', 'user'),   // mittente
+      conn('bob', 'piazza', 'user'),     // target, stessa area
+      conn('carla', 'fogne', 'user'),    // altro
+      conn('master', 'scuola', 'master')
+    ]
+    const result = pickFanoutRecipients(connections, {
+      kind: 'whisper', areaId: 'piazza',
+      authorPlayerId: 'alice', targetPlayerId: 'bob'
+    })
+    expect(result.map(c => c.playerId).sort()).toEqual(['alice', 'bob', 'master'])
+  })
+
+  it('whisper: target in altra area non riceve (per i non-master)', () => {
+    const connections = [
+      conn('alice', 'piazza', 'user'),
+      conn('bob', 'fogne', 'user'),     // target, area diversa
+      conn('carla', 'piazza', 'user')
+    ]
+    const result = pickFanoutRecipients(connections, {
+      kind: 'whisper', areaId: 'piazza',
+      authorPlayerId: 'alice', targetPlayerId: 'bob'
+    })
+    // target bob filtrato perché non in area; alice sì (mittente)
+    expect(result.map(c => c.playerId).sort()).toEqual(['alice'])
+  })
+})
+
+describe('dm fanout', () => {
+  it('dm: mittente + target (qualunque area) + master', () => {
+    const connections = [
+      conn('alice', 'piazza', 'user'),
+      conn('bob', 'fogne', 'user'),
+      conn('carla', 'scuola', 'user'),
+      conn('master', 'ponte', 'master')
+    ]
+    const result = pickFanoutRecipients(connections, {
+      kind: 'dm', areaId: null,
+      authorPlayerId: 'alice', targetPlayerId: 'bob'
+    })
+    expect(result.map(c => c.playerId).sort()).toEqual(['alice', 'bob', 'master'])
+  })
+})
+
+describe('roll fanout', () => {
+  it('roll visibile: area + master', () => {
+    const connections = [
+      conn('alice', 'piazza', 'user'),
+      conn('bob', 'piazza', 'user'),
+      conn('carla', 'fogne', 'user'),
+      conn('master', 'scuola', 'master')
+    ]
+    const result = pickFanoutRecipients(connections, { kind: 'roll', areaId: 'piazza' })
+    expect(result.map(c => c.playerId).sort()).toEqual(['alice', 'bob', 'master'])
+  })
+})
