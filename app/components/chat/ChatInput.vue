@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { parseSlash, type SlashCommand } from '~~/shared/slash/parse'
 import { AREA_IDS } from '~~/shared/map/areas'
 import { usePartyStore } from '~/stores/party'
+import { useZombiesStore } from '~/stores/zombies'
 import { usePartyConnection } from '~/composables/usePartyConnection'
 
 interface CommandSuggestion {
@@ -59,7 +60,38 @@ const MAX_LINES = 5
 const LINE_HEIGHT_PX = 22
 
 const party = usePartyStore()
+const zombiesStore = useZombiesStore()
 const connection = usePartyConnection()
+
+const WEATHER_CODES = [
+  { value: 'clear', hint: 'sereno' },
+  { value: 'overcast', hint: 'nuvoloso' },
+  { value: 'fog', hint: 'nebbia' },
+  { value: 'rain', hint: 'pioggia' },
+  { value: 'storm', hint: 'tempesta' },
+  { value: 'ashfall', hint: 'cenere' },
+  { value: 'redSky', hint: 'cielo rosso' },
+  { value: 'night', hint: 'notte' },
+  { value: 'off', hint: 'rimuovi override' }
+]
+const WEATHER_INTENSITIES = [
+  { value: '0.3', hint: 'lieve' },
+  { value: '0.5', hint: 'medio' },
+  { value: '0.7', hint: 'forte' },
+  { value: '1', hint: 'massimo' }
+]
+const AREA_STATUSES = [
+  { value: 'intact', hint: 'zona integra' },
+  { value: 'infested', hint: 'infestata' },
+  { value: 'ruined', hint: 'in rovina' },
+  { value: 'closed', hint: 'chiusa' }
+]
+const MUTE_PRESETS = [
+  { value: '5', hint: '5 min' },
+  { value: '15', hint: '15 min' },
+  { value: '60', hint: '1 ora' },
+  { value: '0', hint: 'permanente' }
+]
 const input = ref('')
 const errorText = ref<string | null>(null)
 const inputEl = ref<HTMLTextAreaElement | null>(null)
@@ -83,51 +115,93 @@ const suggestions = computed<CommandSuggestion[]>(() => {
   return visibleCommands.value.filter(c => c.slash.startsWith(firstWord))
 })
 
-// Fix 4 — context autocomplete per argomenti
+// argIdx = indice dell argomento in corso (1 = primo dopo il comando)
+// Prefisso = tutti i token precedenti ricostruiti, così il template mantiene il contesto.
 const argSuggestions = computed<CommandSuggestion[]>(() => {
   const v = input.value.trimStart()
   if (!v.startsWith('/')) return []
   const parts = v.split(' ')
   if (parts.length < 2) return []
   const cmd = parts[0]!.toLowerCase()
-  const partial = (parts[1] ?? '').toLowerCase()
+  const argIdx = parts.length - 1
+  const partial = (parts[argIdx] ?? '').toLowerCase()
+  const prefix = parts.slice(0, argIdx).join(' ')
 
-  const nicknameCmds = new Set(['/w', '/whisper', '/dm', '/mute', '/unmute', '/kick', '/ban', '/unban', '/move'])
-  if (nicknameCmds.has(cmd)) {
+  const mk = (value: string, hint: string, label = '', appendSpace = true): CommandSuggestion => ({
+    slash: value,
+    label,
+    hint,
+    template: `${prefix} ${value}${appendSpace ? ' ' : ''}`
+  })
+
+  // /npc NAME body — primo arg: nomi NPC esistenti
+  if (cmd === '/npc' && argIdx === 1) {
+    return zombiesStore.npcNames
+      .filter(n => n.toLowerCase().startsWith(partial))
+      .slice(0, 10)
+      .map(n => mk(n, 'NPC'))
+  }
+
+  // Comandi con target nickname in 1a posizione
+  const nicknameCmdsIdx1 = new Set(['/w', '/whisper', '/dm', '/mute', '/unmute', '/kick', '/ban', '/unban', '/move'])
+  if (nicknameCmdsIdx1.has(cmd) && argIdx === 1) {
     return party.players
       .filter(p => p.id !== party.me?.id)
       .filter(p => p.nickname.toLowerCase().startsWith(partial))
       .slice(0, 8)
-      .map(p => ({
-        slash: p.nickname,
-        label: p.role === 'master' ? '(master)' : '',
-        hint: 'in ' + p.currentAreaId,
-        template: `${cmd} ${p.nickname} `
-      }))
+      .map(p => mk(p.nickname, 'in ' + p.currentAreaId, p.role === 'master' ? '(master)' : ''))
   }
 
-  const areaCmds = new Set(['/close', '/open', '/status', '/setname', '/weather'])
-  if (areaCmds.has(cmd)) {
+  // /mute NICK MINUTI — secondo arg
+  if (cmd === '/mute' && argIdx === 2) {
+    return MUTE_PRESETS
+      .filter(m => m.value.startsWith(partial))
+      .map(m => mk(m.value, m.hint, '', false))
+  }
+
+  // /move NICK AREA — secondo arg
+  if (cmd === '/move' && argIdx === 2) {
     return (AREA_IDS as readonly string[])
-      .filter(a => a.startsWith(partial))
+      .filter(a => a.toLowerCase().startsWith(partial))
       .slice(0, 10)
-      .map(a => ({
-        slash: a,
-        label: '',
-        hint: 'area',
-        template: `${cmd} ${a} `
-      }))
+      .map(a => mk(a, 'area', '', false))
   }
 
-  if (cmd === '/roll' || cmd === '/roll!') {
+  // Comandi con area in 1a posizione
+  const areaCmdsIdx1 = new Set(['/close', '/open', '/status', '/setname', '/weather'])
+  if (areaCmdsIdx1.has(cmd) && argIdx === 1) {
+    const candidates = [...(AREA_IDS as readonly string[])]
+    if (cmd === '/weather') candidates.unshift('*')
+    return candidates
+      .filter(a => a.toLowerCase().startsWith(partial))
+      .slice(0, 12)
+      .map(a => mk(a, a === '*' ? 'tutte le aree' : 'area'))
+  }
+
+  // /status AREA STATUS — secondo arg
+  if (cmd === '/status' && argIdx === 2) {
+    return AREA_STATUSES
+      .filter(s => s.value.startsWith(partial))
+      .map(s => mk(s.value, s.hint, '', false))
+  }
+
+  // /weather AREA CODE [INTENSITY] — secondo e terzo arg
+  if (cmd === '/weather' && argIdx === 2) {
+    return WEATHER_CODES
+      .filter(c => c.value.toLowerCase().startsWith(partial))
+      .map(c => mk(c.value, c.hint))
+  }
+  if (cmd === '/weather' && argIdx === 3) {
+    return WEATHER_INTENSITIES
+      .filter(i => i.value.startsWith(partial))
+      .map(i => mk(i.value, i.hint, '', false))
+  }
+
+  // /roll presets — primo arg (espressione dado)
+  if ((cmd === '/roll' || cmd === '/roll!') && argIdx === 1) {
     return ROLL_PRESETS
       .filter(p => p.value.startsWith(partial))
-      .map(p => ({
-        slash: p.value,
-        label: '',
-        hint: p.hint,
-        template: `${cmd} ${p.value}`
-      }))
+      .map(p => mk(p.value, p.hint, '', false))
   }
 
   return []

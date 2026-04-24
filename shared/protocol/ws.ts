@@ -217,7 +217,9 @@ export const ZombieSchema = z.object({
   areaId: z.string(),
   x: z.number(),
   y: z.number(),
-  spawnedAt: z.number()
+  spawnedAt: z.number(),
+  npcName: z.string().min(1).max(64).nullable().optional(),
+  npcRole: z.string().min(1).max(64).nullable().optional()
 })
 export type Zombie = z.infer<typeof ZombieSchema>
 
@@ -225,7 +227,9 @@ export const MasterSpawnZombieEvent = z.object({
   type: z.literal('master:spawn-zombie'),
   areaId: z.string(),
   x: z.number(),
-  y: z.number()
+  y: z.number(),
+  npcName: z.string().min(1).max(64).nullable().optional(),
+  npcRole: z.string().min(1).max(64).nullable().optional()
 })
 export type MasterSpawnZombieEvent = z.infer<typeof MasterSpawnZombieEvent>
 

@@ -551,7 +551,9 @@ async function handleMasterSpawnZombie(peer: Peer, raw: unknown) {
     areaId: res.data.areaId,
     x: res.data.x,
     y: res.data.y,
-    spawnedAt: Date.now()
+    spawnedAt: Date.now(),
+    npcName: res.data.npcName ?? null,
+    npcRole: res.data.npcRole ?? null
   }
   addZombie(zombie)
 

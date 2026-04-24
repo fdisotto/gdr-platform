@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { Zombie } from '~~/shared/protocol/ws'
 
 export const useZombiesStore = defineStore('zombies', () => {
@@ -64,6 +64,20 @@ export const useZombiesStore = defineStore('zombies', () => {
     return byArea.value[areaId] ?? []
   }
 
+  const npcNames = computed<string[]>(() => {
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const arr of Object.values(byArea.value)) {
+      for (const z of arr) {
+        if (z.npcName && !seen.has(z.npcName)) {
+          seen.add(z.npcName)
+          out.push(z.npcName)
+        }
+      }
+    }
+    return out.sort((a, b) => a.localeCompare(b))
+  })
+
   function select(id: string) {
     selected.value = new Set([...selected.value, id])
   }
@@ -98,7 +112,7 @@ export const useZombiesStore = defineStore('zombies', () => {
   }
 
   return {
-    byArea, selected,
+    byArea, selected, npcNames,
     hydrate, add, addBatch, move, remove, removeMany,
     forArea,
     select, unselect, toggle, selectMany, setSelection, clearSelection, isSelected,

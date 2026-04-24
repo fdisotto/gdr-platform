@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, nextTick, ref, onMounted, onBeforeUnmount } from 'vue'
 import { AREAS, ADJACENCY, type AreaId } from '~~/shared/map/areas'
 import { usePartyStore } from '~/stores/party'
 import { useZombiesStore } from '~/stores/zombies'
@@ -110,13 +110,14 @@ function moveHere() {
 }
 
 // ── Tool modes ──────────────────────────────────────────────────────────────
-type Tool = 'paint' | 'select' | 'move' | 'erase' | 'area-rect' | 'area-lasso'
+type Tool = 'paint' | 'npc' | 'select' | 'move' | 'erase' | 'area-rect' | 'area-lasso'
 const tool = ref<Tool>('paint')
 
 const cursorForTool = computed(() => {
   if (!isMaster.value) return 'cursor: default'
   switch (tool.value) {
     case 'paint': return 'cursor: crosshair'
+    case 'npc': return 'cursor: crosshair'
     case 'select': return 'cursor: cell'
     case 'move': return 'cursor: move'
     case 'erase': return 'cursor: not-allowed'
@@ -125,6 +126,43 @@ const cursorForTool = computed(() => {
     default: return 'cursor: default'
   }
 })
+
+// ── NPC spawn modal ──────────────────────────────────────────────────────────
+interface NpcDraft {
+  x: number
+  y: number
+  name: string
+  role: string
+}
+const npcDraft = ref<NpcDraft | null>(null)
+const NPC_ROLE_PRESETS = [
+  'poliziotto', 'medico', 'sopravvissuto', 'soldato', 'sciacallo',
+  'prete', 'mercante', 'barista', 'meccanico', 'infetto'
+]
+const npcNameInputEl = ref<HTMLInputElement | null>(null)
+
+function openNpcModal(pt: { x: number, y: number }) {
+  npcDraft.value = { x: pt.x, y: pt.y, name: '', role: '' }
+  void nextTick().then(() => npcNameInputEl.value?.focus())
+}
+function cancelNpc() {
+  npcDraft.value = null
+}
+function confirmNpc() {
+  if (!npcDraft.value || !area.value) return
+  const name = npcDraft.value.name.trim()
+  const role = npcDraft.value.role.trim()
+  if (!name) return
+  connection.send({
+    type: 'master:spawn-zombie',
+    areaId: area.value.id,
+    x: npcDraft.value.x,
+    y: npcDraft.value.y,
+    npcName: name,
+    npcRole: role || null
+  })
+  npcDraft.value = null
+}
 
 // ── Paint state ──────────────────────────────────────────────────────────────
 const isPainting = ref(false)
@@ -325,6 +363,10 @@ function onSvgMouseDown(e: MouseEvent) {
     schedulePaintFlush()
     return
   }
+  if (tool.value === 'npc') {
+    openNpcModal(pt)
+    return
+  }
   if (tool.value === 'erase') {
     isErasing.value = true
     eraseAt(pt)
@@ -482,6 +524,7 @@ function onKeyDown(e: KeyboardEvent) {
     rectStart.value = null
     rectCurrent.value = null
     lassoPoints.value = []
+    if (npcDraft.value) npcDraft.value = null
   }
 }
 
@@ -620,7 +663,7 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
       style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
     >
       <button
-        v-for="t in (['paint', 'area-rect', 'area-lasso', 'select', 'move', 'erase'] as const)"
+        v-for="t in (['paint', 'npc', 'area-rect', 'area-lasso', 'select', 'move', 'erase'] as const)"
         :key="t"
         type="button"
         class="text-xs px-2 py-1 rounded text-left flex items-center gap-2"
@@ -630,8 +673,8 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
           : 'background: var(--z-bg-700); color: var(--z-text-md)'"
         @click="tool = t"
       >
-        <span>{{ ({ 'paint': '🧟', 'area-rect': '▭', 'area-lasso': '✏', 'select': '☐', 'move': '✥', 'erase': '⌫' })[t] }}</span>
-        <span class="capitalize">{{ ({ 'paint': 'spawn', 'area-rect': 'orda □', 'area-lasso': 'orda libera', 'select': 'sel.', 'move': 'sposta', 'erase': 'rimuovi' })[t] }}</span>
+        <span>{{ ({ 'paint': '🧟', 'npc': '👤', 'area-rect': '▭', 'area-lasso': '✏', 'select': '☐', 'move': '✥', 'erase': '⌫' })[t] }}</span>
+        <span class="capitalize">{{ ({ 'paint': 'spawn', 'npc': 'npc', 'area-rect': 'orda □', 'area-lasso': 'orda libera', 'select': 'sel.', 'move': 'sposta', 'erase': 'rimuovi' })[t] }}</span>
       </button>
       <div
         v-if="zombies.selected.size > 0"
@@ -702,7 +745,7 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
         <MapWeatherOverlay :weather="weather" />
       </g>
 
-      <!-- Zombies -->
+      <!-- Zombies / NPCs -->
       <g
         v-for="z in zombiesInArea"
         :key="z.id"
@@ -710,19 +753,21 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
         :style="isMaster ? 'cursor: pointer' : undefined"
         @mousedown="onZombieMouseDown($event, z)"
       >
-        <title>{{ isMaster ? `zombie ${z.id.slice(0, 6)} — ${tool}` : 'zombie' }}</title>
+        <title>
+          {{ z.npcName ? `${z.npcName}${z.npcRole ? ' · ' + z.npcRole : ''}` : (isMaster ? `zombie ${z.id.slice(0, 6)} — ${tool}` : 'zombie') }}
+        </title>
         <circle
           v-if="zombies.isSelected(z.id)"
           r="14"
           fill="none"
-          stroke="var(--z-green-300)"
+          :stroke="z.npcName ? 'var(--z-whisper-300)' : 'var(--z-green-300)'"
           stroke-width="2"
           stroke-dasharray="3 3"
         />
         <circle
           r="10"
-          fill="var(--z-green-700)"
-          stroke="var(--z-blood-500)"
+          :fill="z.npcName ? 'var(--z-bg-700)' : 'var(--z-green-700)'"
+          :stroke="z.npcName ? 'var(--z-whisper-300)' : 'var(--z-blood-500)'"
           stroke-width="1.5"
         />
         <text
@@ -730,7 +775,20 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
           y="4"
           font-size="12"
           pointer-events="none"
-        >🧟</text>
+        >{{ z.npcName ? '👤' : '🧟' }}</text>
+        <text
+          v-if="z.npcName"
+          text-anchor="middle"
+          y="-14"
+          font-size="10"
+          fill="var(--z-whisper-300)"
+          font-weight="600"
+          style="pointer-events: none; user-select: none"
+        >{{ z.npcName }}<tspan
+          v-if="z.npcRole"
+          style="font-weight: 400"
+          fill="var(--z-text-lo)"
+        > · {{ z.npcRole }}</tspan></text>
       </g>
 
       <!-- Rubber band selection -->
@@ -815,6 +873,87 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
         >{{ p.nickname }}</text>
       </g>
     </svg>
+
+    <!-- NPC spawn modal -->
+    <div
+      v-if="npcDraft"
+      class="absolute inset-0 z-20 flex items-center justify-center"
+      style="background: rgba(0,0,0,0.55)"
+      @mousedown.self="cancelNpc"
+    >
+      <form
+        class="rounded-md p-4 space-y-3 w-80"
+        style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
+        @submit.prevent="confirmNpc"
+      >
+        <header
+          class="text-sm font-semibold"
+          style="color: var(--z-whisper-300)"
+        >
+          Nuovo NPC
+        </header>
+        <div class="space-y-1">
+          <label
+            class="block text-xs uppercase tracking-wide"
+            style="color: var(--z-text-md)"
+          >
+            Nome
+          </label>
+          <input
+            ref="npcNameInputEl"
+            v-model="npcDraft.name"
+            type="text"
+            required
+            maxlength="64"
+            placeholder="es. Robert"
+            class="w-full bg-transparent border rounded px-2 py-1 text-sm"
+            style="border-color: var(--z-border); color: var(--z-text-hi)"
+          >
+        </div>
+        <div class="space-y-1">
+          <label
+            class="block text-xs uppercase tracking-wide"
+            style="color: var(--z-text-md)"
+          >
+            Ruolo (facoltativo)
+          </label>
+          <input
+            v-model="npcDraft.role"
+            type="text"
+            list="npc-role-presets"
+            maxlength="64"
+            placeholder="es. poliziotto"
+            class="w-full bg-transparent border rounded px-2 py-1 text-sm"
+            style="border-color: var(--z-border); color: var(--z-text-hi)"
+          >
+          <datalist id="npc-role-presets">
+            <option
+              v-for="r in NPC_ROLE_PRESETS"
+              :key="r"
+              :value="r"
+            />
+          </datalist>
+        </div>
+        <div class="flex items-center justify-end gap-2 pt-1">
+          <UButton
+            type="button"
+            size="xs"
+            color="neutral"
+            variant="ghost"
+            @click="cancelNpc"
+          >
+            Annulla
+          </UButton>
+          <UButton
+            type="submit"
+            size="xs"
+            color="primary"
+          >
+            Crea NPC
+          </UButton>
+        </div>
+      </form>
+    </div>
   </section>
   <section
     v-else
