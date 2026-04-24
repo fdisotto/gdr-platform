@@ -1,8 +1,8 @@
-import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent, MasterDeleteMessageEvent, MasterEditMessageEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type PlayerMutedEvent, type KickedEvent, type WeatherUpdatedEvent } from '~~/shared/protocol/ws'
+import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent, MasterDeleteMessageEvent, MasterEditMessageEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, MasterFetchActionsEvent, MasterFetchBansEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type PlayerMutedEvent, type KickedEvent, type WeatherUpdatedEvent, type MasterActionsSnapshotEvent, type MasterBansSnapshotEvent } from '~~/shared/protocol/ws'
 import { useDb } from '~~/server/utils/db'
 import { findPlayerBySession, listOnlinePlayers, touchPlayer, updatePlayerArea, setMute, kickPlayer, findPlayerById, type PlayerRow } from '~~/server/services/players'
-import { addBan, removeBan } from '~~/server/services/bans'
-import { logMasterAction } from '~~/server/services/master-actions'
+import { addBan, removeBan, listBans } from '~~/server/services/bans'
+import { logMasterAction, listMasterActions } from '~~/server/services/master-actions'
 import { setOverride, clearOverride, listOverrides } from '~~/server/services/weather-overrides'
 import { partyMustExist } from '~~/server/services/parties'
 import { listAreasState, updateAreaState, findAreaState } from '~~/server/services/areas'
@@ -171,6 +171,14 @@ export default defineWebSocketHandler({
     }
     if (parsed.type === 'master:move-player') {
       await handleMasterMovePlayer(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:fetch-actions') {
+      await handleMasterFetchActions(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:fetch-bans') {
+      await handleMasterFetchBans(peer, parsed)
       return
     }
   },
@@ -1163,6 +1171,32 @@ async function handleMasterMovePlayer(peer: Peer, raw: unknown) {
       targetConn.ws.send(JSON.stringify({ type: 'area:entered', areaId: res.data.toAreaId, messages }))
     } catch { /* skip */ }
   }
+}
+
+async function handleMasterFetchActions(peer: Peer, raw: unknown) {
+  const res = MasterFetchActionsEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  const actions = listMasterActions(ctx.db, ctx.conn.partySeed, res.data.limit)
+  const event: MasterActionsSnapshotEvent = { type: 'master:actions-snapshot', actions }
+  sendJson(peer, event)
+}
+
+async function handleMasterFetchBans(peer: Peer, raw: unknown) {
+  const res = MasterFetchBansEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  const bans = listBans(ctx.db, ctx.conn.partySeed)
+  const event: MasterBansSnapshotEvent = { type: 'master:bans-snapshot', bans }
+  sendJson(peer, event)
 }
 
 async function handleHello(peer: Peer, seed: string, sessionToken: string) {

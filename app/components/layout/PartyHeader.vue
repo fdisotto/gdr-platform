@@ -56,6 +56,17 @@ const clock = computed(() => time.format())
       >
         ✉ Missive
       </button>
+      <button
+        v-if="party.me?.role === 'master'"
+        type="button"
+        class="text-xs px-3 py-1.5 rounded"
+        :style="view.mainView === 'master'
+          ? 'background: var(--z-blood-700); color: var(--z-blood-300)'
+          : 'background: transparent; color: var(--z-text-md)'"
+        @click="view.show('master')"
+      >
+        🛠 Master
+      </button>
     </nav>
 
     <!-- Destra: meteo, ora, nickname -->

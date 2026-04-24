@@ -276,6 +276,21 @@ export function usePartyConnection() {
         }
         break
       }
+      case 'master:actions-snapshot': {
+        const p = data as { actions: Array<unknown> }
+        // lazy import to avoid circular dep; import() is sync in Vite's module graph after first load
+        import('~/stores/master-tools').then(({ useMasterToolsStore }) => {
+          useMasterToolsStore().setActions(p.actions as never)
+        }).catch(() => { /* ignore */ })
+        break
+      }
+      case 'master:bans-snapshot': {
+        const p = data as { bans: Array<unknown> }
+        import('~/stores/master-tools').then(({ useMasterToolsStore }) => {
+          useMasterToolsStore().setBans(p.bans as never)
+        }).catch(() => { /* ignore */ })
+        break
+      }
       case 'error': {
         console.warn('[ws error]', data)
         break

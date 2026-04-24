@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { AreaId } from '~~/shared/map/areas'
 
-export type MainView = 'map' | 'dm' | 'area'
+export type MainView = 'map' | 'dm' | 'area' | 'master'
 
 export const useViewStore = defineStore('view', () => {
   const mainView = ref<MainView>('map')
@@ -23,6 +23,10 @@ export const useViewStore = defineStore('view', () => {
     mainView.value = 'area'
   }
 
+  function openMaster() {
+    mainView.value = 'master'
+  }
+
   function backToMap() {
     mainView.value = 'map'
   }
@@ -33,5 +37,5 @@ export const useViewStore = defineStore('view', () => {
     viewedAreaId.value = null
   }
 
-  return { mainView, selectedThreadKey, viewedAreaId, show, openThread, openArea, backToMap, reset }
+  return { mainView, selectedThreadKey, viewedAreaId, show, openThread, openArea, openMaster, backToMap, reset }
 })

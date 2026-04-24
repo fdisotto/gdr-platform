@@ -416,6 +416,46 @@ export const MasterMovePlayerEvent = z.object({
 })
 export type MasterMovePlayerEvent = z.infer<typeof MasterMovePlayerEvent>
 
+const MasterActionRowSchema = z.object({
+  id: z.string(),
+  partySeed: z.string(),
+  masterId: z.string(),
+  action: z.string(),
+  target: z.string().nullable(),
+  payload: z.string().nullable(),
+  createdAt: z.number()
+})
+
+const BanRowSchema = z.object({
+  partySeed: z.string(),
+  nicknameLower: z.string(),
+  reason: z.string().nullable(),
+  bannedAt: z.number()
+})
+
+export const MasterFetchActionsEvent = z.object({
+  type: z.literal('master:fetch-actions'),
+  limit: z.number().int().min(1).max(500).default(100)
+})
+export type MasterFetchActionsEvent = z.infer<typeof MasterFetchActionsEvent>
+
+export const MasterActionsSnapshotEvent = z.object({
+  type: z.literal('master:actions-snapshot'),
+  actions: z.array(MasterActionRowSchema)
+})
+export type MasterActionsSnapshotEvent = z.infer<typeof MasterActionsSnapshotEvent>
+
+export const MasterFetchBansEvent = z.object({
+  type: z.literal('master:fetch-bans')
+})
+export type MasterFetchBansEvent = z.infer<typeof MasterFetchBansEvent>
+
+export const MasterBansSnapshotEvent = z.object({
+  type: z.literal('master:bans-snapshot'),
+  bans: z.array(BanRowSchema)
+})
+export type MasterBansSnapshotEvent = z.infer<typeof MasterBansSnapshotEvent>
+
 // Server → client
 export const MessageUpdateEvent = z.object({
   type: z.literal('message:update'),
@@ -445,7 +485,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   PlayerPlacedEvent,
   ZombieMovedEvent, ZombiesBatchSpawnedEvent,
   VoiceSignalEvent,
-  MessageUpdateEvent, PlayerMutedEvent, KickedEvent
+  MessageUpdateEvent, PlayerMutedEvent, KickedEvent,
+  MasterActionsSnapshotEvent, MasterBansSnapshotEvent
 ])
 export type ServerEvent = z.infer<typeof ServerEvent>
 
@@ -459,6 +500,7 @@ export const ClientEvent = z.discriminatedUnion('type', [
   MasterMuteEvent, MasterUnmuteEvent,
   MasterKickEvent, MasterBanEvent, MasterUnbanEvent,
   MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent,
-  MasterWeatherOverrideEvent, MasterMovePlayerEvent
+  MasterWeatherOverrideEvent, MasterMovePlayerEvent,
+  MasterFetchActionsEvent, MasterFetchBansEvent
 ])
 export type ClientEvent = z.infer<typeof ClientEvent>

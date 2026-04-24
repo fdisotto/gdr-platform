@@ -8,6 +8,7 @@ import { useViewStore } from '~/stores/view'
 import { useZombiesStore } from '~/stores/zombies'
 import { usePlayerPositionsStore } from '~/stores/player-positions'
 import { useWeatherOverridesStore } from '~/stores/weather-overrides'
+import { useMasterToolsStore } from '~/stores/master-tools'
 import { usePartyConnection } from '~/composables/usePartyConnection'
 import PartyHeader from '~/components/layout/PartyHeader.vue'
 import ConnectionBanner from '~/components/layout/ConnectionBanner.vue'
@@ -15,6 +16,7 @@ import PartyChat from '~/components/chat/PartyChat.vue'
 import GameMap from '~/components/map/GameMap.vue'
 import AreaDetailView from '~/components/map/AreaDetailView.vue'
 import DirectMessagesView from '~/components/dm/DirectMessagesView.vue'
+import MasterPanel from '~/components/master/MasterPanel.vue'
 
 const route = useRoute()
 const seed = String(route.params.seed)
@@ -25,6 +27,7 @@ const viewStore = useViewStore()
 const zombiesStore = useZombiesStore()
 const playerPositionsStore = usePlayerPositionsStore()
 const weatherOverridesStore = useWeatherOverridesStore()
+const masterToolsStore = useMasterToolsStore()
 const connection = usePartyConnection()
 
 const guardError = ref<string | null>(null)
@@ -58,6 +61,7 @@ onBeforeRouteLeave(() => {
   zombiesStore.reset()
   playerPositionsStore.reset()
   weatherOverridesStore.reset()
+  masterToolsStore.reset()
   return true
 })
 </script>
@@ -90,6 +94,7 @@ onBeforeRouteLeave(() => {
         <GameMap v-if="viewStore.mainView === 'map'" />
         <AreaDetailView v-else-if="viewStore.mainView === 'area'" />
         <DirectMessagesView v-else-if="viewStore.mainView === 'dm'" />
+        <MasterPanel v-else-if="viewStore.mainView === 'master'" />
         <PartyChat />
       </div>
     </template>
