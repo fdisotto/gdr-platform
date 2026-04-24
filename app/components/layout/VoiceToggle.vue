@@ -10,17 +10,19 @@ const voice = useVoiceChat()
 const open = ref(false)
 const wrapper = ref<HTMLElement | null>(null)
 
-const peersInArea = computed(() => {
+const isMasterGlobal = computed(() => party.me?.role === 'master' && settings.masterVoiceScope === 'global')
+
+const visiblePeers = computed(() => {
   if (!party.me) return []
   return party.players.filter(p =>
     p.id !== party.me!.id
-    && p.currentAreaId === party.me!.currentAreaId
+    && (isMasterGlobal.value || p.currentAreaId === party.me!.currentAreaId)
   )
 })
 
 const speakingCount = computed(() => {
   let n = 0
-  for (const p of peersInArea.value) {
+  for (const p of visiblePeers.value) {
     if (voice.speakingPeers.value.has(p.id)) n++
   }
   return n
@@ -117,14 +119,32 @@ if (typeof window !== 'undefined') {
         class="text-xs uppercase tracking-wide mb-2"
         style="color: var(--z-text-md)"
       >
-        Voci nell area
+        {{ isMasterGlobal ? 'Voci — tutta la party' : 'Voci nell area' }}
       </h4>
+      <div
+        v-if="party.me?.role === 'master'"
+        class="flex items-center gap-1 mb-3"
+      >
+        <button
+          v-for="scope in (['zone', 'global'] as const)"
+          :key="scope"
+          type="button"
+          class="text-xs px-2 py-0.5 rounded"
+          :style="settings.masterVoiceScope === scope
+            ? 'background: var(--z-blood-700); color: var(--z-blood-300)'
+            : 'background: var(--z-bg-800); color: var(--z-text-md)'"
+          :title="scope === 'zone' ? 'Parla solo nella zona corrente' : 'Parla con tutta la party'"
+          @click="settings.setMasterVoiceScope(scope)"
+        >
+          {{ scope === 'zone' ? 'Zona' : 'Globale' }}
+        </button>
+      </div>
       <ul
-        v-if="peersInArea.length"
+        v-if="visiblePeers.length"
         class="space-y-2"
       >
         <li
-          v-for="p in peersInArea"
+          v-for="p in visiblePeers"
           :key="p.id"
           class="flex items-center gap-2"
         >
@@ -168,7 +188,7 @@ if (typeof window !== 'undefined') {
         class="text-xs italic"
         style="color: var(--z-text-lo)"
       >
-        Nessun altro player nell area corrente.
+        {{ isMasterGlobal ? 'Nessun altro player nella party.' : 'Nessun altro player nell area corrente.' }}
       </p>
     </div>
   </div>

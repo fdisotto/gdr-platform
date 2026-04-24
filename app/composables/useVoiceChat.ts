@@ -202,9 +202,10 @@ export function useVoiceChat() {
   function targetPeerIds(): string[] {
     if (!party.me) return []
     if (!settings.voiceEnabled) return []
+    const isMasterGlobal = party.me.role === 'master' && settings.masterVoiceScope === 'global'
     return party.players
       .filter(p => p.id !== party.me!.id)
-      .filter(p => p.currentAreaId === party.me!.currentAreaId)
+      .filter(p => isMasterGlobal || p.currentAreaId === party.me!.currentAreaId)
       .map(p => p.id)
   }
 
@@ -239,6 +240,7 @@ export function useVoiceChat() {
     watch(
       () => [
         settings.voiceEnabled,
+        settings.masterVoiceScope,
         party.me?.currentAreaId,
         party.players.map(p => `${p.id}:${p.currentAreaId}`).join('|')
       ],
