@@ -31,12 +31,15 @@ export function createTestDb(): Db {
 }
 
 function applyMigrations(sqlite: SqliteInstance) {
+  // Schema compatibile con la tabella di tracking che drizzle-kit `migrate`
+  // genererebbe nativamente, così DB esistenti non richiedono reset.
   sqlite.exec(`CREATE TABLE IF NOT EXISTS __drizzle_migrations (
-    hash TEXT PRIMARY KEY,
-    applied_at INTEGER NOT NULL
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hash TEXT NOT NULL,
+    created_at NUMERIC
   )`)
   const has = sqlite.prepare('SELECT 1 FROM __drizzle_migrations WHERE hash = ?')
-  const insert = sqlite.prepare('INSERT INTO __drizzle_migrations (hash, applied_at) VALUES (?, ?)')
+  const insert = sqlite.prepare('INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)')
 
   for (const m of MIGRATIONS) {
     if (has.get(m.hash)) continue
@@ -44,7 +47,16 @@ function applyMigrations(sqlite: SqliteInstance) {
     const stmts = m.sql.split(/-->\s*statement-breakpoint/i)
     for (const stmt of stmts) {
       const trimmed = stmt.trim()
-      if (trimmed) sqlite.exec(trimmed)
+      if (!trimmed) continue
+      try {
+        sqlite.exec(trimmed)
+      } catch (e) {
+        // Tollera "already exists" per idempotenza quando un DB preesistente
+        // ha già le tabelle (es. creato da un run precedente con schema
+        // tracking diverso). Qualunque altro errore lo ripropaghiamo.
+        const msg = (e as Error).message ?? ''
+        if (!/already exists/i.test(msg)) throw e
+      }
     }
     insert.run(m.hash, Date.now())
   }
