@@ -1,4 +1,4 @@
-import { HelloEvent, ChatSendEvent, MoveRequestEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent } from '~~/shared/protocol/ws'
+import { HelloEvent, ChatSendEvent, MoveRequestEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent } from '~~/shared/protocol/ws'
 import { useDb } from '~~/server/utils/db'
 import { findPlayerBySession, listOnlinePlayers, touchPlayer, updatePlayerArea } from '~~/server/services/players'
 import { partyMustExist } from '~~/server/services/parties'
@@ -81,7 +81,18 @@ export default defineWebSocketHandler({
   },
 
   close(peer: Peer) {
-    registry.unregister(peer)
+    const info = registry.unregister(peer)
+    if (!info) return
+    const leftEvent: PlayerLeftEvent = {
+      type: 'player:left',
+      playerId: info.playerId
+    }
+    const leftPayload = JSON.stringify(leftEvent)
+    for (const c of registry.listParty(info.partySeed)) {
+      try {
+        c.ws.send(leftPayload)
+      } catch { /* skip */ }
+    }
   }
 })
 
@@ -254,6 +265,19 @@ async function handleHello(peer: Peer, seed: string, sessionToken: string) {
     }
     sendJson(peer, init)
     touchPlayer(db, player.id)
+
+    // Notifica agli altri player della party del nuovo arrivo.
+    const joinEvent: PlayerJoinedEvent = {
+      type: 'player:joined',
+      player: { id: player.id, nickname: player.nickname, role: player.role, currentAreaId: player.currentAreaId }
+    }
+    const joinPayload = JSON.stringify(joinEvent)
+    for (const c of registry.listParty(seed)) {
+      if (c.ws === peer) continue // skip self
+      try {
+        c.ws.send(joinPayload)
+      } catch { /* skip */ }
+    }
   } catch (e) {
     sendJson(peer, { type: 'error', code: 'not_found', detail: (e as Error).message })
     peer.close(4004, 'not_found')
