@@ -3,7 +3,7 @@ import type { Db } from '~~/server/db/client'
 import { players, bans } from '~~/server/db/schema'
 import { generateToken, generateUuid } from '~~/server/utils/crypto'
 import { DomainError } from '~~/shared/errors'
-import { partyMustExist } from '~~/server/services/parties'
+import { partyMustExist, ensureGhostUser } from '~~/server/services/parties'
 
 export interface PlayerRow {
   id: string
@@ -19,7 +19,7 @@ export interface PlayerRow {
   sessionToken: string
 }
 
-export function joinParty(db: Db, seed: string, nickname: string): PlayerRow {
+export function joinParty(db: Db, seed: string, nickname: string, opts?: { userId?: string }): PlayerRow {
   partyMustExist(db, seed)
   const nick = nickname.trim()
 
@@ -33,10 +33,15 @@ export function joinParty(db: Db, seed: string, nickname: string): PlayerRow {
   const id = generateUuid()
   const sessionToken = generateToken(32)
   const now = Date.now()
+  // v2a transitional: se il chiamante non passa userId (test MVP path),
+  // creiamo un user "ghost" approved solo per soddisfare il FK.
+  // Task 22 del plan 7 rimuoverà questo fallback.
+  const userId = opts?.userId ?? ensureGhostUser(db, nick)
 
   db.insert(players).values({
     id,
     partySeed: seed,
+    userId,
     nickname: nick,
     role: 'user',
     currentAreaId: 'piazza',

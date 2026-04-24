@@ -15,6 +15,13 @@
       "when": 1777037162269,
       "tag": "0001_neat_ares",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1777041704871,
+      "tag": "0002_outgoing_the_phantom",
+      "breakpoints": true
     }
   ]
 }
