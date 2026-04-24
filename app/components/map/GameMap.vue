@@ -101,6 +101,122 @@ const contentTransform = computed(() => {
   const ty = (containerH.value - LOGICAL_H * s) / 2
   return `translate(${tx}, ${ty}) scale(${s})`
 })
+
+// ── Zoom & pan ───────────────────────────────────────────────────────────────
+// Transform applicato sopra a contentTransform: viewBox coords → viewBox coords.
+// zoom in [1, 4], pan in pixel del container (stessa scala del viewBox).
+const MIN_ZOOM = 1
+const MAX_ZOOM = 4
+const zoom = ref(1)
+const panX = ref(0)
+const panY = ref(0)
+const userTransform = computed(() =>
+  `translate(${panX.value} ${panY.value}) scale(${zoom.value})`
+)
+const isZoomed = computed(() => zoom.value > 1.001 || panX.value !== 0 || panY.value !== 0)
+
+function clampZoom(z: number): number {
+  return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z))
+}
+
+function resetView() {
+  zoom.value = 1
+  panX.value = 0
+  panY.value = 0
+}
+
+function zoomAt(cx: number, cy: number, factor: number) {
+  const newZoom = clampZoom(zoom.value * factor)
+  if (newZoom === zoom.value) return
+  const k = newZoom / zoom.value
+  panX.value = cx * (1 - k) + panX.value * k
+  panY.value = cy * (1 - k) + panY.value * k
+  zoom.value = newZoom
+}
+
+function onWheel(e: WheelEvent) {
+  if (!containerEl.value) return
+  const rect = containerEl.value.getBoundingClientRect()
+  const cx = e.clientX - rect.left
+  const cy = e.clientY - rect.top
+  const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15
+  zoomAt(cx, cy, factor)
+}
+
+// Pan con drag (mouse): iniziato sul bg, si propaga come pan solo se il
+// pointer si sposta oltre soglia — altrimenti è un click su area che
+// arriva normalmente all'handler MapArea.
+const panStart = ref<{ x: number, y: number } | null>(null)
+const isPanning = ref(false)
+const PAN_THRESHOLD_PX = 5
+
+function onPointerDown(e: PointerEvent) {
+  if (e.button !== 0) return
+  panStart.value = { x: e.clientX, y: e.clientY }
+  isPanning.value = false
+}
+
+function onPointerMove(e: PointerEvent) {
+  if (!panStart.value) return
+  const dx = e.clientX - panStart.value.x
+  const dy = e.clientY - panStart.value.y
+  if (!isPanning.value && Math.hypot(dx, dy) > PAN_THRESHOLD_PX) {
+    isPanning.value = true
+    ;(e.target as Element | null)?.setPointerCapture?.(e.pointerId)
+  }
+  if (isPanning.value) {
+    panX.value += e.movementX
+    panY.value += e.movementY
+  }
+}
+
+function onPointerUp(e: PointerEvent) {
+  if (isPanning.value) {
+    // Sopprimi il click che sta per arrivare come effetto collaterale del drag
+    const cancel = (ev: Event) => ev.stopPropagation()
+    window.addEventListener('click', cancel, { capture: true, once: true })
+    // Se per qualche motivo non arriva, rimuovi l'hook dopo un tick
+    setTimeout(() => window.removeEventListener('click', cancel, { capture: true }), 50)
+    ;(e.target as Element | null)?.releasePointerCapture?.(e.pointerId)
+  }
+  panStart.value = null
+  isPanning.value = false
+}
+
+// Pinch zoom (touch): 2 dita → distanza tra le due determina lo zoom
+const pinchState = ref<{ distance: number, cx: number, cy: number } | null>(null)
+
+function pointerDistance(a: Touch, b: Touch): number {
+  return Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY)
+}
+
+function onTouchStart(e: TouchEvent) {
+  if (e.touches.length !== 2 || !containerEl.value) return
+  const [a, b] = [e.touches[0]!, e.touches[1]!]
+  const rect = containerEl.value.getBoundingClientRect()
+  pinchState.value = {
+    distance: pointerDistance(a, b),
+    cx: (a.clientX + b.clientX) / 2 - rect.left,
+    cy: (a.clientY + b.clientY) / 2 - rect.top
+  }
+  // Annulla eventuale pan mono-dito in corso
+  panStart.value = null
+  isPanning.value = false
+}
+
+function onTouchMove(e: TouchEvent) {
+  if (!pinchState.value || e.touches.length !== 2) return
+  e.preventDefault()
+  const [a, b] = [e.touches[0]!, e.touches[1]!]
+  const dist = pointerDistance(a, b)
+  const factor = dist / pinchState.value.distance
+  zoomAt(pinchState.value.cx, pinchState.value.cy, factor)
+  pinchState.value.distance = dist
+}
+
+function onTouchEnd() {
+  pinchState.value = null
+}
 let resizeObs: ResizeObserver | null = null
 onMounted(() => {
   if (typeof window === 'undefined' || !containerEl.value) return
@@ -174,7 +290,16 @@ function onAreaClick(areaId: AreaId) {
     <svg
       :viewBox="viewBox"
       preserveAspectRatio="none"
-      style="width: 100%; height: 100%; display: block"
+      style="width: 100%; height: 100%; display: block; touch-action: none"
+      :style="isPanning ? 'cursor: grabbing' : ''"
+      @wheel.prevent="onWheel"
+      @pointerdown="onPointerDown"
+      @pointermove="onPointerMove"
+      @pointerup="onPointerUp"
+      @pointerleave="onPointerUp"
+      @touchstart.passive="onTouchStart"
+      @touchmove="onTouchMove"
+      @touchend="onTouchEnd"
     >
       <defs>
         <radialGradient
@@ -260,6 +385,8 @@ function onAreaClick(areaId: AreaId) {
         opacity="0.3"
       />
 
+      <!-- User zoom/pan applicato sopra al fit-to-container -->
+      <g :transform="userTransform">
       <!-- Contenuto logico 1000x700 scalato uniformemente e centrato -->
       <g :transform="contentTransform">
         <MapDecor />
@@ -294,9 +421,54 @@ function onAreaClick(areaId: AreaId) {
 
         <MapWeatherOverlay :weather="weather" />
       </g>
+      </g>
     </svg>
     <MapLegend />
     <MapPlayersBox />
+
+    <!-- Controlli zoom: +/-/reset -->
+    <div
+      class="absolute bottom-3 right-3 flex flex-col gap-1 rounded-md p-1"
+      style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
+    >
+      <button
+        type="button"
+        class="flex items-center justify-center size-7 rounded"
+        style="background: var(--z-bg-700); color: var(--z-text-md)"
+        title="Zoom +"
+        @click="zoomAt(containerW / 2, containerH / 2, 1.3)"
+      >
+        <UIcon
+          name="i-lucide-plus"
+          class="size-4"
+        />
+      </button>
+      <button
+        type="button"
+        class="flex items-center justify-center size-7 rounded"
+        style="background: var(--z-bg-700); color: var(--z-text-md)"
+        title="Zoom -"
+        @click="zoomAt(containerW / 2, containerH / 2, 1 / 1.3)"
+      >
+        <UIcon
+          name="i-lucide-minus"
+          class="size-4"
+        />
+      </button>
+      <button
+        v-if="isZoomed"
+        type="button"
+        class="flex items-center justify-center size-7 rounded"
+        style="background: var(--z-bg-700); color: var(--z-text-md)"
+        title="Reset vista"
+        @click="resetView"
+      >
+        <UIcon
+          name="i-lucide-maximize"
+          class="size-4"
+        />
+      </button>
+    </div>
     <div
       v-if="playerMenu"
       class="fixed z-40 rounded-md py-1"
