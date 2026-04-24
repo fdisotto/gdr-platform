@@ -64,6 +64,7 @@ function cursorStyle(): string {
       ry="8"
       fill="url(#area-infested)"
       opacity="0.6"
+      pointer-events="none"
     />
     <rect
       v-if="status() === 'ruined'"
@@ -73,10 +74,12 @@ function cursorStyle(): string {
       ry="8"
       fill="url(#area-ruined)"
       opacity="0.35"
+      pointer-events="none"
     />
     <g
       v-if="status() === 'closed'"
       :transform="`translate(${area.svg.w / 2 - 12}, ${area.svg.h / 2 - 12})`"
+      pointer-events="none"
     >
       <rect
         x="4"

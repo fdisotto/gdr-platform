@@ -1,4 +1,4 @@
-import { ref, onBeforeUnmount } from 'vue'
+import { ref, type Ref } from 'vue'
 import { usePartyStore, type MeSnapshot, type PartySnapshot, type PlayerSnapshot, type AreaStateSnapshot } from '~/stores/party'
 import { useChatStore, type ChatMessage } from '~/stores/chat'
 import { useServerTime } from '~/composables/useServerTime'
@@ -8,36 +8,60 @@ interface ConnectOptions {
   sessionToken: string
 }
 
+type Status = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed'
+
+// Singleton a livello di modulo: tutti i componenti che chiamano
+// usePartyConnection() condividono la stessa WebSocket. Senza questo ogni
+// chiamata creava un ref locale nuovo — il send dal ChatInput andava a una
+// connessione diversa da quella aperta dalla party page.
+let wsRef: Ref<WebSocket | null> | null = null
+let statusRef: Ref<Status> | null = null
+let pendingQueueRef: Ref<Record<string, unknown>[]> | null = null
+let closedFlag = false
+let reconnectAttempts = 0
+let pendingOpts: ConnectOptions | null = null
+
+function wsUrl(): string {
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${proto}//${window.location.host}/ws/party`
+}
+
 export function usePartyConnection() {
+  if (!wsRef) wsRef = ref<WebSocket | null>(null)
+  if (!statusRef) statusRef = ref<Status>('idle')
+  if (!pendingQueueRef) pendingQueueRef = ref<Record<string, unknown>[]>([])
+
+  const ws = wsRef
+  const status = statusRef
+  const pendingQueue = pendingQueueRef
+
   const partyStore = usePartyStore()
   const chatStore = useChatStore()
   const serverTime = useServerTime()
 
-  const ws = ref<WebSocket | null>(null)
-  const status = ref<'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed'>('idle')
-  const pendingQueue = ref<Record<string, unknown>[]>([])
-  let closed = false
-  let reconnectAttempts = 0
-  let pendingOpts: ConnectOptions | null = null
-
-  function wsUrl(): string {
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${proto}//${window.location.host}/ws/party`
-  }
-
   function scheduleReconnect() {
-    if (closed) return
+    if (closedFlag) return
     reconnectAttempts++
     const delay = Math.min(30_000, 1000 * 2 ** Math.min(reconnectAttempts, 5))
     status.value = 'reconnecting'
     setTimeout(() => {
-      if (!closed && pendingOpts) connect(pendingOpts)
+      if (!closedFlag && pendingOpts) connect(pendingOpts)
     }, delay)
   }
 
   function connect(opts: ConnectOptions) {
+    // Idempotente: se già connesso allo stesso seed+token, non riconnettere.
+    if (
+      ws.value
+      && (status.value === 'connecting' || status.value === 'open')
+      && pendingOpts
+      && pendingOpts.seed === opts.seed
+      && pendingOpts.sessionToken === opts.sessionToken
+    ) {
+      return
+    }
     pendingOpts = opts
-    closed = false
+    closedFlag = false
     status.value = 'connecting'
     const sock = new WebSocket(wsUrl())
     ws.value = sock
@@ -69,7 +93,7 @@ export function usePartyConnection() {
 
     sock.addEventListener('close', () => {
       ws.value = null
-      if (!closed) scheduleReconnect()
+      if (!closedFlag) scheduleReconnect()
       else status.value = 'closed'
     })
 
@@ -81,10 +105,13 @@ export function usePartyConnection() {
   }
 
   function disconnect() {
-    closed = true
+    closedFlag = true
     status.value = 'closed'
     ws.value?.close()
     ws.value = null
+    pendingOpts = null
+    reconnectAttempts = 0
+    pendingQueue.value = []
   }
 
   function send(event: Record<string, unknown>) {
@@ -92,7 +119,6 @@ export function usePartyConnection() {
       ws.value.send(JSON.stringify(event))
       return
     }
-    // Se stiamo riconnettendo, accoda.
     if (status.value === 'reconnecting' || status.value === 'connecting') {
       pendingQueue.value = [...pendingQueue.value, event]
     }
@@ -179,9 +205,15 @@ export function usePartyConnection() {
     }
   }
 
-  onBeforeUnmount(() => {
-    disconnect()
-  })
-
   return { ws, status, pendingQueue, connect, disconnect, send }
+}
+
+// Helper per i test: azzera il singleton.
+export function _resetPartyConnectionForTests() {
+  wsRef = null
+  statusRef = null
+  pendingQueueRef = null
+  closedFlag = false
+  reconnectAttempts = 0
+  pendingOpts = null
 }

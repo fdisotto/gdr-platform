@@ -7,7 +7,10 @@ export default defineNuxtConfig({
     '@pinia/nuxt'
   ],
 
-  ssr: true,
+  // SPA puro: evita problemi di singleton module-level condiviso tra richieste
+  // SSR e bug Reka-UI ConfigProvider. L'MVP è stateful (ws + localStorage),
+  // ssr non aggiunge valore. Rivalutare in Plan 6.
+  ssr: false,
 
   devtools: { enabled: true },
 

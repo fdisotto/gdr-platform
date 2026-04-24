@@ -1,8 +1,11 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, vi } from 'vitest'
-import { useServerTime } from '~/composables/useServerTime'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { useServerTime, _resetServerTimeForTests } from '~/composables/useServerTime'
 
 describe('useServerTime', () => {
+  beforeEach(() => {
+    _resetServerTimeForTests()
+  })
   it('calcola offset da serverTime e Date.now()', () => {
     const realNow = 1_000_000
     vi.spyOn(Date, 'now').mockReturnValue(realNow)

@@ -1,8 +1,16 @@
-import { ref } from 'vue'
+import { ref, type Ref } from 'vue'
+
+// Singleton a livello di modulo: useServerTime() viene chiamato da più
+// componenti (header, weather badge, connection composable) che devono
+// condividere lo stesso ref di offset/synced.
+let offsetRef: Ref<number> | null = null
+let syncedRef: Ref<boolean> | null = null
 
 export function useServerTime() {
-  const offset = ref(0)
-  const synced = ref(false)
+  if (!offsetRef) offsetRef = ref(0)
+  if (!syncedRef) syncedRef = ref(false)
+  const offset = offsetRef
+  const synced = syncedRef
 
   function sync(serverTime: number) {
     offset.value = serverTime - Date.now()
@@ -26,4 +34,10 @@ export function useServerTime() {
   }
 
   return { offset, synced, sync, currentTime, format, formatDate }
+}
+
+// Helper per i test: azzera il singleton.
+export function _resetServerTimeForTests() {
+  offsetRef = null
+  syncedRef = null
 }
