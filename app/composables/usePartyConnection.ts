@@ -25,9 +25,11 @@ type Status = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed'
 let wsRef: Ref<WebSocket | null> | null = null
 let statusRef: Ref<Status> | null = null
 let pendingQueueRef: Ref<Record<string, unknown>[]> | null = null
+let reconnectAtRef: Ref<number | null> | null = null
+let reconnectAttemptsRef: Ref<number> | null = null
 let closedFlag = false
-let reconnectAttempts = 0
 let pendingOpts: ConnectOptions | null = null
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
 function wsUrl(): string {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -38,10 +40,14 @@ export function usePartyConnection() {
   if (!wsRef) wsRef = ref<WebSocket | null>(null)
   if (!statusRef) statusRef = ref<Status>('idle')
   if (!pendingQueueRef) pendingQueueRef = ref<Record<string, unknown>[]>([])
+  if (!reconnectAtRef) reconnectAtRef = ref<number | null>(null)
+  if (!reconnectAttemptsRef) reconnectAttemptsRef = ref<number>(0)
 
   const ws = wsRef
   const status = statusRef
   const pendingQueue = pendingQueueRef
+  const reconnectAt = reconnectAtRef
+  const reconnectAttempts = reconnectAttemptsRef
 
   const partyStore = usePartyStore()
   const chatStore = useChatStore()
@@ -55,12 +61,26 @@ export function usePartyConnection() {
 
   function scheduleReconnect() {
     if (closedFlag) return
-    reconnectAttempts++
-    const delay = Math.min(30_000, 1000 * 2 ** Math.min(reconnectAttempts, 5))
+    reconnectAttempts.value++
+    const delay = Math.min(30_000, 1000 * 2 ** Math.min(reconnectAttempts.value, 5))
     status.value = 'reconnecting'
-    setTimeout(() => {
+    reconnectAt.value = Date.now() + delay
+    if (reconnectTimer) clearTimeout(reconnectTimer)
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null
+      reconnectAt.value = null
       if (!closedFlag && pendingOpts) connect(pendingOpts)
     }, delay)
+  }
+
+  function retryNow() {
+    if (closedFlag || !pendingOpts) return
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+    reconnectAt.value = null
+    connect(pendingOpts)
   }
 
   function connect(opts: ConnectOptions) {
@@ -81,7 +101,8 @@ export function usePartyConnection() {
     ws.value = sock
 
     sock.addEventListener('open', () => {
-      reconnectAttempts = 0
+      reconnectAttempts.value = 0
+      reconnectAt.value = null
       status.value = 'open'
       sock.send(JSON.stringify({ type: 'hello', seed: opts.seed, sessionToken: opts.sessionToken }))
       // Flush pending messages accumulati durante reconnecting.
@@ -124,7 +145,12 @@ export function usePartyConnection() {
     ws.value?.close()
     ws.value = null
     pendingOpts = null
-    reconnectAttempts = 0
+    reconnectAttempts.value = 0
+    reconnectAt.value = null
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
     pendingQueue.value = []
   }
 
@@ -329,7 +355,7 @@ export function usePartyConnection() {
     }
   }
 
-  return { ws, status, pendingQueue, connect, disconnect, send }
+  return { ws, status, pendingQueue, reconnectAt, reconnectAttempts, connect, disconnect, send, retryNow }
 }
 
 // Helper per i test: azzera il singleton.
@@ -337,7 +363,12 @@ export function _resetPartyConnectionForTests() {
   wsRef = null
   statusRef = null
   pendingQueueRef = null
+  reconnectAtRef = null
+  reconnectAttemptsRef = null
   closedFlag = false
-  reconnectAttempts = 0
   pendingOpts = null
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
 }
