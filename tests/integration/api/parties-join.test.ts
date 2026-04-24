@@ -1,9 +1,16 @@
 import { describe, it, expect } from 'vitest'
-import { setup, $fetch } from '@nuxt/test-utils/e2e'
+import { setup, fetch } from '@nuxt/test-utils/e2e'
 import { fileURLToPath } from 'node:url'
-import { resolve } from 'node:path'
+import { resolve, join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { mkdtempSync, rmSync } from 'node:fs'
+import {
+  registerApproveLogin, uniqueUsername
+} from '../helpers/e2e-auth'
 
 const rootDir = fileURLToPath(new URL('../../..', import.meta.url))
+const tmpDir = mkdtempSync(join(tmpdir(), 'gdr-parties-join-'))
+const dbPath = join(tmpDir, 'gdr.sqlite')
 
 await setup({
   rootDir,
@@ -17,42 +24,78 @@ await setup({
       }
     }
   },
-  env: { DATABASE_URL: ':memory:' }
+  env: { DATABASE_URL: dbPath }
 })
 
-async function createParty() {
-  return $fetch('/api/parties', {
+async function createPartyWith(displayName: string): Promise<{ seed: string }> {
+  const { cookie } = await registerApproveLogin(dbPath, uniqueUsername('m'))
+  const res = await fetch('/api/parties', {
     method: 'POST',
-    body: { masterNickname: 'Master' }
-  }) as Promise<{ seed: string }>
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({ displayName })
+  })
+  if (res.status !== 200) throw new Error(`createParty failed ${res.status}`)
+  const body = await res.json() as { seed: string }
+  return { seed: body.seed }
 }
 
 describe('POST /api/parties/:seed/join', () => {
-  it('unisce un nuovo player', async () => {
-    const { seed } = await createParty()
-    const r = await $fetch(`/api/parties/${seed}/join`, {
+  it('unisce un nuovo player con cookie auth', async () => {
+    const { seed } = await createPartyWith('Master')
+    const { cookie: annaCookie } = await registerApproveLogin(dbPath, uniqueUsername('a'))
+    const res = await fetch(`/api/parties/${seed}/join`, {
       method: 'POST',
-      body: { nickname: 'Anna' }
-    }) as Record<string, unknown>
-    expect(typeof r.sessionToken).toBe('string')
-    const me = (r.initialState as { me: { nickname: string, role: string } }).me
+      headers: { 'content-type': 'application/json', 'cookie': annaCookie },
+      body: JSON.stringify({ displayName: 'Anna' })
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json() as Record<string, unknown>
+    expect(body.sessionToken).toBeUndefined()
+    const me = (body.initialState as { me: { nickname: string, role: string } }).me
     expect(me.nickname).toBe('Anna')
     expect(me.role).toBe('user')
   })
 
-  it('rifiuta party inesistente con 404', async () => {
-    await expect($fetch('/api/parties/00000000-0000-0000-0000-000000000000/join', {
+  it('rifiuta senza cookie auth con 401', async () => {
+    const { seed } = await createPartyWith('Master')
+    const res = await fetch(`/api/parties/${seed}/join`, {
       method: 'POST',
-      body: { nickname: 'Anna' }
-    })).rejects.toMatchObject({ statusCode: 404 })
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ displayName: 'Anna' })
+    })
+    expect(res.status).toBe(401)
   })
 
-  it('rifiuta nickname conflittuale con 409', async () => {
-    const { seed } = await createParty()
-    await $fetch(`/api/parties/${seed}/join`, { method: 'POST', body: { nickname: 'Anna' } })
-    await expect($fetch(`/api/parties/${seed}/join`, {
+  it('rifiuta party inesistente con 404', async () => {
+    const { cookie } = await registerApproveLogin(dbPath, uniqueUsername('a'))
+    const res = await fetch('/api/parties/00000000-0000-0000-0000-000000000000/join', {
       method: 'POST',
-      body: { nickname: 'Anna' }
-    })).rejects.toMatchObject({ statusCode: 409, statusMessage: 'conflict' })
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ displayName: 'Anna' })
+    })
+    expect(res.status).toBe(404)
   })
+
+  it('rifiuta displayName conflittuale con 409', async () => {
+    const { seed } = await createPartyWith('Master')
+    const { cookie: annaCookie } = await registerApproveLogin(dbPath, uniqueUsername('a'))
+    await fetch(`/api/parties/${seed}/join`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'cookie': annaCookie },
+      body: JSON.stringify({ displayName: 'Anna' })
+    })
+    const { cookie: bobCookie } = await registerApproveLogin(dbPath, uniqueUsername('b'))
+    const res = await fetch(`/api/parties/${seed}/join`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'cookie': bobCookie },
+      body: JSON.stringify({ displayName: 'Anna' })
+    })
+    expect(res.status).toBe(409)
+  })
+})
+
+process.on('exit', () => {
+  try {
+    rmSync(tmpDir, { recursive: true, force: true })
+  } catch { /* ignore */ }
 })

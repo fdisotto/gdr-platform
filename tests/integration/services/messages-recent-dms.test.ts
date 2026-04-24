@@ -3,6 +3,7 @@ import { createTestDb, type Db } from '~~/server/db/client'
 import { createParty } from '~~/server/services/parties'
 import { joinParty } from '~~/server/services/players'
 import { insertMessage, listRecentDmsForPlayer } from '~~/server/services/messages'
+import { createApprovedUser } from '~~/tests/integration/helpers/test-user'
 
 let db: Db
 let seed: string
@@ -12,11 +13,14 @@ let lucaId: string
 
 beforeEach(async () => {
   db = createTestDb()
-  const r = await createParty(db, { masterNickname: 'M' })
+  const masterUserId = await createApprovedUser(db, 'master-dm')
+  const annaUserId = await createApprovedUser(db, 'anna-dm')
+  const lucaUserId = await createApprovedUser(db, 'luca-dm')
+  const r = await createParty(db, { userId: masterUserId, displayName: 'M' })
   seed = r.seed
   masterId = r.masterPlayer.id
-  annaId = joinParty(db, seed, 'Anna').id
-  lucaId = joinParty(db, seed, 'Luca').id
+  annaId = joinParty(db, seed, 'Anna', { userId: annaUserId }).id
+  lucaId = joinParty(db, seed, 'Luca', { userId: lucaUserId }).id
 })
 
 describe('listRecentDmsForPlayer', () => {

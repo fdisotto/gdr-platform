@@ -4,13 +4,15 @@ import { createParty } from '~~/server/services/parties'
 import {
   closeArea, openArea, isAreaClosed, listClosedAreas
 } from '~~/server/services/area-access'
+import { createApprovedUser } from '~~/tests/integration/helpers/test-user'
 
 let db: Db
 let seed: string
 
 beforeEach(async () => {
   db = createTestDb()
-  const r = await createParty(db, { masterNickname: 'M' })
+  const userId = await createApprovedUser(db)
+  const r = await createParty(db, { userId, displayName: 'M' })
   seed = r.seed
 })
 
@@ -44,7 +46,8 @@ describe('area-access service', () => {
   })
 
   it('chiusure di party diverse sono isolate', async () => {
-    const other = await createParty(db, { masterNickname: 'M2' })
+    const otherUserId = await createApprovedUser(db, 'other-master')
+    const other = await createParty(db, { userId: otherUserId, displayName: 'M2' })
     closeArea(db, seed, 'fogne', null)
     expect(isAreaClosed(db, other.seed, 'fogne')).toBe(false)
   })

@@ -3,13 +3,15 @@ import { createTestDb, type Db } from '~~/server/db/client'
 import { createParty } from '~~/server/services/parties'
 import { listAreasState, updateAreaState, findAreaState } from '~~/server/services/areas'
 import { AREA_IDS } from '~~/shared/map/areas'
+import { createApprovedUser } from '~~/tests/integration/helpers/test-user'
 
 let db: Db
 let seed: string
 
 beforeEach(async () => {
   db = createTestDb()
-  const r = await createParty(db, { masterNickname: 'Master' })
+  const userId = await createApprovedUser(db)
+  const r = await createParty(db, { userId, displayName: 'Master' })
   seed = r.seed
 })
 

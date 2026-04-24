@@ -4,25 +4,21 @@ export const NICKNAME_REGEX = /^[a-zA-Z0-9 _-]+$/
 
 const Nickname = z.string().min(2).max(24).regex(NICKNAME_REGEX).trim()
 
+// v2a: il nickname del master ha perso ogni funzione d'identità (sostituito
+// dall'account user); resta solo come display name visibile nella party.
+// Lo spec v2a lo omette dal body di create, ma serve comunque per il player
+// master creato contestualmente — se non lo passassimo il server dovrebbe
+// inventarsi un fallback (es. username), mischiando identità e display.
 export const CreatePartyBody = z.object({
-  masterNickname: Nickname
+  displayName: Nickname,
+  cityName: z.string().min(1).max(64).optional()
 })
 export type CreatePartyBody = z.infer<typeof CreatePartyBody>
 
 export const JoinPartyBody = z.object({
-  nickname: Nickname
+  displayName: Nickname
 })
 export type JoinPartyBody = z.infer<typeof JoinPartyBody>
-
-export const ReclaimMasterBody = z.object({
-  masterToken: z.string().min(1).max(256)
-})
-export type ReclaimMasterBody = z.infer<typeof ReclaimMasterBody>
-
-export const ResumeBody = z.object({
-  sessionToken: z.string().min(1).max(256)
-})
-export type ResumeBody = z.infer<typeof ResumeBody>
 
 // v2a auth: schemi per registrazione, login, cambio password.
 export const USERNAME_REGEX = /^[a-zA-Z0-9_-]+$/

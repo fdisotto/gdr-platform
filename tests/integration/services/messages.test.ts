@@ -5,6 +5,7 @@ import { joinParty } from '~~/server/services/players'
 import {
   insertMessage, listAreaMessages, softDeleteMessage, editMessage
 } from '~~/server/services/messages'
+import { createApprovedUser } from '~~/tests/integration/helpers/test-user'
 
 let db: Db
 let seed: string
@@ -12,7 +13,8 @@ let masterId: string
 
 beforeEach(async () => {
   db = createTestDb()
-  const r = await createParty(db, { masterNickname: 'M' })
+  const masterUserId = await createApprovedUser(db, 'master-msg')
+  const r = await createParty(db, { userId: masterUserId, displayName: 'M' })
   seed = r.seed
   masterId = r.masterPlayer.id
 })
@@ -73,8 +75,9 @@ describe('messages service', () => {
     expect(rows[0]!.editedAt).not.toBeNull()
   })
 
-  it('insertMessage con kind=dm usa targetPlayerId e areaId null', () => {
-    const other = joinParty(db, seed, 'Anna')
+  it('insertMessage con kind=dm usa targetPlayerId e areaId null', async () => {
+    const annaUserId = await createApprovedUser(db, 'anna-msg')
+    const other = joinParty(db, seed, 'Anna', { userId: annaUserId })
     const msg = insertMessage(db, {
       partySeed: seed, kind: 'dm', authorPlayerId: masterId, authorDisplay: 'M',
       areaId: null, targetPlayerId: other.id, body: 'ciao anna'
