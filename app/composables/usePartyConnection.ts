@@ -113,6 +113,32 @@ export function usePartyConnection() {
         serverTime.sync((data as { serverTime: number }).serverTime)
         break
       }
+      case 'player:joined': {
+        const payload = data as { player: PlayerSnapshot }
+        if (partyStore.players.some(p => p.id === payload.player.id)) break
+        partyStore.players = [...partyStore.players, payload.player]
+        break
+      }
+      case 'player:left': {
+        const payload = data as { playerId: string }
+        partyStore.players = partyStore.players.filter(p => p.id !== payload.playerId)
+        break
+      }
+      case 'player:moved': {
+        const payload = data as { playerId: string, toAreaId: string, fromAreaId: string, teleported: boolean }
+        partyStore.players = partyStore.players.map(p =>
+          p.id === payload.playerId ? { ...p, currentAreaId: payload.toAreaId } : p
+        )
+        if (partyStore.me && partyStore.me.id === payload.playerId) {
+          partyStore.me = { ...partyStore.me, currentAreaId: payload.toAreaId }
+        }
+        break
+      }
+      case 'area:entered': {
+        const payload = data as { areaId: string, messages: ChatMessage[] }
+        chatStore.messagesByArea[payload.areaId] = payload.messages
+        break
+      }
       case 'error': {
         console.warn('[ws error]', data)
         break
