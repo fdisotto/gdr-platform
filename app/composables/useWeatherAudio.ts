@@ -113,11 +113,9 @@ export function useWeatherAudio() {
 
   function applyWeather(code: string | null, intensity: number) {
     if (typeof window === 'undefined') return
-    // Memorizza sempre l ultimo stato, così se l audio viene riattivato
-    // dopo riusciamo a "soffiare" il suono giusto subito.
     state.lastCode = code
     state.lastIntensity = intensity
-    if (!settings.weatherAudio) {
+    if (settings.weatherVolume <= 0) {
       setLevel(state.master, 0)
       return
     }
@@ -125,7 +123,7 @@ export function useWeatherAudio() {
     ensureRain()
     ensureWind()
     if (state.master) {
-      setLevel(state.master, 1)
+      setLevel(state.master, settings.weatherVolume)
     }
     const isRain = code === 'rain' || code === 'storm'
     const isWindy = code === 'storm' || code === 'fog' || code === 'ashfall'
@@ -135,7 +133,7 @@ export function useWeatherAudio() {
 
   function thunder() {
     if (typeof window === 'undefined') return
-    if (!settings.weatherAudio) return
+    if (settings.weatherVolume <= 0) return
     const ctx = ensureContext()
     const now = ctx.currentTime
     // Rumble: low sine + filtered noise
@@ -171,18 +169,17 @@ export function useWeatherAudio() {
 
   if (!installed) {
     installed = true
-    watch(() => settings.weatherAudio, (enabled) => {
-      if (enabled) {
+    watch(() => settings.weatherVolume, (vol) => {
+      if (vol > 0) {
         ensureContext()
         if (state.ctx?.state === 'suspended') {
           state.ctx.resume().catch(() => {})
         }
-        // Riapplica subito l ultimo stato meteo conosciuto (rain/wind gain)
-        // così l utente sente l audio immediatamente al toggle, senza dover
-        // aspettare un cambio meteo.
+        // Riapplica l'ultimo stato meteo (sets rain/wind gain) e master gain
+        // = volume corrente.
         applyWeather(state.lastCode, state.lastIntensity)
-      } else {
-        if (state.master) setLevel(state.master, 0)
+      } else if (state.master) {
+        setLevel(state.master, 0)
       }
     })
   }
