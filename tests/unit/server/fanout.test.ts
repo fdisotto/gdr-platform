@@ -73,9 +73,9 @@ describe('shout fanout', () => {
 describe('whisper fanout', () => {
   it('whisper: mittente + target (stessa area) + master', () => {
     const connections = [
-      conn('alice', 'piazza', 'user'),   // mittente
-      conn('bob', 'piazza', 'user'),     // target, stessa area
-      conn('carla', 'fogne', 'user'),    // altro
+      conn('alice', 'piazza', 'user'), // mittente
+      conn('bob', 'piazza', 'user'), // target, stessa area
+      conn('carla', 'fogne', 'user'), // altro
       conn('master', 'scuola', 'master')
     ]
     const result = pickFanoutRecipients(connections, {
@@ -88,7 +88,7 @@ describe('whisper fanout', () => {
   it('whisper: target in altra area non riceve (per i non-master)', () => {
     const connections = [
       conn('alice', 'piazza', 'user'),
-      conn('bob', 'fogne', 'user'),     // target, area diversa
+      conn('bob', 'fogne', 'user'), // target, area diversa
       conn('carla', 'piazza', 'user')
     ]
     const result = pickFanoutRecipients(connections, {

@@ -17,7 +17,9 @@ await setup({
   env: { DATABASE_URL: ':memory:' }
 })
 
-function base(): string { return nuxtUrl('/') }
+function base(): string {
+  return nuxtUrl('/')
+}
 
 async function openWs(seed: string, sessionToken: string): Promise<WebSocket> {
   const urlStr = base().replace(/^http/, 'ws').replace(/\/$/, '') + '/ws/party'
@@ -35,26 +37,6 @@ function nextMessageMatching(ws: WebSocket, predicate: (m: Record<string, unknow
     const timer = setTimeout(() => {
       ws.off('message', onMsg)
       reject(new Error('timeout'))
-    }, timeoutMs)
-    function onMsg(data: WebSocket.RawData) {
-      try {
-        const m = JSON.parse(String(data)) as Record<string, unknown>
-        if (predicate(m)) {
-          ws.off('message', onMsg)
-          clearTimeout(timer)
-          resolve(m)
-        }
-      } catch { /* skip */ }
-    }
-    ws.on('message', onMsg)
-  })
-}
-
-function tryNextMessage(ws: WebSocket, predicate: (m: Record<string, unknown>) => boolean, timeoutMs = 400) {
-  return new Promise<Record<string, unknown> | null>(resolve => {
-    const timer = setTimeout(() => {
-      ws.off('message', onMsg)
-      resolve(null)
     }, timeoutMs)
     function onMsg(data: WebSocket.RawData) {
       try {
@@ -103,7 +85,9 @@ describe('chat:send whisper/dm/roll', () => {
     expect((mB.message as { body: string }).body).toBe('segreto')
     expect((mM.message as { targetPlayerId: string }).targetPlayerId).toBe(joinB.playerId)
 
-    wsM.close(); wsA.close(); wsB.close()
+    wsM.close()
+    wsA.close()
+    wsB.close()
   })
 
   it('whisper rifiutato se target in altra area', async () => {
@@ -134,7 +118,8 @@ describe('chat:send whisper/dm/roll', () => {
     const err = await nextMessageMatching(wsA, m => m.type === 'error')
     expect((err as { code: string }).code).toBe('forbidden')
 
-    wsA.close(); wsB.close()
+    wsA.close()
+    wsB.close()
   })
 
   it('dm funziona cross-area', async () => {
@@ -166,7 +151,8 @@ describe('chat:send whisper/dm/roll', () => {
     expect((mB.message as { kind: string, areaId: string | null }).kind).toBe('dm')
     expect((mB.message as { areaId: string | null }).areaId).toBeNull()
 
-    wsA.close(); wsB.close()
+    wsA.close()
+    wsB.close()
   })
 
   it('roll parsa 2d6 server-side e pubblica risultato', async () => {
