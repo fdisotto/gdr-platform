@@ -4,9 +4,10 @@ Piattaforma web per giocare GDR (gioco di ruolo) a tema zombi / post-apocalittic
 via chat testuale, con una mappa della città a zone, voice chat di prossimità,
 meteo procedurale e strumenti di moderazione per il master.
 
-Dark-only, desktop-first, nessuna registrazione: si gioca per "party" identificate
-da un seed UUID; i partecipanti scelgono solo un nickname e un ruolo (player o
-master).
+Dark-only, desktop-first. Dalla **v2a** serve un account (username + password)
+per giocare: ogni utente sceglie poi un *display name* per-party. Le party
+restano identificate da un seed UUID; il ruolo master appartiene al creatore
+della party.
 
 ## Stack
 
@@ -25,21 +26,53 @@ Serve Node 20+ e pnpm 10+.
 
 ```bash
 pnpm install
-pnpm db:migrate   # prima volta: crea ./data/gdr.sqlite
+pnpm db:migrate   # prima volta: crea ./data/gdr.sqlite + seed admin/changeme
 pnpm dev          # http://localhost:3000
 ```
 
+`pnpm db:migrate` applica le migrazioni drizzle e chiama `scripts/seed-superadmin.ts`
+che inserisce l'account superadmin di default `admin / changeme` con flag
+`must_reset`: al primo login (su `/admin/login`) sei obbligato a cambiare la
+password prima di poter operare. Finché la password è quella di default,
+il server lo segnala in console con un warning.
+
 Il server Nitro espone:
-- HTTP + SSR (SPA in realtà, `ssr: false`)
+- HTTP + SSR (SPA, `ssr: false`)
 - WebSocket su `/ws/party` (via `experimental.websocket` di Nitro)
+  autenticato dal cookie `gdr_session`
+
+## Auth (v2a)
+
+- **Registrazione self-service con approvazione**: vai su `/register`, compila
+  username + password. Il tuo account entra in stato `pending`; un superadmin
+  deve approvarti dal dashboard admin prima che tu possa fare login.
+- **Login utente** su `/login`. La sessione è un cookie `gdr_session`
+  httpOnly SameSite=Lax con TTL 30 giorni (sliding): viene esteso ogni volta
+  che fai una chiamata autenticata entro gli ultimi 15 giorni di validità.
+- **Login superadmin** su `/admin/login` (separato dal login utente). Con
+  mustReset attivo tutti gli endpoint admin rispondono 403 tranne
+  change-password.
+- **Rate limit**: 5 tentativi falliti di login in 15 minuti per
+  `(username, ip)` → 429. 3 registrazioni / ora per IP.
+- **Password reset**: non c'è self-service (niente email). L'utente chiede al
+  superadmin, che dal dashboard genera una password temporanea one-shot
+  mostrata solo lì.
+- **Audit log**: tabella `auth_events` append-only con register, login,
+  login_failed, logout, change-password, ban, reset. Consultabile dal tab
+  "Audit" del dashboard admin.
+
+Il display name per-party si sceglie al join (o alla creazione, nel caso del
+master). Lo stesso account può apparire con display name diversi in party
+diverse.
 
 ## Come si gioca
 
-1. Nella home **crea una party**: ricevi un seed UUID e un master token (il
-   token sblocca il ruolo master, tienilo al sicuro).
-2. Condividi **solo il seed** (o l'URL) con chi vuoi far giocare — il token
-   non va mai condiviso, te lo dà il DB.
-3. Gli altri giocatori aprono l'URL, scelgono un nickname e entrano come user.
+1. Fai **login** (o registrati e aspetta l'approvazione di un superadmin).
+2. Dalla home **crea una party**: digiti il tuo display name per quella party
+   e ricevi il seed UUID. Sei automaticamente il master della party creata.
+3. Condividi l'URL `/party/<seed>` con chi vuoi far giocare. Gli altri, una
+   volta loggati col loro account, all'apertura dell'URL possono unirsi
+   scegliendo un display name per questa party.
 4. In chat scrivi testo normale per parlare nell'area corrente; usa gli slash
    command per variare registro:
    - `/me apre la porta` — azione in terza persona
