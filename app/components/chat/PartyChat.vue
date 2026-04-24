@@ -2,61 +2,17 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useChatStore } from '~/stores/chat'
 import { usePartyStore } from '~/stores/party'
-import { usePartyConnection } from '~/composables/usePartyConnection'
+import ChatMessage from '~/components/chat/ChatMessage.vue'
+import ChatInput from '~/components/chat/ChatInput.vue'
 
 const chatStore = useChatStore()
 const partyStore = usePartyStore()
-const connection = usePartyConnection()
 
-const input = ref('')
-const inputMode = ref<'say' | 'emote' | 'ooc'>('say')
 const scrollTarget = ref<HTMLElement | null>(null)
 
 const currentAreaId = computed(() => partyStore.me?.currentAreaId ?? '')
 const messages = computed(() => chatStore.forArea(currentAreaId.value))
-
-function formatTime(ms: number): string {
-  const d = new Date(ms)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-function classForKind(kind: string): string {
-  switch (kind) {
-    case 'emote': return 'italic'
-    case 'ooc': return 'text-xs'
-    default: return ''
-  }
-}
-
-function styleForKind(kind: string): Record<string, string> {
-  switch (kind) {
-    case 'emote': return { color: 'var(--z-rust-300)' }
-    case 'ooc': return { color: 'var(--z-toxic-500)' }
-    default: return { color: 'var(--z-text-hi)' }
-  }
-}
-
-function prefixForKind(kind: string, display: string): string {
-  switch (kind) {
-    case 'emote': return `* ${display} `
-    case 'ooc': return `((OOC)) ${display}: `
-    default: return `${display}: `
-  }
-}
-
-function submit() {
-  const body = input.value.trim()
-  if (!body) return
-  if (!currentAreaId.value) return
-  connection.send({
-    type: 'chat:send',
-    kind: inputMode.value,
-    body,
-    areaId: currentAreaId.value
-  })
-  input.value = ''
-}
+const isMaster = computed(() => partyStore.me?.role === 'master')
 
 watch(messages, async () => {
   await nextTick()
@@ -79,30 +35,12 @@ watch(messages, async () => {
       ref="scrollTarget"
       class="flex-1 overflow-y-auto px-4 py-2 space-y-1"
     >
-      <div
+      <ChatMessage
         v-for="m in messages"
         :key="m.id"
-        class="text-sm"
-        :class="classForKind(m.kind)"
-        :style="styleForKind(m.kind)"
-      >
-        <span
-          class="text-xs font-mono-z mr-2"
-          style="color: var(--z-text-lo)"
-        >
-          {{ formatTime(m.createdAt) }}
-        </span>
-        <span
-          v-if="m.deletedAt"
-          style="color: var(--z-text-lo); font-style: italic"
-        >
-          [messaggio rimosso]
-        </span>
-        <template v-else>
-          <span>{{ prefixForKind(m.kind, m.authorDisplay) }}</span>
-          <span>{{ m.body }}</span>
-        </template>
-      </div>
+        :message="m"
+        :is-master="isMaster"
+      />
       <div
         v-if="!messages.length"
         class="text-xs italic"
@@ -111,53 +49,6 @@ watch(messages, async () => {
         Nessun messaggio in questa area.
       </div>
     </div>
-    <form
-      class="px-4 py-3 flex gap-2"
-      style="border-top: 1px solid var(--z-border)"
-      @submit.prevent="submit"
-    >
-      <div class="flex gap-1">
-        <UButton
-          type="button"
-          size="xs"
-          :variant="inputMode === 'say' ? 'solid' : 'ghost'"
-          :color="inputMode === 'say' ? 'primary' : 'neutral'"
-          @click="inputMode = 'say'"
-        >
-          Dice
-        </UButton>
-        <UButton
-          type="button"
-          size="xs"
-          :variant="inputMode === 'emote' ? 'solid' : 'ghost'"
-          :color="inputMode === 'emote' ? 'primary' : 'neutral'"
-          @click="inputMode = 'emote'"
-        >
-          Azione
-        </UButton>
-        <UButton
-          type="button"
-          size="xs"
-          :variant="inputMode === 'ooc' ? 'solid' : 'ghost'"
-          :color="inputMode === 'ooc' ? 'primary' : 'neutral'"
-          @click="inputMode = 'ooc'"
-        >
-          OOC
-        </UButton>
-      </div>
-      <UInput
-        v-model="input"
-        placeholder="Scrivi un messaggio…"
-        class="flex-1"
-        autocomplete="off"
-      />
-      <UButton
-        type="submit"
-        size="sm"
-        color="primary"
-      >
-        Invia
-      </UButton>
-    </form>
+    <ChatInput />
   </section>
 </template>
