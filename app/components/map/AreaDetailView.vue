@@ -616,9 +616,9 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
   >
     <header
       class="absolute top-3 left-3 right-3 flex items-center justify-between gap-4 px-4 py-2 rounded-md z-10"
-      style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
+      style="background: var(--z-bg-800); border: 1px solid var(--z-border); min-height: 40px"
     >
-      <div class="flex items-baseline gap-3 min-w-0">
+      <div class="flex items-center gap-3 min-w-0">
         <UButton
           size="xs"
           color="neutral"
@@ -629,13 +629,13 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
           Mappa
         </UButton>
         <h2
-          class="text-lg font-semibold truncate"
+          class="text-lg font-semibold truncate leading-none"
           style="color: var(--z-green-300)"
         >
           {{ displayName }}
         </h2>
         <span
-          class="text-xs px-2 py-0.5 rounded font-mono-z"
+          class="text-xs px-2 py-0.5 rounded font-mono-z leading-none"
           :style="statusStyle"
         >
           {{ status }}
@@ -652,7 +652,7 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
         </UButton>
         <span
           v-else-if="alreadyHere"
-          class="text-xs"
+          class="text-xs leading-none"
           style="color: var(--z-green-300)"
         >Sei qui</span>
       </div>
@@ -668,14 +668,17 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
         v-for="t in (['paint', 'npc', 'area-rect', 'area-lasso', 'select', 'move', 'erase'] as const)"
         :key="t"
         type="button"
-        class="text-xs px-2 py-1 rounded text-left flex items-center gap-2"
+        class="text-xs px-2 py-1 rounded text-left flex items-center gap-2 w-full"
         :title="t"
         :style="tool === t
           ? 'background: var(--z-green-700); color: var(--z-green-100)'
           : 'background: var(--z-bg-700); color: var(--z-text-md)'"
         @click="tool = t"
       >
-        <span>{{ ({ 'paint': '🧟', 'npc': '👤', 'area-rect': '▭', 'area-lasso': '✏', 'select': '☐', 'move': '✥', 'erase': '⌫' })[t] }}</span>
+        <span
+          class="inline-block text-center"
+          style="width: 1.1rem; flex-shrink: 0"
+        >{{ ({ 'paint': '🧟', 'npc': '👤', 'area-rect': '▭', 'area-lasso': '✏', 'select': '☐', 'move': '✥', 'erase': '⌫' })[t] }}</span>
         <span class="capitalize">{{ ({ 'paint': 'spawn', 'npc': 'npc', 'area-rect': 'orda □', 'area-lasso': 'orda libera', 'select': 'sel.', 'move': 'sposta', 'erase': 'rimuovi' })[t] }}</span>
       </button>
       <div
