@@ -7,6 +7,7 @@ import { useChatStore } from '~/stores/chat'
 import { usePartyConnection } from '~/composables/usePartyConnection'
 import PartyHeader from '~/components/layout/PartyHeader.vue'
 import PartyChat from '~/components/chat/PartyChat.vue'
+import GameMap from '~/components/map/GameMap.vue'
 
 const route = useRoute()
 const seed = String(route.params.seed)
@@ -70,31 +71,7 @@ onBeforeRouteLeave(() => {
     <template v-else>
       <PartyHeader />
       <div class="flex-1 flex flex-col overflow-hidden">
-        <section
-          class="flex-1 flex items-center justify-center"
-          style="background: var(--z-bg-900)"
-        >
-          <div class="text-center space-y-2">
-            <p
-              class="text-sm uppercase tracking-wide"
-              style="color: var(--z-text-md)"
-            >
-              Area corrente
-            </p>
-            <p
-              class="text-2xl font-semibold"
-              style="color: var(--z-green-300)"
-            >
-              {{ partyStore.me?.currentAreaId ?? '…' }}
-            </p>
-            <p
-              class="text-xs"
-              style="color: var(--z-text-lo)"
-            >
-              Connessione: {{ connection.status.value }}
-            </p>
-          </div>
-        </section>
+        <GameMap />
         <PartyChat />
       </div>
     </template>

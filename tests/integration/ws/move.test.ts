@@ -31,7 +31,7 @@ async function openWs(seed: string, sessionToken: string): Promise<WebSocket> {
   const ws = new WebSocket(urlStr)
   await new Promise<void>((resolve, reject) => {
     ws.once('open', () => resolve())
-    ws.once('error', (e) => reject(e))
+    ws.once('error', e => reject(e))
   })
   ws.send(JSON.stringify({ type: 'hello', seed, sessionToken }))
   return ws
