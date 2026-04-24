@@ -4,6 +4,7 @@ import { parseSlash, type SlashCommand } from '~~/shared/slash/parse'
 import { AREA_IDS } from '~~/shared/map/areas'
 import { usePartyStore } from '~/stores/party'
 import { useZombiesStore } from '~/stores/zombies'
+import { useChatStore, type ChatMessage } from '~/stores/chat'
 import { usePartyConnection } from '~/composables/usePartyConnection'
 
 interface CommandSuggestion {
@@ -61,6 +62,7 @@ const LINE_HEIGHT_PX = 22
 
 const party = usePartyStore()
 const zombiesStore = useZombiesStore()
+const chatStore = useChatStore()
 const connection = usePartyConnection()
 
 const WEATHER_CODES = [
@@ -332,6 +334,36 @@ function commandToWsEvent(cmd: SlashCommand, areaId: string | null): Record<stri
   }
 }
 
+// Ritorna il ChatMessage optimistic da aggiungere subito allo store, oppure
+// null se il comando non è un semplice chat:send (es. slash master).
+function makeOptimistic(event: Record<string, unknown>, areaId: string | null): ChatMessage | null {
+  if (event.type !== 'chat:send') return null
+  const me = party.me
+  if (!me) return null
+  const kind = String(event.kind)
+  // Non fare optimistic per roll (server calcola) o per kind non standard
+  if (kind === 'roll') return null
+  const body = typeof event.body === 'string' ? event.body : ''
+  const targetPlayerId = typeof event.targetPlayerId === 'string' ? event.targetPlayerId : null
+  const msgAreaId = kind === 'dm' ? null : areaId
+  return {
+    id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    partySeed: party.party?.seed ?? '',
+    kind,
+    authorPlayerId: me.id,
+    authorDisplay: me.nickname,
+    areaId: msgAreaId,
+    targetPlayerId,
+    body,
+    rollPayload: null,
+    createdAt: Date.now(),
+    deletedAt: null,
+    deletedBy: null,
+    editedAt: null,
+    pending: true
+  }
+}
+
 function submit() {
   const raw = input.value.trim()
   if (!raw) return
@@ -347,6 +379,18 @@ function submit() {
     return
   }
   errorText.value = null
+  // Optimistic append: se non siamo "open" il messaggio andrà in coda,
+  // mostrarlo subito come pending così l'utente vede che è partito.
+  if (connection.status.value !== 'open') {
+    const optimistic = makeOptimistic(result, areaId)
+    if (optimistic) {
+      if (optimistic.kind === 'dm' && party.me) {
+        chatStore.appendPendingDm(optimistic, party.me.id)
+      } else {
+        chatStore.appendPending(optimistic)
+      }
+    }
+  }
   connection.send(result)
   if (history.value[history.value.length - 1] !== raw) {
     history.value.push(raw)

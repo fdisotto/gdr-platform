@@ -153,13 +153,17 @@ if (typeof document !== 'undefined') {
   >
     <div
       class="text-sm"
-      :style="kindStyle"
+      :style="message.pending ? { ...kindStyle, opacity: 0.55 } : kindStyle"
     >
       <span
         class="text-xs font-mono-z mr-2"
         style="color: var(--z-text-lo)"
+        :title="message.pending ? 'In attesa di invio…' : ''"
       >
-        {{ time }}
+        <span
+          v-if="message.pending"
+        >⏳</span>
+        <span v-else>{{ time }}</span>
       </span>
       <span
         v-if="isDeleted && !isMaster"

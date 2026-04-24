@@ -15,7 +15,15 @@ export interface ChatMessage {
   deletedAt: number | null
   deletedBy: string | null
   editedAt: number | null
+  // Client-only flag: true per messaggi inviati durante reconnect, in
+  // attesa di echo dal server. Non esiste sul server.
+  pending?: boolean
 }
+
+// Finestra in cui un messaggio pending viene riconciliato con l'echo
+// server matching su authorPlayerId/kind/body. Dopo questo tempo viene
+// marcato come "fallito" (resterà visibile ma grigio).
+const PENDING_MATCH_WINDOW_MS = 60_000
 
 // Tipi di messaggio che contano per il badge "ha appena parlato":
 // escludiamo whisper e dm (privati), system (non un player), npc/announce
@@ -66,8 +74,51 @@ export const useChatStore = defineStore('chat', () => {
     const area = msg.areaId
     if (!area) return
     const list = messagesByArea.value[area] ?? []
-    messagesByArea.value[area] = [...list, msg]
+    // Se questo echo corrisponde a un pending dell'autore → rimuovilo,
+    // così l'utente vede un solo messaggio "definitivo" al posto della
+    // versione clock-icon.
+    const matched = matchPendingIndex(list, msg)
+    if (matched >= 0) {
+      const next = [...list]
+      next.splice(matched, 1)
+      next.push(msg)
+      messagesByArea.value[area] = next
+    } else {
+      messagesByArea.value[area] = [...list, msg]
+    }
     noteSpeaker(msg)
+  }
+
+  function matchPendingIndex(list: ChatMessage[], echo: ChatMessage): number {
+    if (!echo.authorPlayerId) return -1
+    for (let i = 0; i < list.length; i++) {
+      const m = list[i]!
+      if (!m.pending) continue
+      if (m.authorPlayerId !== echo.authorPlayerId) continue
+      if (m.kind !== echo.kind) continue
+      if (m.body !== echo.body) continue
+      if (Math.abs(m.createdAt - echo.createdAt) > PENDING_MATCH_WINDOW_MS) continue
+      return i
+    }
+    return -1
+  }
+
+  // Optimistic append: chiamato quando il ws è in reconnecting.
+  // Il messaggio compare subito come pending; verrà sostituito dall'echo.
+  function appendPending(msg: ChatMessage) {
+    const area = msg.areaId
+    if (!area) return
+    const list = messagesByArea.value[area] ?? []
+    messagesByArea.value[area] = [...list, msg]
+  }
+
+  function appendPendingDm(msg: ChatMessage, selfId: string) {
+    if (msg.kind !== 'dm') return
+    const otherId = msg.authorPlayerId === selfId ? msg.targetPlayerId : msg.authorPlayerId
+    if (!otherId) return
+    const key = threadKey(selfId, otherId)
+    const existing = dmsByThread.value[key] ?? []
+    dmsByThread.value[key] = [...existing, msg]
   }
 
   function update(msg: ChatMessage) {
@@ -101,7 +152,15 @@ export const useChatStore = defineStore('chat', () => {
     if (!otherId) return
     const key = threadKey(selfId, otherId)
     const existing = dmsByThread.value[key] ?? []
-    dmsByThread.value[key] = [...existing, msg]
+    const matched = matchPendingIndex(existing, msg)
+    if (matched >= 0) {
+      const next = [...existing]
+      next.splice(matched, 1)
+      next.push(msg)
+      dmsByThread.value[key] = next
+    } else {
+      dmsByThread.value[key] = [...existing, msg]
+    }
   }
 
   function forThread(key: string): ChatMessage[] {
@@ -180,7 +239,8 @@ export const useChatStore = defineStore('chat', () => {
     areaHasMore, threadHasMore,
     lastSpeakerPlayerId, lastSpokeAt,
     hydrate, hydrateDms, append, update, forArea, forThread,
-    appendDm, listDmThreads, threadKey,
+    appendDm, appendPending, appendPendingDm,
+    listDmThreads, threadKey,
     prependArea, prependThread,
     areaHasMoreFor, threadHasMoreFor,
     reset
