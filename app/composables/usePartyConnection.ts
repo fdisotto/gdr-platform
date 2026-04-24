@@ -107,6 +107,7 @@ export function usePartyConnection() {
           players: PlayerSnapshot[]
           areasState: AreaStateSnapshot[]
           messagesByArea: Record<string, ChatMessage[]>
+          dms: ChatMessage[]
           serverTime: number
         }
         partyStore.hydrate({
@@ -114,6 +115,7 @@ export function usePartyConnection() {
           players: init.players, areasState: init.areasState
         })
         chatStore.hydrate(init.messagesByArea ?? {})
+        chatStore.hydrateDms(init.dms ?? [], init.me.id)
         serverTime.sync(init.serverTime)
         break
       }

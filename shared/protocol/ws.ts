@@ -93,6 +93,7 @@ export const StateInitEvent = z.object({
   players: z.array(PlayerSnapshot),
   areasState: z.array(AreaStateSnapshot),
   messagesByArea: z.record(z.array(MessageRowSchema)),
+  dms: z.array(MessageRowSchema),
   serverTime: z.number()
 })
 export type StateInitEvent = z.infer<typeof StateInitEvent>

@@ -3,7 +3,7 @@ import { useDb } from '~~/server/utils/db'
 import { findPlayerBySession, listOnlinePlayers, touchPlayer, updatePlayerArea } from '~~/server/services/players'
 import { partyMustExist } from '~~/server/services/parties'
 import { listAreasState } from '~~/server/services/areas'
-import { listAreaMessages, insertMessage, listAreaMessagesBefore, listThreadMessagesBefore, type MessageRow } from '~~/server/services/messages'
+import { listAreaMessages, insertMessage, listAreaMessagesBefore, listThreadMessagesBefore, listRecentDmsForPlayer, type MessageRow } from '~~/server/services/messages'
 import { registry, sendJson, chatRateLimiter } from '~~/server/ws/state'
 import { pickFanoutRecipients } from '~~/server/ws/fanout'
 import { isAreaId, areAdjacent } from '~~/shared/map/areas'
@@ -363,6 +363,7 @@ async function handleHello(peer: Peer, seed: string, sessionToken: string) {
     const areasState = listAreasState(db, seed)
     const messagesByArea: Record<string, MessageRow[]> = {}
     messagesByArea[player.currentAreaId] = listAreaMessages(db, seed, player.currentAreaId, 100)
+    const dms = listRecentDmsForPlayer(db, seed, player.id, 50)
 
     const init: StateInitEvent = {
       type: 'state:init',
@@ -371,6 +372,7 @@ async function handleHello(peer: Peer, seed: string, sessionToken: string) {
       players,
       areasState,
       messagesByArea: messagesByArea as never,
+      dms,
       serverTime: Date.now()
     }
     sendJson(peer, init)

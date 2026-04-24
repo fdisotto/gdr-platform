@@ -88,6 +88,7 @@ describe('StateInitEvent', () => {
       players: [],
       areasState: [],
       messagesByArea: {},
+      dms: [],
       serverTime: 1
     }).success).toBe(true)
   })

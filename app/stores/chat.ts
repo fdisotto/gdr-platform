@@ -115,6 +115,23 @@ export const useChatStore = defineStore('chat', () => {
     return threadHasMore.value[key] ?? true
   }
 
+  function hydrateDms(dms: ChatMessage[], selfId: string) {
+    const grouped: Record<string, ChatMessage[]> = {}
+    for (const m of dms) {
+      if (m.kind !== 'dm') continue
+      const otherId = m.authorPlayerId === selfId ? m.targetPlayerId : m.authorPlayerId
+      if (!otherId) continue
+      const key = threadKey(selfId, otherId)
+      grouped[key] = grouped[key] ?? []
+      grouped[key].push(m)
+    }
+    // Sort ogni thread
+    for (const key of Object.keys(grouped)) {
+      grouped[key]!.sort((a, b) => a.createdAt - b.createdAt)
+    }
+    dmsByThread.value = grouped
+  }
+
   function reset() {
     messagesByArea.value = {}
     dmsByThread.value = {}
@@ -126,7 +143,7 @@ export const useChatStore = defineStore('chat', () => {
   return {
     messagesByArea, dmsByThread, inputDraft,
     areaHasMore, threadHasMore,
-    hydrate, append, update, forArea, forThread,
+    hydrate, hydrateDms, append, update, forArea, forThread,
     appendDm, listDmThreads, threadKey,
     prependArea, prependThread,
     areaHasMoreFor, threadHasMoreFor,

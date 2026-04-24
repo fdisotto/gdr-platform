@@ -99,6 +99,16 @@ export function listAreaMessagesBefore(db: Db, seed: string, areaId: string, bef
     .reverse()
 }
 
+export function listRecentDmsForPlayer(db: Db, seed: string, playerId: string, limit: number): MessageRow[] {
+  const rows = db.select().from(messages)
+    .where(and(eq(messages.partySeed, seed), eq(messages.kind, 'dm')))
+    .all() as MessageRow[]
+  return rows
+    .filter(m => m.authorPlayerId === playerId || m.targetPlayerId === playerId)
+    .sort((a, b) => a.createdAt - b.createdAt)
+    .slice(-limit)
+}
+
 export function listThreadMessagesBefore(db: Db, seed: string, playerIdA: string, playerIdB: string, beforeMs: number, limit: number): MessageRow[] {
   const rows = db.select().from(messages)
     .where(and(eq(messages.partySeed, seed), eq(messages.kind, 'dm')))
