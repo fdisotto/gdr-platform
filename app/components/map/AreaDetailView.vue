@@ -79,7 +79,7 @@ function moveHere() {
 }
 
 // ── Tool modes ──────────────────────────────────────────────────────────────
-type Tool = 'paint' | 'select' | 'move' | 'erase'
+type Tool = 'paint' | 'select' | 'move' | 'erase' | 'area-rect' | 'area-lasso'
 const tool = ref<Tool>('paint')
 
 const cursorForTool = computed(() => {
@@ -89,6 +89,8 @@ const cursorForTool = computed(() => {
     case 'select': return 'cursor: cell'
     case 'move': return 'cursor: move'
     case 'erase': return 'cursor: not-allowed'
+    case 'area-rect': return 'cursor: cell'
+    case 'area-lasso': return 'cursor: crosshair'
     default: return 'cursor: default'
   }
 })
@@ -118,6 +120,32 @@ const rubberRect = computed(() => {
   const x2 = Math.max(rubberStart.value.x, rubberCurrent.value.x)
   const y2 = Math.max(rubberStart.value.y, rubberCurrent.value.y)
   return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 }
+})
+
+// ── Area rect drag ───────────────────────────────────────────────────────────
+const rectStart = ref<{ x: number, y: number } | null>(null)
+const rectCurrent = ref<{ x: number, y: number } | null>(null)
+
+const rectShape = computed(() => {
+  if (!rectStart.value || !rectCurrent.value) return null
+  const x1 = Math.min(rectStart.value.x, rectCurrent.value.x)
+  const y1 = Math.min(rectStart.value.y, rectCurrent.value.y)
+  const x2 = Math.max(rectStart.value.x, rectCurrent.value.x)
+  const y2 = Math.max(rectStart.value.y, rectCurrent.value.y)
+  return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 }
+})
+
+// ── Lasso path ───────────────────────────────────────────────────────────────
+const lassoPoints = ref<Array<{ x: number, y: number }>>([])
+
+const lassoSvgPath = computed(() => {
+  if (lassoPoints.value.length === 0) return ''
+  const head = lassoPoints.value[0]!
+  let d = `M ${head.x} ${head.y}`
+  for (let i = 1; i < lassoPoints.value.length; i++) {
+    d += ` L ${lassoPoints.value[i]!.x} ${lassoPoints.value[i]!.y}`
+  }
+  return d + ' Z'
 })
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -179,6 +207,75 @@ function moveDragTo(pt: { x: number, y: number }) {
   }
 }
 
+// ── Area spawn helpers ───────────────────────────────────────────────────────
+const SPAWN_GRID_STEP = 28
+const SPAWN_MAX = 200
+
+function gridPositionsInRect(r: { x: number, y: number, w: number, h: number }): Array<{ x: number, y: number }> {
+  const out: Array<{ x: number, y: number }> = []
+  for (let y = r.y + SPAWN_GRID_STEP / 2; y < r.y + r.h; y += SPAWN_GRID_STEP) {
+    for (let x = r.x + SPAWN_GRID_STEP / 2; x < r.x + r.w; x += SPAWN_GRID_STEP) {
+      out.push({ x, y })
+      if (out.length >= SPAWN_MAX) return out
+    }
+  }
+  return out
+}
+
+function pointInPolygon(pt: { x: number, y: number }, polygon: Array<{ x: number, y: number }>): boolean {
+  let inside = false
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i]!.x
+    const yi = polygon[i]!.y
+    const xj = polygon[j]!.x
+    const yj = polygon[j]!.y
+    const intersect = (yi > pt.y) !== (yj > pt.y)
+      && pt.x < ((xj - xi) * (pt.y - yi)) / (yj - yi + 0.000001) + xi
+    if (intersect) inside = !inside
+  }
+  return inside
+}
+
+function gridPositionsInPolygon(polygon: Array<{ x: number, y: number }>): Array<{ x: number, y: number }> {
+  if (polygon.length < 3) return []
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const p of polygon) {
+    if (p.x < minX) minX = p.x
+    if (p.x > maxX) maxX = p.x
+    if (p.y < minY) minY = p.y
+    if (p.y > maxY) maxY = p.y
+  }
+  const out: Array<{ x: number, y: number }> = []
+  for (let y = minY + SPAWN_GRID_STEP / 2; y < maxY; y += SPAWN_GRID_STEP) {
+    for (let x = minX + SPAWN_GRID_STEP / 2; x < maxX; x += SPAWN_GRID_STEP) {
+      const candidate = { x, y }
+      if (pointInPolygon(candidate, polygon)) {
+        out.push(candidate)
+        if (out.length >= SPAWN_MAX) return out
+      }
+    }
+  }
+  return out
+}
+
+function spawnPositionsBatch(positions: Array<{ x: number, y: number }>) {
+  if (!area.value || positions.length === 0) return
+  if (positions.length === 1) {
+    connection.send({
+      type: 'master:spawn-zombie',
+      areaId: area.value.id,
+      x: positions[0]!.x,
+      y: positions[0]!.y
+    })
+  } else {
+    connection.send({
+      type: 'master:spawn-zombies',
+      areaId: area.value.id,
+      positions
+    })
+  }
+}
+
 // ── SVG event handlers ───────────────────────────────────────────────────────
 function onSvgMouseDown(e: MouseEvent) {
   if (!isMaster.value || !area.value) return
@@ -199,6 +296,15 @@ function onSvgMouseDown(e: MouseEvent) {
   if (tool.value === 'select') {
     rubberStart.value = pt
     rubberCurrent.value = pt
+    return
+  }
+  if (tool.value === 'area-rect') {
+    rectStart.value = pt
+    rectCurrent.value = pt
+    return
+  }
+  if (tool.value === 'area-lasso') {
+    lassoPoints.value = [pt]
     return
   }
   // move: gestito da onZombieMouseDown
@@ -223,6 +329,19 @@ function onSvgMouseMove(e: MouseEvent) {
   }
   if (rubberStart.value && tool.value === 'select') {
     rubberCurrent.value = pt
+    return
+  }
+  if (rectStart.value && tool.value === 'area-rect') {
+    rectCurrent.value = pt
+    return
+  }
+  if (tool.value === 'area-lasso' && lassoPoints.value.length > 0) {
+    const last = lassoPoints.value[lassoPoints.value.length - 1]!
+    const dx = pt.x - last.x
+    const dy = pt.y - last.y
+    if (dx * dx + dy * dy > 16) {
+      lassoPoints.value.push(pt)
+    }
     return
   }
   if (draggingZombieId.value && tool.value === 'move') {
@@ -256,6 +375,19 @@ function onSvgMouseUp() {
   }
   rubberStart.value = null
   rubberCurrent.value = null
+  if (rectStart.value && tool.value === 'area-rect') {
+    if (rectShape.value && rectShape.value.w > 8 && rectShape.value.h > 8) {
+      const positions = gridPositionsInRect(rectShape.value)
+      spawnPositionsBatch(positions)
+    }
+    rectStart.value = null
+    rectCurrent.value = null
+  }
+  if (tool.value === 'area-lasso' && lassoPoints.value.length > 0) {
+    const positions = gridPositionsInPolygon(lassoPoints.value)
+    spawnPositionsBatch(positions)
+    lassoPoints.value = []
+  }
   if (draggingZombieId.value) {
     // Commit move per ogni zombie nel gruppo drag
     for (const id of dragOffsets.value.keys()) {
@@ -310,6 +442,9 @@ function onKeyDown(e: KeyboardEvent) {
   }
   if (e.key === 'Escape') {
     zombies.clearSelection()
+    rectStart.value = null
+    rectCurrent.value = null
+    lassoPoints.value = []
   }
 }
 
@@ -446,7 +581,7 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
       style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
     >
       <button
-        v-for="t in (['paint', 'select', 'move', 'erase'] as const)"
+        v-for="t in (['paint', 'area-rect', 'area-lasso', 'select', 'move', 'erase'] as const)"
         :key="t"
         type="button"
         class="text-xs px-2 py-1 rounded text-left flex items-center gap-2"
@@ -456,8 +591,8 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
           : 'background: var(--z-bg-700); color: var(--z-text-md)'"
         @click="tool = t"
       >
-        <span>{{ ({ paint: '🧟', select: '☐', move: '✥', erase: '⌫' })[t] }}</span>
-        <span class="capitalize">{{ ({ paint: 'spawn', select: 'sel.', move: 'sposta', erase: 'rimuovi' })[t] }}</span>
+        <span>{{ ({ 'paint': '🧟', 'area-rect': '▭', 'area-lasso': '✏', 'select': '☐', 'move': '✥', 'erase': '⌫' })[t] }}</span>
+        <span class="capitalize">{{ ({ 'paint': 'spawn', 'area-rect': 'orda □', 'area-lasso': 'orda libera', 'select': 'sel.', 'move': 'sposta', 'erase': 'rimuovi' })[t] }}</span>
       </button>
       <div
         v-if="zombies.selected.size > 0"
@@ -573,6 +708,49 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
         stroke-dasharray="4 3"
         pointer-events="none"
       />
+
+      <!-- Area rect preview -->
+      <g
+        v-if="rectShape && tool === 'area-rect'"
+        pointer-events="none"
+      >
+        <rect
+          :x="rectShape.x"
+          :y="rectShape.y"
+          :width="rectShape.w"
+          :height="rectShape.h"
+          fill="var(--z-rust-500)"
+          fill-opacity="0.1"
+          stroke="var(--z-rust-300)"
+          stroke-width="1.5"
+          stroke-dasharray="6 4"
+        />
+        <text
+          :x="rectShape.x + rectShape.w / 2"
+          :y="rectShape.y + rectShape.h / 2"
+          text-anchor="middle"
+          font-size="14"
+          fill="var(--z-rust-300)"
+          font-weight="700"
+        >
+          🧟 × {{ Math.min(SPAWN_MAX, Math.floor(rectShape.w / SPAWN_GRID_STEP) * Math.floor(rectShape.h / SPAWN_GRID_STEP)) }}
+        </text>
+      </g>
+
+      <!-- Lasso preview -->
+      <g
+        v-if="tool === 'area-lasso' && lassoPoints.length > 0"
+        pointer-events="none"
+      >
+        <path
+          :d="lassoSvgPath"
+          fill="var(--z-rust-500)"
+          fill-opacity="0.08"
+          stroke="var(--z-rust-300)"
+          stroke-width="1.5"
+          stroke-dasharray="4 4"
+        />
+      </g>
 
       <!-- Player nella zona -->
       <g
