@@ -4,6 +4,7 @@ import { useChatStore, type ChatMessage as ChatMessageType } from '~/stores/chat
 import { usePartyStore } from '~/stores/party'
 import { useSettingsStore } from '~/stores/settings'
 import { useViewStore } from '~/stores/view'
+import { usePartyConnection } from '~/composables/usePartyConnection'
 import ChatMessage from '~/components/chat/ChatMessage.vue'
 import ChatInput from '~/components/chat/ChatInput.vue'
 
@@ -11,12 +12,36 @@ const chatStore = useChatStore()
 const partyStore = usePartyStore()
 const settings = useSettingsStore()
 const viewStore = useViewStore()
+const connection = usePartyConnection()
 
 const scrollTarget = ref<HTMLElement | null>(null)
 
 const currentAreaId = computed(() => partyStore.me?.currentAreaId ?? '')
 const isMaster = computed(() => partyStore.me?.role === 'master')
 const showAll = ref(false)
+const loadingMore = ref(false)
+const HISTORY_PAGE_SIZE = 50
+
+const hasMoreHistory = computed(() => {
+  if (!currentAreaId.value) return false
+  if (showAll.value) return false
+  return chatStore.areaHasMoreFor(currentAreaId.value)
+})
+
+function loadMoreHistory() {
+  if (loadingMore.value || !currentAreaId.value || showAll.value) return
+  const list = chatStore.forArea(currentAreaId.value)
+  const oldest = list[0]
+  const before = oldest?.createdAt ?? Date.now()
+  loadingMore.value = true
+  connection.send({
+    type: 'chat:history-before',
+    areaId: currentAreaId.value,
+    before,
+    limit: HISTORY_PAGE_SIZE
+  })
+  // Il flag viene spento alla prossima mutazione dei messaggi (risposta server)
+}
 
 // Stream unico: tutti i messaggi dell'area eccetto dm (che vanno nell'inbox missive)
 const messages = computed(() => {
@@ -33,9 +58,29 @@ const messages = computed(() => {
   return chatStore.forArea(currentAreaId.value).filter(m => m.kind !== 'dm')
 })
 
-watch(messages, async () => {
+// Scroll smart: se arriva un nuovo messaggio in fondo scrolla giù, se
+// l'aggiornamento è un prepend (history load) mantieni la posizione
+// aggiungendo la differenza di altezza.
+let lastBottomId: string | null = null
+let lastScrollHeight = 0
+watch(messages, async (newList) => {
+  const newBottomId = newList.length > 0 ? newList[newList.length - 1]!.id : null
+  const isPrepend = newBottomId !== null && newBottomId === lastBottomId
+  const el = scrollTarget.value
   await nextTick()
-  scrollTarget.value?.scrollTo({ top: scrollTarget.value.scrollHeight, behavior: 'smooth' })
+  if (!el) {
+    lastBottomId = newBottomId
+    return
+  }
+  if (isPrepend) {
+    const delta = el.scrollHeight - lastScrollHeight
+    if (delta > 0) el.scrollTop += delta
+  } else {
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+  }
+  lastBottomId = newBottomId
+  lastScrollHeight = el.scrollHeight
+  loadingMore.value = false
 }, { deep: true })
 </script>
 
@@ -100,6 +145,22 @@ watch(messages, async () => {
         ref="scrollTarget"
         class="flex-1 overflow-y-auto px-4 py-2 space-y-1"
       >
+        <div
+          v-if="hasMoreHistory"
+          class="flex justify-center py-1"
+        >
+          <button
+            type="button"
+            class="text-xs px-2 py-1 rounded"
+            :disabled="loadingMore"
+            :style="loadingMore
+              ? 'background: var(--z-bg-700); color: var(--z-text-lo); cursor: wait'
+              : 'background: var(--z-bg-700); color: var(--z-text-md); cursor: pointer'"
+            @click="loadMoreHistory"
+          >
+            {{ loadingMore ? 'Caricamento…' : '↑ Carica più vecchi' }}
+          </button>
+        </div>
         <ChatMessage
           v-for="m in messages"
           :key="m.id"

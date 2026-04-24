@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useChatStore } from '~/stores/chat'
 import { usePartyStore } from '~/stores/party'
 import { useViewStore } from '~/stores/view'
@@ -58,11 +58,36 @@ function formatDate(ms: number): string {
 
 const newBody = ref('')
 const sendError = ref<string | null>(null)
+const loadingMore = ref(false)
+const HISTORY_PAGE_SIZE = 50
 
 const selectedThread = computed(() => {
   if (!selectedKey.value || !partyStore.me) return null
   return threads.value.find(t => t.key === selectedKey.value) ?? null
 })
+
+const hasMoreHistory = computed(() => {
+  if (!selectedKey.value) return false
+  return chatStore.threadHasMoreFor(selectedKey.value)
+})
+
+function loadMoreHistory() {
+  if (loadingMore.value || !selectedKey.value) return
+  const oldest = selectedMessages.value[0]
+  const before = oldest?.createdAt ?? Date.now()
+  loadingMore.value = true
+  connection.send({
+    type: 'chat:history-before',
+    threadKey: selectedKey.value,
+    before,
+    limit: HISTORY_PAGE_SIZE
+  })
+  // Reset del flag alla prossima mutazione della thread (vedi watcher sotto)
+}
+
+watch(selectedMessages, () => {
+  loadingMore.value = false
+}, { deep: true })
 
 function send() {
   const body = newBody.value.trim()
@@ -195,6 +220,22 @@ function send() {
         </p>
       </div>
       <div class="flex-1 overflow-y-auto p-6 space-y-4">
+        <div
+          v-if="selectedKey && hasMoreHistory"
+          class="flex justify-center"
+        >
+          <button
+            type="button"
+            class="text-xs px-3 py-1 rounded"
+            :disabled="loadingMore"
+            :style="loadingMore
+              ? 'background: var(--z-bg-700); color: var(--z-text-lo); cursor: wait'
+              : 'background: var(--z-bg-700); color: var(--z-text-md); cursor: pointer'"
+            @click="loadMoreHistory"
+          >
+            {{ loadingMore ? 'Caricamento…' : '↑ Carica missive precedenti' }}
+          </button>
+        </div>
         <article
           v-for="m in selectedMessages"
           :key="m.id"
