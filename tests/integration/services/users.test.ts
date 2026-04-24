@@ -9,7 +9,9 @@ import { hashPassword } from '~~/server/services/auth'
 import { generateUuid } from '~~/server/utils/crypto'
 
 let db: Db
-beforeEach(() => { db = createTestDb() })
+beforeEach(() => {
+  db = createTestDb()
+})
 
 async function fakeUser(overrides: Partial<{ username: string, password: string, id: string }> = {}) {
   const hash = await hashPassword(overrides.password ?? 'secret12')
