@@ -224,6 +224,16 @@ export function usePartyConnection() {
         zombiesStore.remove(id)
         break
       }
+      case 'zombie:moved': {
+        const p = data as { id: string, x: number, y: number }
+        zombiesStore.move(p.id, p.x, p.y)
+        break
+      }
+      case 'zombies:batch-spawned': {
+        const p = data as { zombies: Zombie[] }
+        zombiesStore.addBatch(p.zombies)
+        break
+      }
       case 'area:updated': {
         const payload = data as { patch: AreaStateSnapshot }
         const idx = partyStore.areasState.findIndex(a => a.areaId === payload.patch.areaId)

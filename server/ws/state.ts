@@ -46,6 +46,24 @@ export function removeZombie(partySeed: string, id: string): Zombie | null {
   return null
 }
 
+export function moveZombie(partySeed: string, id: string, x: number, y: number): Zombie | null {
+  const byArea = zombiesByParty.get(partySeed)
+  if (!byArea) return null
+  for (const arr of byArea.values()) {
+    const z = arr.find(z => z.id === id)
+    if (z) {
+      z.x = x
+      z.y = y
+      return z
+    }
+  }
+  return null
+}
+
+export function addZombies(zombies: Zombie[]): void {
+  for (const z of zombies) addZombie(z)
+}
+
 export function resetZombiesForParty(partySeed: string): void {
   zombiesByParty.delete(partySeed)
 }

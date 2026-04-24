@@ -1,10 +1,10 @@
-import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent } from '~~/shared/protocol/ws'
+import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent } from '~~/shared/protocol/ws'
 import { useDb } from '~~/server/utils/db'
 import { findPlayerBySession, listOnlinePlayers, touchPlayer, updatePlayerArea } from '~~/server/services/players'
 import { partyMustExist } from '~~/server/services/parties'
 import { listAreasState, updateAreaState, findAreaState } from '~~/server/services/areas'
 import { listAreaMessages, insertMessage, listAreaMessagesBefore, listThreadMessagesBefore, listRecentDmsForPlayer, type MessageRow } from '~~/server/services/messages'
-import { registry, sendJson, chatRateLimiter, listPartyZombies, addZombie, removeZombie, listPlayerPositions, setPlayerPosition, resetPlayerPosition } from '~~/server/ws/state'
+import { registry, sendJson, chatRateLimiter, listPartyZombies, addZombie, removeZombie, moveZombie, addZombies, listPlayerPositions, setPlayerPosition, resetPlayerPosition } from '~~/server/ws/state'
 import { pickFanoutRecipients } from '~~/server/ws/fanout'
 import { isAreaId, areAdjacent } from '~~/shared/map/areas'
 import { isAreaClosed } from '~~/server/services/area-access'
@@ -104,6 +104,15 @@ export default defineWebSocketHandler({
 
     if (parsed.type === 'master:place-player') {
       await handleMasterPlacePlayer(peer, parsed)
+      return
+    }
+
+    if (parsed.type === 'master:move-zombie') {
+      await handleMasterMoveZombie(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:spawn-zombies') {
+      await handleMasterSpawnZombies(peer, parsed)
       return
     }
   },
@@ -537,6 +546,68 @@ async function handleMasterPlacePlayer(peer: Peer, raw: unknown) {
     x: res.data.x,
     y: res.data.y
   }
+  const payload = JSON.stringify(event)
+  for (const c of registry.listParty(conn.partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
+}
+
+async function handleMasterMoveZombie(peer: Peer, raw: unknown) {
+  const res = MasterMoveZombieEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'move_zombie_malformed' })
+    return
+  }
+  const conn = registry.all().find(c => c.ws === peer)
+  if (!conn) return
+  const db = useDb()
+  const me = listOnlinePlayers(db, conn.partySeed).find(p => p.id === conn.playerId)
+  if (!me || me.role !== 'master') {
+    sendJson(peer, { type: 'error', code: 'master_only' })
+    return
+  }
+  const z = moveZombie(conn.partySeed, res.data.id, res.data.x, res.data.y)
+  if (!z) return
+  const event: ZombieMovedEvent = { type: 'zombie:moved', id: z.id, x: z.x, y: z.y }
+  const payload = JSON.stringify(event)
+  for (const c of registry.listParty(conn.partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
+}
+
+async function handleMasterSpawnZombies(peer: Peer, raw: unknown) {
+  const res = MasterSpawnZombiesEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'spawn_zombies_malformed' })
+    return
+  }
+  const conn = registry.all().find(c => c.ws === peer)
+  if (!conn) return
+  const db = useDb()
+  const me = listOnlinePlayers(db, conn.partySeed).find(p => p.id === conn.playerId)
+  if (!me || me.role !== 'master') {
+    sendJson(peer, { type: 'error', code: 'master_only' })
+    return
+  }
+  if (!isAreaId(res.data.areaId)) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'unknown_area' })
+    return
+  }
+  const now = Date.now()
+  const newZombies: Zombie[] = res.data.positions.map(pos => ({
+    id: generateUuid(),
+    partySeed: conn.partySeed,
+    areaId: res.data.areaId,
+    x: pos.x,
+    y: pos.y,
+    spawnedAt: now
+  }))
+  addZombies(newZombies)
+  const event: ZombiesBatchSpawnedEvent = { type: 'zombies:batch-spawned', zombies: newZombies }
   const payload = JSON.stringify(event)
   for (const c of registry.listParty(conn.partySeed)) {
     try {

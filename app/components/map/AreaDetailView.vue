@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { AREAS, ADJACENCY, type AreaId } from '~~/shared/map/areas'
 import { usePartyStore } from '~/stores/party'
 import { useZombiesStore } from '~/stores/zombies'
@@ -8,6 +8,7 @@ import { usePlayerPositionsStore } from '~/stores/player-positions'
 import { usePartyConnection } from '~/composables/usePartyConnection'
 import { useAreaWeather } from '~/composables/useAreaWeather'
 import MapWeatherOverlay from '~/components/map/MapWeatherOverlay.vue'
+import type { Zombie } from '~~/shared/protocol/ws'
 
 const party = usePartyStore()
 const zombies = useZombiesStore()
@@ -77,52 +78,250 @@ function moveHere() {
   viewStore.backToMap()
 }
 
-function onSvgClick(e: MouseEvent) {
-  if (!isMaster.value || !area.value) return
-  const svg = e.currentTarget as SVGSVGElement
+// ── Tool modes ──────────────────────────────────────────────────────────────
+type Tool = 'paint' | 'select' | 'move' | 'erase'
+const tool = ref<Tool>('paint')
+
+const cursorForTool = computed(() => {
+  if (!isMaster.value) return 'cursor: default'
+  switch (tool.value) {
+    case 'paint': return 'cursor: crosshair'
+    case 'select': return 'cursor: cell'
+    case 'move': return 'cursor: move'
+    case 'erase': return 'cursor: not-allowed'
+    default: return 'cursor: default'
+  }
+})
+
+// ── Paint state ──────────────────────────────────────────────────────────────
+const isPainting = ref(false)
+const lastSpawnAt = ref(0)
+const SPAWN_THROTTLE_MS = 50
+const paintBatch = ref<Array<{ x: number, y: number }>>([])
+let paintFlushTimer: ReturnType<typeof setTimeout> | null = null
+
+// ── Erase state ──────────────────────────────────────────────────────────────
+const isErasing = ref(false)
+
+// ── Move state ───────────────────────────────────────────────────────────────
+const draggingZombieId = ref<string | null>(null)
+const dragOffsets = ref<Map<string, { dx: number, dy: number }>>(new Map())
+
+// ── Rubber band select ───────────────────────────────────────────────────────
+const rubberStart = ref<{ x: number, y: number } | null>(null)
+const rubberCurrent = ref<{ x: number, y: number } | null>(null)
+
+const rubberRect = computed(() => {
+  if (!rubberStart.value || !rubberCurrent.value) return null
+  const x1 = Math.min(rubberStart.value.x, rubberCurrent.value.x)
+  const y1 = Math.min(rubberStart.value.y, rubberCurrent.value.y)
+  const x2 = Math.max(rubberStart.value.x, rubberCurrent.value.x)
+  const y2 = Math.max(rubberStart.value.y, rubberCurrent.value.y)
+  return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 }
+})
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function svgPoint(e: MouseEvent): { x: number, y: number } | null {
+  const svg = document.querySelector('#area-detail-svg') as SVGSVGElement | null
+  if (!svg) return null
   const pt = svg.createSVGPoint()
   pt.x = e.clientX
   pt.y = e.clientY
   const ctm = svg.getScreenCTM()?.inverse()
-  if (!ctm) return
+  if (!ctm) return null
   const loc = pt.matrixTransform(ctm)
-  connection.send({
-    type: 'master:spawn-zombie',
-    areaId: area.value.id,
-    x: loc.x,
-    y: loc.y
+  return { x: loc.x, y: loc.y }
+}
+
+function flushPaintBatch() {
+  if (!area.value || paintBatch.value.length === 0) return
+  const positions = paintBatch.value
+  paintBatch.value = []
+  if (positions.length === 1) {
+    connection.send({
+      type: 'master:spawn-zombie',
+      areaId: area.value.id,
+      x: positions[0]!.x,
+      y: positions[0]!.y
+    })
+  } else {
+    connection.send({
+      type: 'master:spawn-zombies',
+      areaId: area.value.id,
+      positions
+    })
+  }
+}
+
+function schedulePaintFlush() {
+  if (paintFlushTimer) return
+  paintFlushTimer = setTimeout(() => {
+    paintFlushTimer = null
+    flushPaintBatch()
+  }, 200)
+}
+
+function eraseAt(pt: { x: number, y: number }) {
+  const radius = 14
+  const toRemove = zombiesInArea.value.filter((z) => {
+    const dx = z.x - pt.x
+    const dy = z.y - pt.y
+    return dx * dx + dy * dy < radius * radius
   })
+  for (const z of toRemove) {
+    connection.send({ type: 'master:remove-zombie', id: z.id })
+  }
 }
 
-function removeZombie(id: string) {
+function moveDragTo(pt: { x: number, y: number }) {
+  for (const [id, off] of dragOffsets.value) {
+    zombies.move(id, pt.x + off.dx, pt.y + off.dy)
+  }
+}
+
+// ── SVG event handlers ───────────────────────────────────────────────────────
+function onSvgMouseDown(e: MouseEvent) {
+  if (!isMaster.value || !area.value) return
+  const pt = svgPoint(e)
+  if (!pt) return
+  if (tool.value === 'paint') {
+    isPainting.value = true
+    paintBatch.value.push(pt)
+    lastSpawnAt.value = performance.now()
+    schedulePaintFlush()
+    return
+  }
+  if (tool.value === 'erase') {
+    isErasing.value = true
+    eraseAt(pt)
+    return
+  }
+  if (tool.value === 'select') {
+    rubberStart.value = pt
+    rubberCurrent.value = pt
+    return
+  }
+  // move: gestito da onZombieMouseDown
+}
+
+function onSvgMouseMove(e: MouseEvent) {
+  if (!area.value) return
+  const pt = svgPoint(e)
+  if (!pt) return
+  if (isPainting.value && tool.value === 'paint') {
+    const now = performance.now()
+    if (now - lastSpawnAt.value >= SPAWN_THROTTLE_MS) {
+      paintBatch.value.push(pt)
+      lastSpawnAt.value = now
+      schedulePaintFlush()
+    }
+    return
+  }
+  if (isErasing.value && tool.value === 'erase') {
+    eraseAt(pt)
+    return
+  }
+  if (rubberStart.value && tool.value === 'select') {
+    rubberCurrent.value = pt
+    return
+  }
+  if (draggingZombieId.value && tool.value === 'move') {
+    moveDragTo(pt)
+    return
+  }
+}
+
+function onSvgMouseUp() {
+  if (isPainting.value) {
+    isPainting.value = false
+    if (paintFlushTimer) {
+      clearTimeout(paintFlushTimer)
+      paintFlushTimer = null
+    }
+    flushPaintBatch()
+  }
+  if (isErasing.value) {
+    isErasing.value = false
+  }
+  if (rubberStart.value && rubberRect.value) {
+    const rect = rubberRect.value
+    // Solo seleziona se il rect ha una dimensione minima (evita click accidentali)
+    if (rect.w > 4 || rect.h > 4) {
+      const ids = zombiesInArea.value
+        .filter(z => z.x >= rect.x && z.x <= rect.x + rect.w && z.y >= rect.y && z.y <= rect.y + rect.h)
+        .map(z => z.id)
+      if (ids.length > 0) zombies.setSelection(ids)
+      else zombies.clearSelection()
+    }
+  }
+  rubberStart.value = null
+  rubberCurrent.value = null
+  if (draggingZombieId.value) {
+    // Commit move per ogni zombie nel gruppo drag
+    for (const id of dragOffsets.value.keys()) {
+      const z = zombiesInArea.value.find(zz => zz.id === id)
+      if (z) {
+        connection.send({ type: 'master:move-zombie', id: z.id, x: z.x, y: z.y })
+      }
+    }
+    draggingZombieId.value = null
+    dragOffsets.value.clear()
+  }
+}
+
+function onZombieMouseDown(e: MouseEvent, z: Zombie) {
   if (!isMaster.value) return
-  connection.send({ type: 'master:remove-zombie', id })
-}
-
-const DEFAULT_CENTER_X = VIEWBOX_W / 2
-const DEFAULT_CENTER_Y = VIEWBOX_H * 0.55
-
-function defaultPlayerPos(index: number, total: number): { x: number, y: number } {
-  if (total === 1) {
-    return { x: DEFAULT_CENTER_X, y: DEFAULT_CENTER_Y }
+  e.stopPropagation()
+  if (tool.value === 'erase') {
+    connection.send({ type: 'master:remove-zombie', id: z.id })
+    return
   }
-  const radius = Math.min(120, 40 + total * 12)
-  const startAngle = -Math.PI / 2
-  const a = startAngle + (index / total) * Math.PI * 2
-  return {
-    x: DEFAULT_CENTER_X + Math.cos(a) * radius,
-    y: DEFAULT_CENTER_Y + Math.sin(a) * radius
+  if (tool.value === 'select') {
+    if (e.shiftKey) zombies.toggle(z.id)
+    else zombies.setSelection([z.id])
+    return
+  }
+  if (tool.value === 'move') {
+    draggingZombieId.value = z.id
+    const startPt = svgPoint(e)
+    if (!startPt) return
+    // Se lo zombie cliccato è selezionato, drag tutti i selezionati. Altrimenti solo lui.
+    const groupIds = zombies.selected.has(z.id) ? Array.from(zombies.selected) : [z.id]
+    const offsets = new Map<string, { dx: number, dy: number }>()
+    for (const id of groupIds) {
+      const target = zombiesInArea.value.find(zz => zz.id === id)
+      if (target) offsets.set(id, { dx: target.x - startPt.x, dy: target.y - startPt.y })
+    }
+    dragOffsets.value = offsets
+    return
+  }
+  // paint mode: click su zombie non fa nulla di speciale
+}
+
+// ── Keyboard shortcuts ───────────────────────────────────────────────────────
+function onKeyDown(e: KeyboardEvent) {
+  if (!isMaster.value) return
+  if (e.key === 'Backspace' || e.key === 'Delete') {
+    if (zombies.selected.size === 0) return
+    const ids = Array.from(zombies.selected)
+    for (const id of ids) {
+      connection.send({ type: 'master:remove-zombie', id })
+    }
+  }
+  if (e.key === 'Escape') {
+    zombies.clearSelection()
   }
 }
 
-function playerMarkerPos(player: { id: string }, index: number, total: number): { x: number, y: number } {
-  if (!area.value) return { x: 0, y: 0 }
-  const stored = playerPositionsStore.get(player.id, area.value.id)
-  if (stored) return stored
-  return defaultPlayerPos(index, total)
-}
+onMounted(() => {
+  window.addEventListener('keydown', onKeyDown)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeyDown)
+  if (paintFlushTimer) clearTimeout(paintFlushTimer)
+})
 
-// Drag logic (solo master)
+// ── Player drag (master può spostare pedine) ─────────────────────────────────
 const dragging = ref<string | null>(null)
 
 function startDrag(e: MouseEvent, playerId: string) {
@@ -165,6 +364,29 @@ function endDrag() {
   }
   dragging.value = null
 }
+
+const DEFAULT_CENTER_X = VIEWBOX_W / 2
+const DEFAULT_CENTER_Y = VIEWBOX_H * 0.55
+
+function defaultPlayerPos(index: number, total: number): { x: number, y: number } {
+  if (total === 1) {
+    return { x: DEFAULT_CENTER_X, y: DEFAULT_CENTER_Y }
+  }
+  const radius = Math.min(120, 40 + total * 12)
+  const startAngle = -Math.PI / 2
+  const a = startAngle + (index / total) * Math.PI * 2
+  return {
+    x: DEFAULT_CENTER_X + Math.cos(a) * radius,
+    y: DEFAULT_CENTER_Y + Math.sin(a) * radius
+  }
+}
+
+function playerMarkerPos(player: { id: string }, index: number, total: number): { x: number, y: number } {
+  if (!area.value) return { x: 0, y: 0 }
+  const stored = playerPositionsStore.get(player.id, area.value.id)
+  if (stored) return stored
+  return defaultPlayerPos(index, total)
+}
 </script>
 
 <template>
@@ -201,11 +423,6 @@ function endDrag() {
         </span>
       </div>
       <div class="flex items-center gap-2">
-        <span
-          v-if="isMaster"
-          class="text-xs"
-          style="color: var(--z-text-md)"
-        >Click sulla zona per spawnare uno zombie</span>
         <UButton
           v-if="canMoveHere && !alreadyHere"
           size="xs"
@@ -222,13 +439,45 @@ function endDrag() {
       </div>
     </header>
 
+    <!-- Toolbar tool modes (solo master) -->
+    <div
+      v-if="isMaster"
+      class="absolute top-16 left-3 flex flex-col gap-1 p-2 rounded-md z-10"
+      style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
+    >
+      <button
+        v-for="t in (['paint', 'select', 'move', 'erase'] as const)"
+        :key="t"
+        type="button"
+        class="text-xs px-2 py-1 rounded text-left flex items-center gap-2"
+        :title="t"
+        :style="tool === t
+          ? 'background: var(--z-green-700); color: var(--z-green-100)'
+          : 'background: var(--z-bg-700); color: var(--z-text-md)'"
+        @click="tool = t"
+      >
+        <span>{{ ({ paint: '🧟', select: '☐', move: '✥', erase: '⌫' })[t] }}</span>
+        <span class="capitalize">{{ ({ paint: 'spawn', select: 'sel.', move: 'sposta', erase: 'rimuovi' })[t] }}</span>
+      </button>
+      <div
+        v-if="zombies.selected.size > 0"
+        class="text-xs mt-2 px-2 py-1 rounded"
+        style="background: var(--z-bg-700); color: var(--z-text-md)"
+      >
+        {{ zombies.selected.size }} sel · DEL
+      </div>
+    </div>
+
     <svg
       id="area-detail-svg"
       :viewBox="`0 0 ${VIEWBOX_W} ${VIEWBOX_H}`"
       preserveAspectRatio="xMidYMid meet"
       style="width: 100%; flex: 1; display: block; min-height: 0"
-      :style="isMaster ? 'cursor: crosshair' : 'cursor: default'"
-      @click="onSvgClick"
+      :style="cursorForTool"
+      @mousedown="onSvgMouseDown"
+      @mousemove="onSvgMouseMove"
+      @mouseup="onSvgMouseUp"
+      @mouseleave="onSvgMouseUp"
     >
       <defs>
         <radialGradient
@@ -285,9 +534,17 @@ function endDrag() {
         :key="z.id"
         :transform="`translate(${z.x}, ${z.y})`"
         :style="isMaster ? 'cursor: pointer' : undefined"
-        @click.stop="removeZombie(z.id)"
+        @mousedown="onZombieMouseDown($event, z)"
       >
-        <title>{{ isMaster ? 'click per rimuovere zombie' : 'zombie' }}</title>
+        <title>{{ isMaster ? `zombie ${z.id.slice(0, 6)} — ${tool}` : 'zombie' }}</title>
+        <circle
+          v-if="zombies.isSelected(z.id)"
+          r="14"
+          fill="none"
+          stroke="var(--z-green-300)"
+          stroke-width="2"
+          stroke-dasharray="3 3"
+        />
         <circle
           r="10"
           fill="var(--z-green-700)"
@@ -298,8 +555,24 @@ function endDrag() {
           text-anchor="middle"
           y="4"
           font-size="12"
+          pointer-events="none"
         >🧟</text>
       </g>
+
+      <!-- Rubber band selection -->
+      <rect
+        v-if="rubberRect"
+        :x="rubberRect.x"
+        :y="rubberRect.y"
+        :width="rubberRect.w"
+        :height="rubberRect.h"
+        fill="var(--z-green-300)"
+        fill-opacity="0.1"
+        stroke="var(--z-green-300)"
+        stroke-width="1"
+        stroke-dasharray="4 3"
+        pointer-events="none"
+      />
 
       <!-- Player nella zona -->
       <g

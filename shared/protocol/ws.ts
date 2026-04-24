@@ -258,18 +258,49 @@ export const PlayerPlacedEvent = z.object({
 })
 export type PlayerPlacedEvent = z.infer<typeof PlayerPlacedEvent>
 
+export const MasterMoveZombieEvent = z.object({
+  type: z.literal('master:move-zombie'),
+  id: z.string(),
+  x: z.number(),
+  y: z.number()
+})
+export type MasterMoveZombieEvent = z.infer<typeof MasterMoveZombieEvent>
+
+export const ZombieMovedEvent = z.object({
+  type: z.literal('zombie:moved'),
+  id: z.string(),
+  x: z.number(),
+  y: z.number()
+})
+export type ZombieMovedEvent = z.infer<typeof ZombieMovedEvent>
+
+export const MasterSpawnZombiesEvent = z.object({
+  type: z.literal('master:spawn-zombies'),
+  areaId: z.string(),
+  positions: z.array(z.object({ x: z.number(), y: z.number() })).min(1).max(200)
+})
+export type MasterSpawnZombiesEvent = z.infer<typeof MasterSpawnZombiesEvent>
+
+export const ZombiesBatchSpawnedEvent = z.object({
+  type: z.literal('zombies:batch-spawned'),
+  zombies: z.array(ZombieSchema)
+})
+export type ZombiesBatchSpawnedEvent = z.infer<typeof ZombiesBatchSpawnedEvent>
+
 export const ServerEvent = z.discriminatedUnion('type', [
   StateInitEvent, MessageNewEvent, TimeTickEvent, ServerErrorEvent,
   PlayerJoinedEvent, PlayerLeftEvent, PlayerMovedEvent,
   AreaUpdatedEvent, WeatherUpdatedEvent, HistoryBatchEvent,
   ZombieSpawnedEvent, ZombieRemovedEvent,
-  PlayerPlacedEvent
+  PlayerPlacedEvent,
+  ZombieMovedEvent, ZombiesBatchSpawnedEvent
 ])
 export type ServerEvent = z.infer<typeof ServerEvent>
 
 export const ClientEvent = z.discriminatedUnion('type', [
   HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent,
   MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent,
-  MasterPlacePlayerEvent
+  MasterPlacePlayerEvent,
+  MasterMoveZombieEvent, MasterSpawnZombiesEvent
 ])
 export type ClientEvent = z.infer<typeof ClientEvent>
