@@ -188,8 +188,33 @@ function commandToWsEvent(cmd: SlashCommand, areaId: string | null): Record<stri
       if (!targetId) return { error: `giocatore non trovato: ${cmd.target}` }
       return { type: 'chat:send', kind: 'dm', body: cmd.body, targetPlayerId: targetId }
     }
-    case 'roll':
+    case 'npc': {
+      const npcAreaId = party.me?.currentAreaId
+      if (!npcAreaId) return { error: 'nessuna area' }
+      return { type: 'master:npc', areaId: npcAreaId, npcName: cmd.npcName, body: cmd.body }
+    }
+    case 'announce':
+      return { type: 'master:announce', body: cmd.body }
+    case 'roll': {
+      if (cmd.hidden) return { type: 'master:hidden-roll', expr: cmd.expr }
       return { type: 'chat:send', kind: 'roll', body: cmd.expr, rollExpr: cmd.expr, areaId }
+    }
+    case 'weather': {
+      if ('clear' in cmd && cmd.clear) {
+        return { type: 'master:weather-override', areaId: cmd.areaId, clear: true }
+      }
+      return {
+        type: 'master:weather-override',
+        areaId: (cmd as { areaId: string | null, code: string, intensity: number | null }).areaId,
+        code: (cmd as { areaId: string | null, code: string, intensity: number | null }).code,
+        intensity: (cmd as { areaId: string | null, code: string, intensity: number | null }).intensity ?? 0.7
+      }
+    }
+    case 'move': {
+      const targetId = resolveTargetPlayerId(cmd.target)
+      if (!targetId) return { error: `giocatore non trovato: ${cmd.target}` }
+      return { type: 'master:move-player', playerId: targetId, toAreaId: cmd.areaId }
+    }
     case 'close':
       return { type: 'master:area', areaId: cmd.areaId, status: 'closed' }
     case 'open':

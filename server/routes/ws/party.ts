@@ -1,8 +1,9 @@
-import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent, MasterDeleteMessageEvent, MasterEditMessageEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type PlayerMutedEvent, type KickedEvent } from '~~/shared/protocol/ws'
+import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent, MasterDeleteMessageEvent, MasterEditMessageEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type PlayerMutedEvent, type KickedEvent, type WeatherUpdatedEvent } from '~~/shared/protocol/ws'
 import { useDb } from '~~/server/utils/db'
 import { findPlayerBySession, listOnlinePlayers, touchPlayer, updatePlayerArea, setMute, kickPlayer, findPlayerById, type PlayerRow } from '~~/server/services/players'
 import { addBan, removeBan } from '~~/server/services/bans'
 import { logMasterAction } from '~~/server/services/master-actions'
+import { setOverride, clearOverride, listOverrides } from '~~/server/services/weather-overrides'
 import { partyMustExist } from '~~/server/services/parties'
 import { listAreasState, updateAreaState, findAreaState } from '~~/server/services/areas'
 import { listAreaMessages, insertMessage, listAreaMessagesBefore, listThreadMessagesBefore, listRecentDmsForPlayer, softDeleteMessage, editMessage, findMessage, type MessageRow } from '~~/server/services/messages'
@@ -150,6 +151,26 @@ export default defineWebSocketHandler({
     }
     if (parsed.type === 'master:unban') {
       await handleMasterUnban(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:npc') {
+      await handleMasterNpc(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:announce') {
+      await handleMasterAnnounce(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:hidden-roll') {
+      await handleMasterHiddenRoll(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:weather-override') {
+      await handleMasterWeatherOverride(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:move-player') {
+      await handleMasterMovePlayer(peer, parsed)
       return
     }
   },
@@ -945,6 +966,205 @@ async function handleMasterUnban(peer: Peer, raw: unknown) {
   })
 }
 
+async function handleMasterNpc(peer: Peer, raw: unknown) {
+  const res = MasterNpcEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  if (!isAreaId(res.data.areaId)) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'unknown_area' })
+    return
+  }
+
+  const stored = insertMessage(ctx.db, {
+    partySeed: ctx.conn.partySeed,
+    kind: 'npc',
+    authorPlayerId: ctx.me.id,
+    authorDisplay: res.data.npcName,
+    areaId: res.data.areaId,
+    body: res.data.body
+  })
+  logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'npc', target: res.data.areaId, payload: { npcName: res.data.npcName } })
+
+  const event: MessageNewEvent = { type: 'message:new', message: stored }
+  const payload = JSON.stringify(event)
+  const partyPlayers = listOnlinePlayers(ctx.db, ctx.conn.partySeed)
+  const roleById = new Map(partyPlayers.map(p => [p.id, p.role]))
+  for (const c of registry.listParty(ctx.conn.partySeed)) {
+    const role = roleById.get(c.playerId) ?? 'user'
+    if (role === 'master' || c.areaId === res.data.areaId) {
+      try {
+        c.ws.send(payload)
+      } catch { /* skip */ }
+    }
+  }
+}
+
+async function handleMasterAnnounce(peer: Peer, raw: unknown) {
+  const res = MasterAnnounceEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  const stored = insertMessage(ctx.db, {
+    partySeed: ctx.conn.partySeed,
+    kind: 'announce',
+    authorPlayerId: ctx.me.id,
+    authorDisplay: ctx.me.nickname,
+    areaId: null,
+    body: res.data.body
+  })
+  logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'announce', payload: { body: res.data.body } })
+  const event: MessageNewEvent = { type: 'message:new', message: stored }
+  const payload = JSON.stringify(event)
+  for (const c of registry.listParty(ctx.conn.partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
+}
+
+async function handleMasterHiddenRoll(peer: Peer, raw: unknown) {
+  const res = MasterHiddenRollEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  const parsedRoll = parseRoll(res.data.expr)
+  if (!parsedRoll.ok) {
+    sendJson(peer, { type: 'error', code: 'bad_roll_expr', detail: parsedRoll.error })
+    return
+  }
+  const rng = mulberry32(seedFromString(`${ctx.conn.partySeed}|${ctx.me.id}|${Date.now()}|hidden`))
+  const rolled = rollDice(parsedRoll.expr, rng)
+  const stored = insertMessage(ctx.db, {
+    partySeed: ctx.conn.partySeed,
+    kind: 'roll',
+    authorPlayerId: ctx.me.id,
+    authorDisplay: ctx.me.nickname,
+    areaId: null,
+    body: res.data.expr,
+    rollPayload: JSON.stringify({ expr: res.data.expr, ...rolled })
+  })
+  logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'hidden-roll', payload: { expr: res.data.expr, total: rolled.total } })
+  const event: MessageNewEvent = { type: 'message:new', message: stored }
+  const sendPayload = JSON.stringify(event)
+  const conn = registry.getPlayerConn(ctx.conn.partySeed, ctx.me.id)
+  if (conn) {
+    try {
+      conn.ws.send(sendPayload)
+    } catch { /* skip */ }
+  }
+}
+
+async function handleMasterWeatherOverride(peer: Peer, raw: unknown) {
+  const res = MasterWeatherOverrideEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  const targetArea = res.data.areaId
+  if (targetArea !== null && !isAreaId(targetArea)) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'unknown_area' })
+    return
+  }
+  if (res.data.clear) {
+    clearOverride(ctx.db, ctx.conn.partySeed, targetArea)
+    logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'weather-clear', target: targetArea ?? '*' })
+    const event: WeatherUpdatedEvent = { type: 'weather:updated', areaId: targetArea, effective: null }
+    const payload = JSON.stringify(event)
+    for (const c of registry.listParty(ctx.conn.partySeed)) {
+      try {
+        c.ws.send(payload)
+      } catch { /* skip */ }
+    }
+    return
+  }
+  if (!res.data.code) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'missing_code' })
+    return
+  }
+  const intensity = res.data.intensity ?? 0.7
+  setOverride(ctx.db, ctx.conn.partySeed, targetArea, res.data.code, intensity)
+  logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'weather-set', target: targetArea ?? '*', payload: { code: res.data.code, intensity } })
+  const event: WeatherUpdatedEvent = {
+    type: 'weather:updated',
+    areaId: targetArea,
+    effective: { code: res.data.code, intensity, label: res.data.code }
+  }
+  const payload = JSON.stringify(event)
+  for (const c of registry.listParty(ctx.conn.partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
+}
+
+async function handleMasterMovePlayer(peer: Peer, raw: unknown) {
+  const res = MasterMovePlayerEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  if (!isAreaId(res.data.toAreaId)) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'unknown_area' })
+    return
+  }
+  const target = findPlayerById(ctx.db, ctx.conn.partySeed, res.data.playerId)
+  if (!target) {
+    sendJson(peer, { type: 'error', code: 'not_found' })
+    return
+  }
+  const fromAreaId = target.currentAreaId
+  if (fromAreaId === res.data.toAreaId) return
+
+  updatePlayerArea(ctx.db, target.id, res.data.toAreaId)
+  registry.updateArea(ctx.conn.partySeed, target.id, res.data.toAreaId)
+  resetPlayerPosition(ctx.conn.partySeed, target.id)
+  logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'teleport', target: target.id, payload: { from: fromAreaId, to: res.data.toAreaId } })
+
+  const moved: PlayerMovedEvent = {
+    type: 'player:moved',
+    playerId: target.id,
+    fromAreaId,
+    toAreaId: res.data.toAreaId,
+    teleported: true
+  }
+  const movedPayload = JSON.stringify(moved)
+  for (const c of registry.listParty(ctx.conn.partySeed)) {
+    try {
+      c.ws.send(movedPayload)
+    } catch { /* skip */ }
+  }
+
+  const reset: PlayerPlacedEvent = { type: 'player:placed', playerId: target.id, areaId: res.data.toAreaId, x: null, y: null }
+  const resetPayload = JSON.stringify(reset)
+  for (const c of registry.listParty(ctx.conn.partySeed)) {
+    try {
+      c.ws.send(resetPayload)
+    } catch { /* skip */ }
+  }
+
+  const targetConn = registry.getPlayerConn(ctx.conn.partySeed, target.id)
+  if (targetConn) {
+    const messages = listAreaMessages(ctx.db, ctx.conn.partySeed, res.data.toAreaId, 100)
+    try {
+      targetConn.ws.send(JSON.stringify({ type: 'area:entered', areaId: res.data.toAreaId, messages }))
+    } catch { /* skip */ }
+  }
+}
+
 async function handleHello(peer: Peer, seed: string, sessionToken: string) {
   try {
     const db = useDb()
@@ -971,6 +1191,7 @@ async function handleHello(peer: Peer, seed: string, sessionToken: string) {
     const dms = listRecentDmsForPlayer(db, seed, player.id, 50)
     const zombies = listPartyZombies(seed)
     const playerPositions = listPlayerPositions(seed)
+    const weatherOverridesList = listOverrides(db, seed)
 
     const init: StateInitEvent = {
       type: 'state:init',
@@ -982,6 +1203,7 @@ async function handleHello(peer: Peer, seed: string, sessionToken: string) {
       dms,
       zombies,
       playerPositions,
+      weatherOverrides: weatherOverridesList,
       serverTime: Date.now()
     }
     sendJson(peer, init)

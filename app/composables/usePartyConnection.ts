@@ -4,6 +4,7 @@ import { useChatStore, type ChatMessage } from '~/stores/chat'
 import { useServerTime } from '~/composables/useServerTime'
 import { useZombiesStore } from '~/stores/zombies'
 import { usePlayerPositionsStore } from '~/stores/player-positions'
+import { useWeatherOverridesStore } from '~/stores/weather-overrides'
 import type { Zombie, PlayerPosition } from '~~/shared/protocol/ws'
 
 interface ConnectOptions {
@@ -43,6 +44,7 @@ export function usePartyConnection() {
   const serverTime = useServerTime()
   const zombiesStore = useZombiesStore()
   const playerPositionsStore = usePlayerPositionsStore()
+  const weatherOverridesStore = useWeatherOverridesStore()
 
   function scheduleReconnect() {
     if (closedFlag) return
@@ -141,6 +143,7 @@ export function usePartyConnection() {
           dms: ChatMessage[]
           zombies: Zombie[]
           playerPositions: PlayerPosition[]
+          weatherOverrides: { areaId: string | null, code: string, intensity: number }[]
           serverTime: number
         }
         partyStore.hydrate({
@@ -151,6 +154,7 @@ export function usePartyConnection() {
         chatStore.hydrateDms(init.dms ?? [], init.me.id)
         zombiesStore.hydrate(init.zombies ?? [])
         playerPositionsStore.hydrate(init.playerPositions ?? [])
+        weatherOverridesStore.hydrate(init.weatherOverrides ?? [])
         serverTime.sync(init.serverTime)
         break
       }
@@ -259,6 +263,11 @@ export function usePartyConnection() {
           window.alert(`Sei stato espulso dalla party${p.reason ? ': ' + p.reason : ''}.`)
           window.location.href = '/'
         }
+        break
+      }
+      case 'weather:updated': {
+        const p = data as { areaId: string | null, effective: { code: string, intensity: number, label: string } | null }
+        weatherOverridesStore.set(p.areaId, p.effective ? { code: p.effective.code, intensity: p.effective.intensity } : null)
         break
       }
       case 'voice:signal': {

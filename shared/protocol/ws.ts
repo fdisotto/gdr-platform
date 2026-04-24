@@ -94,6 +94,12 @@ export const PlayerPositionSchema = z.object({
 })
 export type PlayerPosition = z.infer<typeof PlayerPositionSchema>
 
+const WeatherOverridePublicSchema = z.object({
+  areaId: z.string().nullable(),
+  code: z.string(),
+  intensity: z.number()
+})
+
 export const StateInitEvent = z.object({
   type: z.literal('state:init'),
   me: PlayerSnapshot,
@@ -111,6 +117,7 @@ export const StateInitEvent = z.object({
     spawnedAt: z.number()
   })),
   playerPositions: z.array(PlayerPositionSchema),
+  weatherOverrides: z.array(WeatherOverridePublicSchema),
   serverTime: z.number()
 })
 export type StateInitEvent = z.infer<typeof StateInitEvent>
@@ -173,7 +180,7 @@ const WeatherStateSchema = z.object({
 export const WeatherUpdatedEvent = z.object({
   type: z.literal('weather:updated'),
   areaId: z.string().nullable(),
-  effective: WeatherStateSchema
+  effective: WeatherStateSchema.nullable()
 })
 export type WeatherUpdatedEvent = z.infer<typeof WeatherUpdatedEvent>
 
@@ -373,6 +380,42 @@ export const MasterUnbanEvent = z.object({
 })
 export type MasterUnbanEvent = z.infer<typeof MasterUnbanEvent>
 
+export const MasterNpcEvent = z.object({
+  type: z.literal('master:npc'),
+  areaId: z.string(),
+  npcName: z.string().min(1).max(64),
+  body: z.string().min(1).max(2000)
+})
+export type MasterNpcEvent = z.infer<typeof MasterNpcEvent>
+
+export const MasterAnnounceEvent = z.object({
+  type: z.literal('master:announce'),
+  body: z.string().min(1).max(2000)
+})
+export type MasterAnnounceEvent = z.infer<typeof MasterAnnounceEvent>
+
+export const MasterHiddenRollEvent = z.object({
+  type: z.literal('master:hidden-roll'),
+  expr: z.string().min(1).max(64)
+})
+export type MasterHiddenRollEvent = z.infer<typeof MasterHiddenRollEvent>
+
+export const MasterWeatherOverrideEvent = z.object({
+  type: z.literal('master:weather-override'),
+  areaId: z.string().nullable(),
+  code: z.string().nullable().optional(),
+  intensity: z.number().min(0).max(1).nullable().optional(),
+  clear: z.boolean().optional()
+})
+export type MasterWeatherOverrideEvent = z.infer<typeof MasterWeatherOverrideEvent>
+
+export const MasterMovePlayerEvent = z.object({
+  type: z.literal('master:move-player'),
+  playerId: z.string(),
+  toAreaId: z.string()
+})
+export type MasterMovePlayerEvent = z.infer<typeof MasterMovePlayerEvent>
+
 // Server → client
 export const MessageUpdateEvent = z.object({
   type: z.literal('message:update'),
@@ -414,6 +457,8 @@ export const ClientEvent = z.discriminatedUnion('type', [
   VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent,
   MasterDeleteMessageEvent, MasterEditMessageEvent,
   MasterMuteEvent, MasterUnmuteEvent,
-  MasterKickEvent, MasterBanEvent, MasterUnbanEvent
+  MasterKickEvent, MasterBanEvent, MasterUnbanEvent,
+  MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent,
+  MasterWeatherOverrideEvent, MasterMovePlayerEvent
 ])
 export type ClientEvent = z.infer<typeof ClientEvent>

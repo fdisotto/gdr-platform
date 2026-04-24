@@ -91,6 +91,7 @@ describe('StateInitEvent', () => {
       dms: [],
       zombies: [],
       playerPositions: [],
+      weatherOverrides: [],
       serverTime: 1
     }).success).toBe(true)
   })
@@ -158,6 +159,12 @@ describe('WeatherUpdatedEvent', () => {
     expect(WeatherUpdatedEvent.safeParse({
       type: 'weather:updated', areaId: null,
       effective: { code: 'storm', intensity: 0.5, label: 'Tempesta' }
+    }).success).toBe(true)
+  })
+  it('accetta effective null (override rimosso)', () => {
+    expect(WeatherUpdatedEvent.safeParse({
+      type: 'weather:updated', areaId: 'piazza',
+      effective: null
     }).success).toBe(true)
   })
 })

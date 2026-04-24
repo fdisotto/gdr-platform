@@ -7,6 +7,7 @@ import { useChatStore } from '~/stores/chat'
 import { useViewStore } from '~/stores/view'
 import { useZombiesStore } from '~/stores/zombies'
 import { usePlayerPositionsStore } from '~/stores/player-positions'
+import { useWeatherOverridesStore } from '~/stores/weather-overrides'
 import { usePartyConnection } from '~/composables/usePartyConnection'
 import PartyHeader from '~/components/layout/PartyHeader.vue'
 import ConnectionBanner from '~/components/layout/ConnectionBanner.vue'
@@ -23,6 +24,7 @@ const chatStore = useChatStore()
 const viewStore = useViewStore()
 const zombiesStore = useZombiesStore()
 const playerPositionsStore = usePlayerPositionsStore()
+const weatherOverridesStore = useWeatherOverridesStore()
 const connection = usePartyConnection()
 
 const guardError = ref<string | null>(null)
@@ -55,6 +57,7 @@ onBeforeRouteLeave(() => {
   viewStore.reset()
   zombiesStore.reset()
   playerPositionsStore.reset()
+  weatherOverridesStore.reset()
   return true
 })
 </script>
