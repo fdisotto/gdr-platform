@@ -121,9 +121,12 @@ const isEdited = computed(() => props.message.editedAt !== null)
         class="font-semibold"
       >{{ message.authorDisplay }}</span>
       <span>{{ prefixAfter }}</span>
-      <span :style="isDeleted ? 'text-decoration: line-through; opacity: 0.5' : undefined">
-        {{ message.body }}
-      </span>
+      <span
+        :style="{
+          whiteSpace: 'pre-wrap',
+          ...(isDeleted ? { textDecoration: 'line-through', opacity: 0.5 } : {})
+        }"
+      >{{ message.body }}</span>
       <span
         v-if="message.kind === 'roll' && rollData"
         class="ml-2 font-mono-z text-xs px-2 py-0.5 rounded"
