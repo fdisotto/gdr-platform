@@ -17,6 +17,11 @@ export interface ChatMessage {
   editedAt: number | null
 }
 
+// Tipi di messaggio che contano per il badge "ha appena parlato":
+// escludiamo whisper e dm (privati), system (non un player), npc/announce
+// (parole del master travestite) e roll (è un evento, non discorso).
+const PUBLIC_SPEECH_KINDS = new Set(['say', 'emote', 'shout', 'ooc'])
+
 export const useChatStore = defineStore('chat', () => {
   const messagesByArea = ref<Record<string, ChatMessage[]>>({})
   const dmsByThread = ref<Record<string, ChatMessage[]>>({})
@@ -26,8 +31,35 @@ export const useChatStore = defineStore('chat', () => {
   const areaHasMore = ref<Record<string, boolean>>({})
   const threadHasMore = ref<Record<string, boolean>>({})
 
+  // Ultimo player che ha parlato in chat pubblica (per badge sull'avatar)
+  const lastSpeakerPlayerId = ref<string | null>(null)
+  const lastSpokeAt = ref<number>(0)
+  function noteSpeaker(msg: ChatMessage) {
+    if (!msg.authorPlayerId) return
+    if (!PUBLIC_SPEECH_KINDS.has(msg.kind)) return
+    lastSpeakerPlayerId.value = msg.authorPlayerId
+    lastSpokeAt.value = msg.createdAt
+  }
+
   function hydrate(payload: Record<string, ChatMessage[]>) {
     messagesByArea.value = { ...payload }
+    // Riprendi l'ultimo speaker pubblico dalla history iniziale così il
+    // badge ha uno stato sensato subito al join (non vuoto finché non
+    // qualcuno riparla).
+    let bestTs = 0
+    let bestId: string | null = null
+    for (const arr of Object.values(payload)) {
+      for (const m of arr) {
+        if (!m.authorPlayerId) continue
+        if (!PUBLIC_SPEECH_KINDS.has(m.kind)) continue
+        if (m.createdAt > bestTs) {
+          bestTs = m.createdAt
+          bestId = m.authorPlayerId
+        }
+      }
+    }
+    lastSpeakerPlayerId.value = bestId
+    lastSpokeAt.value = bestTs
   }
 
   function append(msg: ChatMessage) {
@@ -35,6 +67,7 @@ export const useChatStore = defineStore('chat', () => {
     if (!area) return
     const list = messagesByArea.value[area] ?? []
     messagesByArea.value[area] = [...list, msg]
+    noteSpeaker(msg)
   }
 
   function update(msg: ChatMessage) {
@@ -138,11 +171,14 @@ export const useChatStore = defineStore('chat', () => {
     areaHasMore.value = {}
     threadHasMore.value = {}
     inputDraft.value = ''
+    lastSpeakerPlayerId.value = null
+    lastSpokeAt.value = 0
   }
 
   return {
     messagesByArea, dmsByThread, inputDraft,
     areaHasMore, threadHasMore,
+    lastSpeakerPlayerId, lastSpokeAt,
     hydrate, hydrateDms, append, update, forArea, forThread,
     appendDm, listDmThreads, threadKey,
     prependArea, prependThread,

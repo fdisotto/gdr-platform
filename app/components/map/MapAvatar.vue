@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { Area } from '~~/shared/map/areas'
 import { seedFromString } from '~~/shared/seed/prng'
+import { useChatStore } from '~/stores/chat'
 
 interface Props {
   player: { id: string, nickname: string, role: 'user' | 'master', currentAreaId: string }
@@ -11,6 +12,8 @@ interface Props {
 }
 const props = defineProps<Props>()
 const emit = defineEmits<{ (e: 'click', ev: MouseEvent): void }>()
+
+const chatStore = useChatStore()
 
 const AVATAR_COLORS = [
   '#7cbe79', '#9aa13a', '#d4965b', '#a8572a',
@@ -36,6 +39,7 @@ const position = computed(() => {
 })
 
 const isMaster = computed(() => props.player.role === 'master')
+const isLastSpeaker = computed(() => chatStore.lastSpeakerPlayerId === props.player.id)
 </script>
 
 <template>
@@ -58,5 +62,45 @@ const isMaster = computed(() => props.player.role === 'master')
       stroke="var(--z-bg-900)"
       stroke-width="0.5"
     />
+    <!-- Badge "ha appena parlato": fumetto in alto a destra dell'avatar -->
+    <g
+      v-if="isLastSpeaker"
+      transform="translate(6, -6)"
+      style="pointer-events: none"
+    >
+      <title>Ha parlato di recente</title>
+      <ellipse
+        rx="4.5"
+        ry="3.5"
+        fill="var(--z-bg-900)"
+        stroke="var(--z-green-300)"
+        stroke-width="1"
+      />
+      <path
+        d="M -1.5 3 L 0 5.5 L 1 3 Z"
+        fill="var(--z-bg-900)"
+        stroke="var(--z-green-300)"
+        stroke-width="1"
+        stroke-linejoin="round"
+      />
+      <circle
+        cx="-2"
+        cy="0"
+        r="0.6"
+        fill="var(--z-green-300)"
+      />
+      <circle
+        cx="0"
+        cy="0"
+        r="0.6"
+        fill="var(--z-green-300)"
+      />
+      <circle
+        cx="2"
+        cy="0"
+        r="0.6"
+        fill="var(--z-green-300)"
+      />
+    </g>
   </g>
 </template>
