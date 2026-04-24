@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
-const open = ref(true)
+const open = ref(false)
 
 const ITEMS: { status: 'intact' | 'infested' | 'ruined' | 'closed', label: string, description: string }[] = [
   { status: 'intact', label: 'Intatta', description: 'Area agibile, niente infestazione' },

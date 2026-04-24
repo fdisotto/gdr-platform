@@ -4,7 +4,7 @@ import { usePartyStore } from '~/stores/party'
 import { AREAS } from '~~/shared/map/areas'
 
 const party = usePartyStore()
-const open = ref(true)
+const open = ref(false)
 
 const areaNameById = new Map(AREAS.map(a => [a.id as string, a.name]))
 
