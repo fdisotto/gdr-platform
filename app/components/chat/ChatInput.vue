@@ -38,6 +38,11 @@ const errorText = ref<string | null>(null)
 const inputEl = ref<HTMLInputElement | null>(null)
 const showSuggestions = ref(false)
 
+const history = ref<string[]>([])
+const historyIndex = ref<number>(-1) // -1 = non in history (stato corrente)
+const draftBeforeHistory = ref<string>('')
+const MAX_HISTORY = 30
+
 const suggestions = computed<CommandSuggestion[]>(() => {
   const v = input.value.trimStart()
   if (!v.startsWith('/')) return []
@@ -94,6 +99,12 @@ function submit() {
   }
   errorText.value = null
   connection.send(result)
+  // Aggiungi alla history (dedupe consecutivo)
+  if (history.value[history.value.length - 1] !== raw) {
+    history.value.push(raw)
+    if (history.value.length > MAX_HISTORY) history.value.shift()
+  }
+  historyIndex.value = -1
   input.value = ''
   showSuggestions.value = false
 }
@@ -113,6 +124,43 @@ function pickSuggestion(s: CommandSuggestion) {
 function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     showSuggestions.value = false
+    return
+  }
+  if (e.key === 'ArrowUp') {
+    if (showSuggestions.value) return // non interferire col dropdown
+    if (history.value.length === 0) return
+    e.preventDefault()
+    if (historyIndex.value === -1) {
+      draftBeforeHistory.value = input.value
+      historyIndex.value = history.value.length - 1
+    } else if (historyIndex.value > 0) {
+      historyIndex.value--
+    }
+    input.value = history.value[historyIndex.value] ?? ''
+    const el = inputEl.value
+    if (el) {
+      const len = input.value.length
+      nextTick(() => el.setSelectionRange(len, len))
+    }
+    return
+  }
+  if (e.key === 'ArrowDown') {
+    if (historyIndex.value === -1) return
+    e.preventDefault()
+    if (historyIndex.value < history.value.length - 1) {
+      historyIndex.value++
+      input.value = history.value[historyIndex.value] ?? ''
+    } else {
+      historyIndex.value = -1
+      input.value = draftBeforeHistory.value
+      draftBeforeHistory.value = ''
+    }
+    const el = inputEl.value
+    if (el) {
+      const len = input.value.length
+      nextTick(() => el.setSelectionRange(len, len))
+    }
+    return
   }
 }
 

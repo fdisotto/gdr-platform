@@ -10,6 +10,7 @@ const time = useServerTime()
 const view = useViewStore()
 
 const seedShort = computed(() => party.party?.seed.slice(0, 8) ?? '…')
+const clock = computed(() => time.format())
 </script>
 
 <template>
@@ -65,7 +66,7 @@ const seedShort = computed(() => party.party?.seed.slice(0, 8) ?? '…')
         <span
           v-if="time.synced.value"
           class="font-mono-z"
-        >{{ time.format() }}</span>
+        >{{ clock }}</span>
         <span v-else>… sync</span>
       </div>
       <div

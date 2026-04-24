@@ -250,6 +250,16 @@ async function handleMoveRequest(peer: Peer, raw: unknown) {
 
   const isMaster = me.role === 'master'
 
+  // Non-master: valida che l'area di destinazione non sia closed da seed
+  if (!isMaster) {
+    const areas = listAreasState(db, conn.partySeed)
+    const targetState = areas.find(a => a.areaId === toAreaId)
+    if (targetState && targetState.status === 'closed') {
+      sendJson(peer, { type: 'error', code: 'area_closed', detail: 'area_status_closed' })
+      return
+    }
+  }
+
   // Non-master: valida adiacenza (isAreaId protegge il cast sotto)
   if (!isMaster && !areAdjacent(fromAreaId as never, toAreaId as never)) {
     sendJson(peer, { type: 'error', code: 'not_adjacent' })
