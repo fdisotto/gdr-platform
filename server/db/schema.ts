@@ -11,6 +11,9 @@ export const parties = sqliteTable('parties', {
 export const players = sqliteTable('players', {
   id: text('id').primaryKey(),
   partySeed: text('party_seed').notNull().references(() => parties.seed, { onDelete: 'cascade' }),
+  // v2a: userId è la FK all'account. In MVP le vecchie righe non ce l'hanno,
+  // ma la migration 0002 azzera players e poi aggiunge NOT NULL.
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   nickname: text('nickname').notNull(),
   role: text('role', { enum: ['user', 'master'] }).notNull(),
   currentAreaId: text('current_area_id').notNull(),
@@ -22,6 +25,7 @@ export const players = sqliteTable('players', {
   sessionToken: text('session_token').notNull()
 }, t => [
   uniqueIndex('players_party_nickname_unique').on(t.partySeed, t.nickname),
+  uniqueIndex('players_party_user_unique').on(t.partySeed, t.userId),
   index('players_session_idx').on(t.sessionToken)
 ])
 
@@ -120,4 +124,70 @@ export const playerPositions = sqliteTable('player_positions', {
   setAt: integer('set_at').notNull()
 }, t => [
   primaryKey({ columns: [t.partySeed, t.playerId, t.areaId] })
+])
+
+// v2a auth: utenti registrati con username + password (+ status di approvazione
+// gestito dal superadmin). usernameLower serve per il lookup case-insensitive.
+export const users = sqliteTable('users', {
+  id: text('id').primaryKey(),
+  username: text('username').notNull(),
+  usernameLower: text('username_lower').notNull(),
+  passwordHash: text('password_hash').notNull(),
+  mustReset: integer('must_reset', { mode: 'boolean' }).notNull().default(false),
+  status: text('status', { enum: ['pending', 'approved', 'banned'] }).notNull(),
+  createdAt: integer('created_at').notNull(),
+  approvedAt: integer('approved_at'),
+  approvedBy: text('approved_by'),
+  bannedReason: text('banned_reason')
+}, t => [
+  uniqueIndex('users_username_lower_unique').on(t.usernameLower),
+  index('users_status_idx').on(t.status)
+])
+
+// Superadmin su tabella separata: non è un ruolo elevato sopra users ma un
+// account distinto con proprio namespace. Seed script crea admin/changeme
+// con mustReset=true al primo boot.
+export const superadmins = sqliteTable('superadmins', {
+  id: text('id').primaryKey(),
+  username: text('username').notNull(),
+  usernameLower: text('username_lower').notNull(),
+  passwordHash: text('password_hash').notNull(),
+  mustReset: integer('must_reset', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at').notNull()
+}, t => [
+  uniqueIndex('superadmins_username_lower_unique').on(t.usernameLower)
+])
+
+// Sessioni auth: token opaque in cookie httpOnly. Una riga per user o
+// per superadmin (XOR expresso via CHECK aggiunto nella migration SQL, che
+// drizzle-kit non genera automaticamente).
+export const sessions = sqliteTable('sessions', {
+  token: text('token').primaryKey(),
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  superadminId: text('superadmin_id').references(() => superadmins.id, { onDelete: 'cascade' }),
+  createdAt: integer('created_at').notNull(),
+  lastActivityAt: integer('last_activity_at').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+  ip: text('ip'),
+  userAgent: text('user_agent')
+}, t => [
+  index('sessions_user_idx').on(t.userId),
+  index('sessions_superadmin_idx').on(t.superadminId),
+  index('sessions_expires_idx').on(t.expiresAt)
+])
+
+// Audit log append-only per eventi auth: register, login, ban, reset…
+export const authEvents = sqliteTable('auth_events', {
+  id: text('id').primaryKey(),
+  actorKind: text('actor_kind', { enum: ['user', 'superadmin', 'anonymous'] }).notNull(),
+  actorId: text('actor_id'),
+  usernameAttempted: text('username_attempted'),
+  event: text('event').notNull(),
+  ip: text('ip'),
+  userAgent: text('user_agent'),
+  detail: text('detail'),
+  createdAt: integer('created_at').notNull()
+}, t => [
+  index('auth_events_time_idx').on(t.createdAt),
+  index('auth_events_actor_idx').on(t.actorKind, t.actorId, t.createdAt)
 ])
