@@ -119,7 +119,11 @@ export function usePartyConnection() {
       }
       case 'message:new': {
         const m = (data as { message: ChatMessage }).message
-        chatStore.append(m)
+        if (m.kind === 'dm' && partyStore.me) {
+          chatStore.appendDm(m, partyStore.me.id)
+        } else {
+          chatStore.append(m)
+        }
         break
       }
       case 'message:update': {

@@ -4,17 +4,20 @@ import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { useSession } from '~/composables/useSession'
 import { usePartyStore } from '~/stores/party'
 import { useChatStore } from '~/stores/chat'
+import { useViewStore } from '~/stores/view'
 import { usePartyConnection } from '~/composables/usePartyConnection'
 import PartyHeader from '~/components/layout/PartyHeader.vue'
 import ConnectionBanner from '~/components/layout/ConnectionBanner.vue'
 import PartyChat from '~/components/chat/PartyChat.vue'
 import GameMap from '~/components/map/GameMap.vue'
+import DirectMessagesView from '~/components/dm/DirectMessagesView.vue'
 
 const route = useRoute()
 const seed = String(route.params.seed)
 const session = useSession()
 const partyStore = usePartyStore()
 const chatStore = useChatStore()
+const viewStore = useViewStore()
 const connection = usePartyConnection()
 
 const guardError = ref<string | null>(null)
@@ -44,6 +47,7 @@ onBeforeRouteLeave(() => {
   connection.disconnect()
   partyStore.reset()
   chatStore.reset()
+  viewStore.reset()
   return true
 })
 </script>
@@ -73,7 +77,29 @@ onBeforeRouteLeave(() => {
       <PartyHeader />
       <ConnectionBanner />
       <div class="flex-1 flex flex-col overflow-hidden">
-        <GameMap />
+        <nav
+          class="px-4 py-1 flex gap-2 text-xs"
+          style="background: var(--z-bg-800); border-bottom: 1px solid var(--z-border)"
+        >
+          <button
+            type="button"
+            class="px-2 py-1 rounded"
+            :style="viewStore.mainView === 'map' ? 'background: var(--z-green-700); color: var(--z-green-100)' : 'color: var(--z-text-md)'"
+            @click="viewStore.show('map')"
+          >
+            🗺 Mappa
+          </button>
+          <button
+            type="button"
+            class="px-2 py-1 rounded"
+            :style="viewStore.mainView === 'dm' ? 'background: var(--z-whisper-500); color: var(--z-bg-900)' : 'color: var(--z-text-md)'"
+            @click="viewStore.show('dm')"
+          >
+            💬 Messaggi
+          </button>
+        </nav>
+        <GameMap v-if="viewStore.mainView === 'map'" />
+        <DirectMessagesView v-else-if="viewStore.mainView === 'dm'" />
         <PartyChat />
       </div>
     </template>

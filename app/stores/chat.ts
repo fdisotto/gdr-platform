@@ -19,6 +19,7 @@ export interface ChatMessage {
 
 export const useChatStore = defineStore('chat', () => {
   const messagesByArea = ref<Record<string, ChatMessage[]>>({})
+  const dmsByThread = ref<Record<string, ChatMessage[]>>({})
   const inputDraft = ref('')
 
   function hydrate(payload: Record<string, ChatMessage[]>) {
@@ -51,10 +52,50 @@ export const useChatStore = defineStore('chat', () => {
     return messagesByArea.value[areaId] ?? []
   }
 
+  function threadKey(aId: string, bId: string): string {
+    return [aId, bId].sort().join('::')
+  }
+
+  function appendDm(msg: ChatMessage, selfId: string) {
+    if (msg.kind !== 'dm') return
+    const otherId = msg.authorPlayerId === selfId
+      ? msg.targetPlayerId
+      : msg.authorPlayerId
+    if (!otherId) return
+    const key = threadKey(selfId, otherId)
+    const existing = dmsByThread.value[key] ?? []
+    dmsByThread.value[key] = [...existing, msg]
+  }
+
+  function forThread(key: string): ChatMessage[] {
+    return dmsByThread.value[key] ?? []
+  }
+
+  function listDmThreads(selfId: string, knownPlayers: Array<{ id: string, nickname: string }>): Array<{ key: string, otherId: string, otherNickname: string, lastMessage: ChatMessage | null }> {
+    const byId = new Map(knownPlayers.map(p => [p.id, p.nickname]))
+    const result: Array<{ key: string, otherId: string, otherNickname: string, lastMessage: ChatMessage | null }> = []
+    for (const [key, msgs] of Object.entries(dmsByThread.value)) {
+      const [a, b] = key.split('::') as [string, string]
+      const otherId = a === selfId ? b : a
+      const otherNickname = byId.get(otherId) ?? otherId.slice(0, 6)
+      const lastMessage = msgs[msgs.length - 1] ?? null
+      result.push({ key, otherId, otherNickname, lastMessage })
+    }
+    return result.sort((x, y) =>
+      (y.lastMessage?.createdAt ?? 0) - (x.lastMessage?.createdAt ?? 0)
+    )
+  }
+
   function reset() {
     messagesByArea.value = {}
+    dmsByThread.value = {}
     inputDraft.value = ''
   }
 
-  return { messagesByArea, inputDraft, hydrate, append, update, forArea, reset }
+  return {
+    messagesByArea, dmsByThread, inputDraft,
+    hydrate, append, update, forArea, forThread,
+    appendDm, listDmThreads, threadKey,
+    reset
+  }
 })
