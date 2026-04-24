@@ -28,7 +28,9 @@ const ALL_COMMANDS: CommandSuggestion[] = [
   { slash: '/announce', label: 'Annuncio', hint: 'master: annuncio globale', template: '/announce ' },
   { slash: '/mute', label: 'Muta', hint: 'master: /mute NICK', template: '/mute ' },
   { slash: '/kick', label: 'Kick', hint: 'master: /kick NICK', template: '/kick ' },
-  { slash: '/move', label: 'Muovi', hint: 'master: /move NICK area', template: '/move ' }
+  { slash: '/move', label: 'Muovi', hint: 'master: /move NICK area', template: '/move ' },
+  { slash: '/close', label: 'Chiudi area', hint: 'master: /close area_id', template: '/close ' },
+  { slash: '/open', label: 'Apri area', hint: 'master: /open area_id', template: '/open ' }
 ]
 
 const party = usePartyStore()
@@ -78,6 +80,10 @@ function commandToWsEvent(cmd: SlashCommand, areaId: string | null): Record<stri
     }
     case 'roll':
       return { type: 'chat:send', kind: 'roll', body: cmd.expr, rollExpr: cmd.expr, areaId }
+    case 'close':
+      return { type: 'master:area', areaId: cmd.areaId, status: 'closed' }
+    case 'open':
+      return { type: 'master:area', areaId: cmd.areaId, status: 'intact' }
     default:
       return { error: 'comando master non ancora disponibile in questa versione' }
   }

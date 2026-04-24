@@ -1,8 +1,8 @@
-import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent } from '~~/shared/protocol/ws'
+import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent } from '~~/shared/protocol/ws'
 import { useDb } from '~~/server/utils/db'
 import { findPlayerBySession, listOnlinePlayers, touchPlayer, updatePlayerArea } from '~~/server/services/players'
 import { partyMustExist } from '~~/server/services/parties'
-import { listAreasState } from '~~/server/services/areas'
+import { listAreasState, updateAreaState, findAreaState } from '~~/server/services/areas'
 import { listAreaMessages, insertMessage, listAreaMessagesBefore, listThreadMessagesBefore, listRecentDmsForPlayer, type MessageRow } from '~~/server/services/messages'
 import { registry, sendJson, chatRateLimiter } from '~~/server/ws/state'
 import { pickFanoutRecipients } from '~~/server/ws/fanout'
@@ -84,6 +84,11 @@ export default defineWebSocketHandler({
 
     if (parsed.type === 'chat:history-before') {
       await handleHistoryFetch(peer, parsed)
+      return
+    }
+
+    if (parsed.type === 'master:area') {
+      await handleMasterArea(peer, parsed)
       return
     }
   },
@@ -348,6 +353,58 @@ async function handleHistoryFetch(peer: Peer, raw: unknown) {
   }
 
   sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'missing_area_or_thread' })
+}
+
+async function handleMasterArea(peer: Peer, raw: unknown) {
+  const res = MasterAreaEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'master_area_malformed' })
+    return
+  }
+  const conn = registry.all().find(c => c.ws === peer)
+  if (!conn) {
+    sendJson(peer, { type: 'error', code: 'session_invalid' })
+    return
+  }
+  const db = useDb()
+  const me = listOnlinePlayers(db, conn.partySeed).find(p => p.id === conn.playerId)
+  if (!me) {
+    sendJson(peer, { type: 'error', code: 'session_invalid' })
+    return
+  }
+  if (me.role !== 'master') {
+    sendJson(peer, { type: 'error', code: 'master_only' })
+    return
+  }
+  if (!isAreaId(res.data.areaId)) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'unknown_area' })
+    return
+  }
+
+  updateAreaState(db, conn.partySeed, res.data.areaId, {
+    status: res.data.status,
+    customName: res.data.customName,
+    notes: res.data.notes
+  })
+  const fresh = findAreaState(db, conn.partySeed, res.data.areaId)
+  if (!fresh) return
+
+  const event = {
+    type: 'area:updated' as const,
+    patch: {
+      partySeed: fresh.partySeed,
+      areaId: fresh.areaId,
+      status: fresh.status,
+      customName: fresh.customName,
+      notes: fresh.notes
+    }
+  }
+  const payload = JSON.stringify(event)
+  for (const c of registry.listParty(conn.partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
 }
 
 async function handleHello(peer: Peer, seed: string, sessionToken: string) {

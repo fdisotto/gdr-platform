@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createTestDb, type Db } from '~~/server/db/client'
 import { createParty } from '~~/server/services/parties'
-import { listAreasState } from '~~/server/services/areas'
+import { listAreasState, updateAreaState, findAreaState } from '~~/server/services/areas'
 import { AREA_IDS } from '~~/shared/map/areas'
 
 let db: Db
@@ -25,5 +25,21 @@ describe('areas service', () => {
     const rows = listAreasState(db, seed)
     const piazza = rows.find(r => r.areaId === 'piazza')!
     expect(piazza.status).toBe('intact')
+  })
+})
+
+describe('updateAreaState', () => {
+  it('aggiorna solo i campi patch passati', () => {
+    updateAreaState(db, seed, 'fogne', { status: 'closed', notes: 'tappata' })
+    const row = findAreaState(db, seed, 'fogne')
+    expect(row?.status).toBe('closed')
+    expect(row?.notes).toBe('tappata')
+  })
+
+  it('non tocca campi non in patch', () => {
+    updateAreaState(db, seed, 'piazza', { customName: 'Nuova Piazza' })
+    const row = findAreaState(db, seed, 'piazza')
+    expect(row?.customName).toBe('Nuova Piazza')
+    expect(row?.status).toBe('intact')
   })
 })

@@ -178,6 +178,15 @@ export const HistoryBatchEvent = z.object({
 })
 export type HistoryBatchEvent = z.infer<typeof HistoryBatchEvent>
 
+export const MasterAreaEvent = z.object({
+  type: z.literal('master:area'),
+  areaId: z.string(),
+  status: z.enum(['intact', 'infested', 'ruined', 'closed']).optional(),
+  customName: z.string().nullable().optional(),
+  notes: z.string().nullable().optional()
+})
+export type MasterAreaEvent = z.infer<typeof MasterAreaEvent>
+
 export const ServerEvent = z.discriminatedUnion('type', [
   StateInitEvent, MessageNewEvent, TimeTickEvent, ServerErrorEvent,
   PlayerJoinedEvent, PlayerLeftEvent, PlayerMovedEvent,
@@ -186,6 +195,6 @@ export const ServerEvent = z.discriminatedUnion('type', [
 export type ServerEvent = z.infer<typeof ServerEvent>
 
 export const ClientEvent = z.discriminatedUnion('type', [
-  HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent
+  HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent
 ])
 export type ClientEvent = z.infer<typeof ClientEvent>

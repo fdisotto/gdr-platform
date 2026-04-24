@@ -198,6 +198,18 @@ export function usePartyConnection() {
         }
         break
       }
+      case 'area:updated': {
+        const payload = data as { patch: AreaStateSnapshot }
+        const idx = partyStore.areasState.findIndex(a => a.areaId === payload.patch.areaId)
+        if (idx >= 0) {
+          const copy = [...partyStore.areasState]
+          copy[idx] = payload.patch
+          partyStore.areasState = copy
+        } else {
+          partyStore.areasState = [...partyStore.areasState, payload.patch]
+        }
+        break
+      }
       case 'error': {
         console.warn('[ws error]', data)
         break
