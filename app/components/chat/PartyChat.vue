@@ -87,9 +87,8 @@ watch(messages, async (newList) => {
 <template>
   <section
     class="flex flex-col"
-    :style="viewStore.chatCollapsed
-      ? 'background: var(--z-bg-800); border-top: 1px solid var(--z-border); flex-shrink: 0'
-      : 'background: var(--z-bg-800); border-top: 1px solid var(--z-border); height: 40vh; min-height: 260px; max-height: 50vh; flex-shrink: 0'"
+    :class="viewStore.chatCollapsed ? '' : 'chat-expanded'"
+    style="background: var(--z-bg-800); border-top: 1px solid var(--z-border); flex-shrink: 0"
   >
     <div
       class="px-4 py-2 text-xs uppercase tracking-wide flex items-center justify-between"
@@ -179,3 +178,20 @@ watch(messages, async (newList) => {
     </template>
   </section>
 </template>
+
+<style scoped>
+/* Mobile: chat expanded prende il 55% del viewport, con min più basso */
+.chat-expanded {
+  height: 55vh;
+  min-height: 200px;
+  max-height: 65vh;
+}
+/* Desktop: come prima, con tetto al 50vh */
+@media (min-width: 768px) {
+  .chat-expanded {
+    height: 40vh;
+    min-height: 260px;
+    max-height: 50vh;
+  }
+}
+</style>

@@ -89,15 +89,15 @@ const decodedActions = computed(() => {
 
 <template>
   <section
-    class="w-full flex flex-1 min-h-0"
+    class="w-full flex flex-col md:flex-row flex-1 min-h-0"
     style="background: var(--z-bg-900)"
   >
     <aside
-      class="w-44 flex flex-col"
-      style="border-right: 1px solid var(--z-border); background: var(--z-bg-800)"
+      class="w-full md:w-44 flex flex-row md:flex-col"
+      style="border-right: 1px solid var(--z-border); border-bottom: 1px solid var(--z-border); background: var(--z-bg-800)"
     >
       <h3
-        class="text-xs uppercase tracking-wide px-4 py-3"
+        class="hidden md:block text-xs uppercase tracking-wide px-4 py-3"
         style="color: var(--z-blood-300); border-bottom: 1px solid var(--z-border)"
       >
         Master
@@ -106,15 +106,15 @@ const decodedActions = computed(() => {
         v-for="t in (['tools', 'log', 'bans'] as const)"
         :key="t"
         type="button"
-        class="text-left px-4 py-2 text-sm capitalize"
+        class="flex-1 md:flex-none text-left px-3 md:px-4 py-2 text-xs md:text-sm capitalize"
         :style="activeTab === t
           ? 'background: var(--z-blood-700); color: var(--z-blood-300)'
           : 'background: transparent; color: var(--z-text-md)'"
         @click="activeTab = t"
       >
-        {{ ({ tools: 'Strumenti', log: 'Log azioni', bans: 'Banditi' })[t] }}
+        {{ ({ tools: 'Strumenti', log: 'Log', bans: 'Banditi' })[t] }}
       </button>
-      <div class="flex-1" />
+      <div class="hidden md:block flex-1" />
       <UButton
         size="xs"
         variant="ghost"
@@ -123,7 +123,7 @@ const decodedActions = computed(() => {
         icon="i-lucide-refresh-cw"
         @click="refresh"
       >
-        Aggiorna
+        <span class="hidden md:inline">Aggiorna</span>
       </UButton>
     </aside>
 

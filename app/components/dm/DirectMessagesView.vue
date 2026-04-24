@@ -113,9 +113,12 @@ function send() {
     class="w-full flex flex-1 min-h-0"
     style="background: var(--z-bg-900)"
   >
-    <!-- Lista conversazioni (inbox) -->
+    <!-- Lista conversazioni (inbox): full-width su mobile quando nessun thread
+         selezionato, nascosta su mobile quando invece c'è un thread aperto.
+         Su desktop resta sempre visibile come sidebar 320px. -->
     <aside
-      class="w-80 flex flex-col"
+      class="flex flex-col w-full md:w-80"
+      :class="selectedKey ? 'hidden md:flex' : 'flex'"
       style="border-right: 1px solid var(--z-border); background: var(--z-bg-800)"
     >
       <header
@@ -199,25 +202,41 @@ function send() {
       </div>
     </aside>
 
-    <!-- Missive view (letters) -->
-    <div class="flex-1 flex flex-col overflow-hidden">
+    <!-- Missive view (letters): full-width su mobile quando thread selezionato,
+         nascosta altrimenti. Su desktop sempre visibile (placeholder se nessun
+         thread). -->
+    <div
+      class="flex-1 flex flex-col overflow-hidden"
+      :class="selectedKey ? 'flex' : 'hidden md:flex'"
+    >
       <div
         v-if="selectedThread"
-        class="px-6 py-3"
+        class="px-4 md:px-6 py-3 flex items-center gap-3"
         style="border-bottom: 1px solid var(--z-border); background: var(--z-bg-800)"
       >
-        <p
-          class="text-xs uppercase tracking-wide"
-          style="color: var(--z-text-md)"
+        <button
+          type="button"
+          class="md:hidden text-sm px-2 py-1 rounded"
+          title="Torna alla lista"
+          style="background: var(--z-bg-700); color: var(--z-text-md)"
+          @click="viewStore.selectedThreadKey = null"
         >
-          Corrispondenza con
-        </p>
-        <p
-          class="text-lg font-semibold"
-          :style="settings.colorNicknames ? { color: nicknameColor(selectedThread.otherNickname) } : { color: 'var(--z-green-300)' }"
-        >
-          {{ selectedThread.otherNickname }}
-        </p>
+          ←
+        </button>
+        <div>
+          <p
+            class="text-xs uppercase tracking-wide"
+            style="color: var(--z-text-md)"
+          >
+            Corrispondenza con
+          </p>
+          <p
+            class="text-base md:text-lg font-semibold"
+            :style="settings.colorNicknames ? { color: nicknameColor(selectedThread.otherNickname) } : { color: 'var(--z-green-300)' }"
+          >
+            {{ selectedThread.otherNickname }}
+          </p>
+        </div>
       </div>
       <div class="flex-1 overflow-y-auto p-6 space-y-4">
         <div

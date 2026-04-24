@@ -658,17 +658,20 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
       </div>
     </header>
 
-    <!-- Toolbar tool modes (solo master) -->
+    <!-- Toolbar tool modes (solo master).
+         Desktop: colonna verticale a sinistra sotto l'header.
+         Mobile: scroll orizzontale in testa (sotto l'header) per non
+         rubare spazio alla mappa. -->
     <div
       v-if="isMaster"
-      class="absolute top-16 left-3 flex flex-col gap-1 p-2 rounded-md z-10"
+      class="absolute left-3 right-3 md:right-auto md:top-16 top-16 flex flex-row md:flex-col gap-1 p-2 rounded-md z-10 overflow-x-auto md:overflow-visible"
       style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
     >
       <button
         v-for="t in (['paint', 'npc', 'area-rect', 'area-lasso', 'select', 'move', 'erase'] as const)"
         :key="t"
         type="button"
-        class="text-xs px-2 py-1 rounded text-left flex items-center gap-2 w-full"
+        class="text-xs px-2 py-1 rounded text-left flex items-center gap-2 md:w-full shrink-0 whitespace-nowrap"
         :title="t"
         :style="tool === t
           ? 'background: var(--z-green-700); color: var(--z-green-100)'
@@ -683,7 +686,7 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
       </button>
       <div
         v-if="zombies.selected.size > 0"
-        class="text-xs mt-2 px-2 py-1 rounded"
+        class="text-xs md:mt-2 ml-1 md:ml-0 px-2 py-1 rounded shrink-0 whitespace-nowrap"
         style="background: var(--z-bg-700); color: var(--z-text-md)"
       >
         {{ zombies.selected.size }} sel · DEL

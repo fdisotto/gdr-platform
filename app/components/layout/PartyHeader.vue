@@ -18,66 +18,71 @@ const clock = computed(() => time.format())
 
 <template>
   <header
-    class="flex items-center justify-between gap-4 px-6 py-2"
+    class="flex items-center justify-between gap-2 md:gap-4 px-3 md:px-6 py-2"
     style="background: var(--z-bg-800); border-bottom: 1px solid var(--z-border)"
   >
-    <!-- Sinistra: città + seed -->
-    <div class="flex items-baseline gap-3 min-w-0">
+    <!-- Sinistra: città + seed (seed nascosto su mobile) -->
+    <div class="flex items-baseline gap-2 md:gap-3 min-w-0">
       <h1
-        class="text-lg font-semibold truncate"
+        class="text-sm md:text-lg font-semibold truncate"
         style="color: var(--z-green-300)"
       >
         {{ party.party?.cityName ?? 'Città ignota' }}
       </h1>
       <code
-        class="text-xs font-mono-z"
+        class="hidden md:inline text-xs font-mono-z"
         style="color: var(--z-text-lo)"
       >{{ seedShort }}</code>
     </div>
 
-    <!-- Centro: nav tabs -->
+    <!-- Centro: nav tabs (icon-only su mobile) -->
     <nav class="flex items-center gap-1">
       <button
         type="button"
-        class="text-xs px-3 py-1.5 rounded"
+        class="text-xs px-2 md:px-3 py-1.5 rounded"
+        :title="'Mappa'"
         :style="view.mainView === 'map'
           ? 'background: var(--z-green-700); color: var(--z-green-100)'
           : 'background: transparent; color: var(--z-text-md)'"
         @click="view.show('map')"
       >
-        🗺 Mappa
+        🗺<span class="hidden md:inline ml-1">Mappa</span>
       </button>
       <button
         type="button"
-        class="text-xs px-3 py-1.5 rounded"
+        class="text-xs px-2 md:px-3 py-1.5 rounded"
+        :title="'Missive'"
         :style="view.mainView === 'dm'
           ? 'background: var(--z-whisper-500); color: var(--z-bg-900)'
           : 'background: transparent; color: var(--z-text-md)'"
         @click="view.show('dm')"
       >
-        ✉ Missive
+        ✉<span class="hidden md:inline ml-1">Missive</span>
       </button>
       <button
         v-if="party.me?.role === 'master'"
         type="button"
-        class="text-xs px-3 py-1.5 rounded"
+        class="text-xs px-2 md:px-3 py-1.5 rounded"
+        :title="'Master'"
         :style="view.mainView === 'master'
           ? 'background: var(--z-blood-700); color: var(--z-blood-300)'
           : 'background: transparent; color: var(--z-text-md)'"
         @click="view.show('master')"
       >
-        🛠 Master
+        🛠<span class="hidden md:inline ml-1">Master</span>
       </button>
     </nav>
 
-    <!-- Destra: meteo, ora, nickname -->
-    <div class="flex items-center gap-4">
+    <!-- Destra: meteo, ora, nickname (audio/voice/notifiche nascosti su xs) -->
+    <div class="flex items-center gap-2 md:gap-4">
       <WeatherBadge />
-      <AudioToggle />
-      <VoiceToggle />
-      <NotificationsToggle />
+      <div class="hidden sm:flex items-center gap-2 md:gap-4">
+        <AudioToggle />
+        <VoiceToggle />
+        <NotificationsToggle />
+      </div>
       <div
-        class="text-xs"
+        class="hidden md:block text-xs"
         style="color: var(--z-text-md)"
       >
         <span
@@ -88,11 +93,14 @@ const clock = computed(() => time.format())
       </div>
       <div
         v-if="party.me"
-        class="text-sm flex items-center gap-2"
+        class="text-xs md:text-sm flex items-center gap-1 md:gap-2 min-w-0"
       >
-        <span style="color: var(--z-text-md)">{{ party.me.nickname }}</span>
         <span
-          class="px-2 py-0.5 text-xs rounded"
+          class="truncate max-w-[5rem] md:max-w-none"
+          style="color: var(--z-text-md)"
+        >{{ party.me.nickname }}</span>
+        <span
+          class="hidden md:inline px-2 py-0.5 text-xs rounded"
           :style="party.me.role === 'master'
             ? 'background: var(--z-blood-700); color: var(--z-blood-300)'
             : 'background: var(--z-bg-700); color: var(--z-text-md)'"
