@@ -2,45 +2,28 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useChatStore } from '~/stores/chat'
 import { usePartyStore } from '~/stores/party'
+import { useSettingsStore } from '~/stores/settings'
 import ChatMessage from '~/components/chat/ChatMessage.vue'
 import ChatInput from '~/components/chat/ChatInput.vue'
-import ChatTabs, { type ChatTab } from '~/components/chat/ChatTabs.vue'
 
 const chatStore = useChatStore()
 const partyStore = usePartyStore()
+const settings = useSettingsStore()
 
 const scrollTarget = ref<HTMLElement | null>(null)
-const activeTab = ref<ChatTab>({ kind: 'area' })
 
 const currentAreaId = computed(() => partyStore.me?.currentAreaId ?? '')
 const isMaster = computed(() => partyStore.me?.role === 'master')
 
-const visibleMessages = computed(() => {
-  const tab = activeTab.value
-  const areaMsgs = chatStore.forArea(currentAreaId.value)
-  if (tab.kind === 'area') {
-    return areaMsgs.filter(m => !['whisper', 'ooc', 'dm'].includes(m.kind))
-  }
-  if (tab.kind === 'whispers') {
-    return areaMsgs.filter(m => m.kind === 'whisper')
-  }
-  if (tab.kind === 'ooc') {
-    return areaMsgs.filter(m => m.kind === 'ooc')
-  }
-  if (tab.kind === 'dm') {
-    return chatStore.forThread(tab.threadKey)
-  }
-  return []
+// Stream unico: tutti i messaggi dell'area eccetto dm (che vanno nell'inbox missive)
+const messages = computed(() => {
+  return chatStore.forArea(currentAreaId.value).filter(m => m.kind !== 'dm')
 })
 
-watch(visibleMessages, async () => {
+watch(messages, async () => {
   await nextTick()
   scrollTarget.value?.scrollTo({ top: scrollTarget.value.scrollHeight, behavior: 'smooth' })
 }, { deep: true })
-
-function onSelectTab(t: ChatTab) {
-  activeTab.value = t
-}
 </script>
 
 <template>
@@ -48,26 +31,41 @@ function onSelectTab(t: ChatTab) {
     class="flex flex-col"
     style="background: var(--z-bg-800); border-top: 1px solid var(--z-border); height: 45vh"
   >
-    <ChatTabs
-      :active-tab="activeTab"
-      @select="onSelectTab"
-    />
+    <div
+      class="px-4 py-2 text-xs uppercase tracking-wide flex items-center justify-between"
+      style="color: var(--z-text-md); border-bottom: 1px solid var(--z-border)"
+    >
+      <span>
+        Chat · <span style="color: var(--z-green-300)">{{ currentAreaId || '…' }}</span>
+      </span>
+      <button
+        type="button"
+        class="text-xs px-2 py-0.5 rounded"
+        :title="settings.colorNicknames ? 'Disattiva colori nickname' : 'Attiva colori nickname'"
+        :style="settings.colorNicknames
+          ? 'background: var(--z-green-700); color: var(--z-green-100)'
+          : 'background: var(--z-bg-700); color: var(--z-text-md)'"
+        @click="settings.toggleColorNicknames()"
+      >
+        🎨 nick {{ settings.colorNicknames ? 'on' : 'off' }}
+      </button>
+    </div>
     <div
       ref="scrollTarget"
       class="flex-1 overflow-y-auto px-4 py-2 space-y-1"
     >
       <ChatMessage
-        v-for="m in visibleMessages"
+        v-for="m in messages"
         :key="m.id"
         :message="m"
         :is-master="isMaster"
       />
       <div
-        v-if="!visibleMessages.length"
+        v-if="!messages.length"
         class="text-xs italic"
         style="color: var(--z-text-lo)"
       >
-        Nessun messaggio in questo canale.
+        Nessun messaggio in questa area.
       </div>
     </div>
     <ChatInput />

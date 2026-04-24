@@ -1,13 +1,53 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { parseSlash, type SlashCommand } from '~~/shared/slash/parse'
 import { usePartyStore } from '~/stores/party'
 import { usePartyConnection } from '~/composables/usePartyConnection'
+
+interface CommandSuggestion {
+  slash: string
+  label: string
+  hint: string
+  template: string
+}
+
+const SHORTCUTS: CommandSuggestion[] = [
+  { slash: '/me', label: 'Azione', hint: '/me apre la porta', template: '/me ' },
+  { slash: '/w', label: 'Sussurro', hint: '/w NICK testo', template: '/w ' },
+  { slash: '/shout', label: 'Grido', hint: '/shout aiuto!', template: '/shout ' },
+  { slash: '/ooc', label: 'OOC', hint: '/ooc fuori personaggio', template: '/ooc ' },
+  { slash: '/roll', label: 'Dado', hint: '/roll 2d6+3', template: '/roll ' },
+  { slash: '/dm', label: 'Missiva', hint: '/dm NICK testo (inbox privata)', template: '/dm ' }
+]
+
+const ALL_COMMANDS: CommandSuggestion[] = [
+  ...SHORTCUTS,
+  { slash: '/whisper', label: 'Sussurro', hint: 'alias di /w', template: '/whisper ' },
+  { slash: '/roll!', label: 'Dado nasc.', hint: 'master: roll nascosto', template: '/roll! ' },
+  { slash: '/npc', label: 'NPC', hint: 'master: parla come NPC', template: '/npc ' },
+  { slash: '/announce', label: 'Annuncio', hint: 'master: annuncio globale', template: '/announce ' },
+  { slash: '/mute', label: 'Muta', hint: 'master: /mute NICK', template: '/mute ' },
+  { slash: '/kick', label: 'Kick', hint: 'master: /kick NICK', template: '/kick ' },
+  { slash: '/move', label: 'Muovi', hint: 'master: /move NICK area', template: '/move ' }
+]
 
 const party = usePartyStore()
 const connection = usePartyConnection()
 const input = ref('')
 const errorText = ref<string | null>(null)
+const inputEl = ref<HTMLInputElement | null>(null)
+const showSuggestions = ref(false)
+
+const suggestions = computed<CommandSuggestion[]>(() => {
+  const v = input.value.trimStart()
+  if (!v.startsWith('/')) return []
+  const firstWord = v.split(' ')[0]!.toLowerCase()
+  return ALL_COMMANDS.filter(c => c.slash.startsWith(firstWord))
+})
+
+watch(suggestions, (s) => {
+  showSuggestions.value = s.length > 0 && input.value.trimStart().startsWith('/') && !input.value.includes(' ')
+})
 
 function resolveTargetPlayerId(nickname: string): string | null {
   const target = party.players.find(p => p.nickname.toLowerCase() === nickname.toLowerCase())
@@ -55,14 +95,38 @@ function submit() {
   errorText.value = null
   connection.send(result)
   input.value = ''
+  showSuggestions.value = false
+}
+
+async function applyTemplate(template: string) {
+  input.value = template
+  showSuggestions.value = false
+  await nextTick()
+  inputEl.value?.focus()
+  inputEl.value?.setSelectionRange(template.length, template.length)
+}
+
+function pickSuggestion(s: CommandSuggestion) {
+  void applyTemplate(s.template)
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') {
+    showSuggestions.value = false
+  }
+}
+
+function onInputFocus() {
+  if (suggestions.value.length > 0 && input.value.trimStart().startsWith('/') && !input.value.includes(' ')) {
+    showSuggestions.value = true
+  }
 }
 </script>
 
 <template>
-  <form
+  <div
     class="px-4 py-3 space-y-2"
-    style="border-top: 1px solid var(--z-border)"
-    @submit.prevent="submit"
+    style="border-top: 1px solid var(--z-border); position: relative"
   >
     <p
       v-if="errorText"
@@ -71,13 +135,61 @@ function submit() {
     >
       {{ errorText }}
     </p>
-    <div class="flex gap-2">
-      <UInput
+
+    <div
+      v-if="showSuggestions"
+      class="absolute left-4 right-4 bottom-full mb-1 rounded-md py-1 z-10"
+      style="background: var(--z-bg-700); border: 1px solid var(--z-border); max-height: 220px; overflow-y: auto"
+    >
+      <button
+        v-for="s in suggestions"
+        :key="s.slash"
+        type="button"
+        class="block w-full text-left px-3 py-1.5 text-xs"
+        style="color: var(--z-text-hi)"
+        @mousedown.prevent="pickSuggestion(s)"
+      >
+        <span
+          class="font-mono-z font-semibold"
+          style="color: var(--z-green-300)"
+        >{{ s.slash }}</span>
+        <span class="ml-2">{{ s.label }}</span>
+        <span
+          class="ml-2"
+          style="color: var(--z-text-lo)"
+        >— {{ s.hint }}</span>
+      </button>
+    </div>
+
+    <!-- Toolbar shortcut -->
+    <div class="flex items-center gap-1 flex-wrap">
+      <UButton
+        v-for="s in SHORTCUTS"
+        :key="s.slash"
+        type="button"
+        size="xs"
+        variant="soft"
+        color="neutral"
+        @click="applyTemplate(s.template)"
+      >
+        {{ s.label }}
+      </UButton>
+    </div>
+
+    <form
+      class="flex gap-2"
+      @submit.prevent="submit"
+    >
+      <input
+        ref="inputEl"
         v-model="input"
-        placeholder="Scrivi un messaggio… prova /w nick, /me, /roll 2d6, /dm nick, /shout, /ooc"
-        class="flex-1 font-mono-z"
+        class="flex-1 rounded px-3 py-2 text-sm font-mono-z"
+        style="background: var(--z-bg-700); border: 1px solid var(--z-border); color: var(--z-text-hi); outline: none"
+        placeholder="Scrivi un messaggio… prova /"
         autocomplete="off"
-      />
+        @keydown="handleKeydown"
+        @focus="onInputFocus"
+      >
       <UButton
         type="submit"
         size="sm"
@@ -85,6 +197,6 @@ function submit() {
       >
         Invia
       </UButton>
-    </div>
-  </form>
+    </form>
+  </div>
 </template>

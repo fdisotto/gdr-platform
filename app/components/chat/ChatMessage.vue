@@ -1,12 +1,26 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ChatMessage as ChatMessageType } from '~/stores/chat'
+import { useSettingsStore } from '~/stores/settings'
+import { seedFromString } from '~~/shared/seed/prng'
 
 interface Props {
   message: ChatMessageType
   isMaster: boolean
 }
 const props = defineProps<Props>()
+const settings = useSettingsStore()
+
+const NICK_COLORS = [
+  '#7cbe79', '#9aa13a', '#d4965b', '#a8572a',
+  '#9b81a8', '#b96565', '#4f8aa3', '#c9a66b',
+  '#6ec3a6', '#c26f8e'
+]
+
+function nicknameColor(display: string): string {
+  const h = seedFromString(display)
+  return NICK_COLORS[h % NICK_COLORS.length]!
+}
 
 const time = computed(() => {
   const d = new Date(props.message.createdAt)
@@ -29,35 +43,54 @@ const rollData = computed(() => {
 })
 
 const kindStyle = computed(() => {
-  switch (props.message.kind) {
+  const k = props.message.kind
+  switch (k) {
     case 'emote': return { color: 'var(--z-rust-300)', fontStyle: 'italic' }
-    case 'ooc': return { color: 'var(--z-toxic-500)', fontSize: '0.8em' }
+    case 'ooc': return { color: 'var(--z-toxic-500)', fontSize: '0.85em' }
     case 'whisper': return { color: 'var(--z-whisper-300)', fontStyle: 'italic' }
     case 'shout': return { color: 'var(--z-rust-500)', fontWeight: 'bold' }
     case 'dm': return { color: 'var(--z-whisper-300)' }
     case 'npc': return { color: 'var(--z-green-300)', fontFamily: 'ui-serif, Georgia, serif' }
     case 'announce': return { color: 'var(--z-blood-300)', fontWeight: 'bold', fontStyle: 'italic' }
-    case 'system': return { color: 'var(--z-text-lo)', fontSize: '0.8em', fontStyle: 'italic' }
+    case 'system': return { color: 'var(--z-text-lo)', fontSize: '0.85em', fontStyle: 'italic' }
     case 'roll': return { color: 'var(--z-text-hi)' }
     default: return { color: 'var(--z-text-hi)' }
   }
 })
 
-const prefix = computed(() => {
-  const d = props.message.authorDisplay
+const nickStyle = computed(() => {
+  if (!settings.colorNicknames) return {}
+  return { color: nicknameColor(props.message.authorDisplay) }
+})
+
+const prefixBefore = computed(() => {
   switch (props.message.kind) {
-    case 'emote': return `* ${d} `
-    case 'ooc': return `((OOC)) ${d}: `
-    case 'whisper': return `🔒 ${d} sussurra: `
-    case 'shout': return `📣 ${d} urla: `
-    case 'dm': return `✉ ${d}: `
-    case 'npc': return `${d}: `
-    case 'announce': return `ANNUNCIO · `
-    case 'system': return ''
-    case 'roll': return `🎲 ${d}: `
-    default: return `${d}: `
+    case 'emote': return '* '
+    case 'ooc': return '((OOC)) '
+    case 'whisper': return '🔒 '
+    case 'shout': return '📣 '
+    case 'dm': return '✉ '
+    case 'roll': return '🎲 '
+    case 'announce': return 'ANNUNCIO · '
+    default: return ''
   }
 })
+
+const prefixAfter = computed(() => {
+  switch (props.message.kind) {
+    case 'emote': return ' ' // emote: "* Nick walks"
+    case 'ooc': return ': '
+    case 'whisper': return ' sussurra: '
+    case 'shout': return ' urla: '
+    case 'dm': return ': '
+    case 'npc': return ': '
+    case 'roll': return ': '
+    case 'system': return ''
+    default: return ': '
+  }
+})
+
+const showNickname = computed(() => props.message.kind !== 'system' && props.message.kind !== 'announce')
 
 const isDeleted = computed(() => props.message.deletedAt !== null)
 const isEdited = computed(() => props.message.editedAt !== null)
@@ -81,7 +114,13 @@ const isEdited = computed(() => props.message.editedAt !== null)
       [messaggio rimosso]
     </span>
     <template v-else>
-      <span>{{ prefix }}</span>
+      <span>{{ prefixBefore }}</span>
+      <span
+        v-if="showNickname"
+        :style="nickStyle"
+        class="font-semibold"
+      >{{ message.authorDisplay }}</span>
+      <span>{{ prefixAfter }}</span>
       <span :style="isDeleted ? 'text-decoration: line-through; opacity: 0.5' : undefined">
         {{ message.body }}
       </span>
