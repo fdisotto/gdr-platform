@@ -5,6 +5,8 @@ import { useServerTime } from '~/composables/useServerTime'
 import { useZombiesStore } from '~/stores/zombies'
 import { usePlayerPositionsStore } from '~/stores/player-positions'
 import { useWeatherOverridesStore } from '~/stores/weather-overrides'
+import { useViewStore } from '~/stores/view'
+import { playNotificationSound } from '~/composables/useNotificationSound'
 import type { Zombie, PlayerPosition } from '~~/shared/protocol/ws'
 
 interface ConnectOptions {
@@ -45,6 +47,7 @@ export function usePartyConnection() {
   const zombiesStore = useZombiesStore()
   const playerPositionsStore = usePlayerPositionsStore()
   const weatherOverridesStore = useWeatherOverridesStore()
+  const viewStore = useViewStore()
 
   function scheduleReconnect() {
     if (closedFlag) return
@@ -164,6 +167,16 @@ export function usePartyConnection() {
           chatStore.appendDm(m, partyStore.me.id)
         } else {
           chatStore.append(m)
+        }
+        // Notifica: solo se il messaggio è di un altro player e non un system
+        const fromOther = partyStore.me && m.authorPlayerId && m.authorPlayerId !== partyStore.me.id
+        if (fromOther && m.kind !== 'system') {
+          const isDirectToMe = m.kind === 'dm'
+            || (m.kind === 'whisper' && m.targetPlayerId === partyStore.me!.id)
+          playNotificationSound(isDirectToMe ? 'dm' : 'msg')
+          if (viewStore.chatCollapsed && m.kind !== 'dm') {
+            viewStore.bumpUnreadIfCollapsed()
+          }
         }
         break
       }

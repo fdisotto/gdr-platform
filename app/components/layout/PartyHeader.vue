@@ -6,6 +6,7 @@ import { useViewStore } from '~/stores/view'
 import WeatherBadge from '~/components/layout/WeatherBadge.vue'
 import AudioToggle from '~/components/layout/AudioToggle.vue'
 import VoiceToggle from '~/components/layout/VoiceToggle.vue'
+import NotificationsToggle from '~/components/layout/NotificationsToggle.vue'
 
 const party = usePartyStore()
 const time = useServerTime()
@@ -74,6 +75,7 @@ const clock = computed(() => time.format())
       <WeatherBadge />
       <AudioToggle />
       <VoiceToggle />
+      <NotificationsToggle />
       <div
         class="text-xs"
         style="color: var(--z-text-md)"
