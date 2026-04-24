@@ -97,12 +97,76 @@ export const StateInitEvent = z.object({
 })
 export type StateInitEvent = z.infer<typeof StateInitEvent>
 
+export const MoveRequestEvent = z.object({
+  type: z.literal('move:request'),
+  toAreaId: z.string()
+})
+export type MoveRequestEvent = z.infer<typeof MoveRequestEvent>
+
+const PlayerSnapshotSchema = z.object({
+  id: z.string(),
+  nickname: z.string(),
+  role: z.enum(['user', 'master']),
+  currentAreaId: z.string()
+})
+
+export const PlayerJoinedEvent = z.object({
+  type: z.literal('player:joined'),
+  player: PlayerSnapshotSchema
+})
+export type PlayerJoinedEvent = z.infer<typeof PlayerJoinedEvent>
+
+export const PlayerLeftEvent = z.object({
+  type: z.literal('player:left'),
+  playerId: z.string(),
+  reason: z.string().optional()
+})
+export type PlayerLeftEvent = z.infer<typeof PlayerLeftEvent>
+
+export const PlayerMovedEvent = z.object({
+  type: z.literal('player:moved'),
+  playerId: z.string(),
+  fromAreaId: z.string(),
+  toAreaId: z.string(),
+  teleported: z.boolean()
+})
+export type PlayerMovedEvent = z.infer<typeof PlayerMovedEvent>
+
+const AreaStateSnapshotSchema = z.object({
+  partySeed: z.string(),
+  areaId: z.string(),
+  status: z.enum(['intact', 'infested', 'ruined', 'closed']),
+  customName: z.string().nullable(),
+  notes: z.string().nullable()
+})
+
+export const AreaUpdatedEvent = z.object({
+  type: z.literal('area:updated'),
+  patch: AreaStateSnapshotSchema
+})
+export type AreaUpdatedEvent = z.infer<typeof AreaUpdatedEvent>
+
+const WeatherStateSchema = z.object({
+  code: z.string(),
+  intensity: z.number(),
+  label: z.string()
+})
+
+export const WeatherUpdatedEvent = z.object({
+  type: z.literal('weather:updated'),
+  areaId: z.string().nullable(),
+  effective: WeatherStateSchema
+})
+export type WeatherUpdatedEvent = z.infer<typeof WeatherUpdatedEvent>
+
 export const ServerEvent = z.discriminatedUnion('type', [
-  StateInitEvent, MessageNewEvent, TimeTickEvent, ServerErrorEvent
+  StateInitEvent, MessageNewEvent, TimeTickEvent, ServerErrorEvent,
+  PlayerJoinedEvent, PlayerLeftEvent, PlayerMovedEvent,
+  AreaUpdatedEvent, WeatherUpdatedEvent
 ])
 export type ServerEvent = z.infer<typeof ServerEvent>
 
 export const ClientEvent = z.discriminatedUnion('type', [
-  HelloEvent, ChatSendEvent
+  HelloEvent, ChatSendEvent, MoveRequestEvent
 ])
 export type ClientEvent = z.infer<typeof ClientEvent>

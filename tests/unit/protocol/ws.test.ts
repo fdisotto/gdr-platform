@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { HelloEvent, MESSAGE_KINDS, ServerErrorEvent, ChatSendEvent, MessageNewEvent, TimeTickEvent, StateInitEvent } from '~~/shared/protocol/ws'
+import { HelloEvent, MESSAGE_KINDS, ServerErrorEvent, ChatSendEvent, MessageNewEvent, TimeTickEvent, StateInitEvent, MoveRequestEvent, PlayerJoinedEvent, PlayerLeftEvent, PlayerMovedEvent, AreaUpdatedEvent, WeatherUpdatedEvent } from '~~/shared/protocol/ws'
 
 describe('HelloEvent', () => {
   it('accetta seed uuid e sessionToken', () => {
@@ -89,6 +89,72 @@ describe('StateInitEvent', () => {
       areasState: [],
       messagesByArea: {},
       serverTime: 1
+    }).success).toBe(true)
+  })
+})
+
+describe('MoveRequestEvent', () => {
+  it('accetta shape corretta', () => {
+    expect(MoveRequestEvent.safeParse({
+      type: 'move:request', toAreaId: 'fogne'
+    }).success).toBe(true)
+  })
+  it('rifiuta senza toAreaId', () => {
+    expect(MoveRequestEvent.safeParse({
+      type: 'move:request'
+    }).success).toBe(false)
+  })
+})
+
+describe('PlayerJoinedEvent', () => {
+  it('accetta player snapshot', () => {
+    expect(PlayerJoinedEvent.safeParse({
+      type: 'player:joined',
+      player: { id: 'x', nickname: 'A', role: 'user', currentAreaId: 'piazza' }
+    }).success).toBe(true)
+  })
+})
+
+describe('PlayerLeftEvent', () => {
+  it('accetta playerId', () => {
+    expect(PlayerLeftEvent.safeParse({
+      type: 'player:left', playerId: 'x'
+    }).success).toBe(true)
+  })
+})
+
+describe('PlayerMovedEvent', () => {
+  it('accetta from/to + teleported', () => {
+    expect(PlayerMovedEvent.safeParse({
+      type: 'player:moved', playerId: 'x',
+      fromAreaId: 'piazza', toAreaId: 'fogne', teleported: false
+    }).success).toBe(true)
+  })
+})
+
+describe('AreaUpdatedEvent', () => {
+  it('accetta patch area state', () => {
+    expect(AreaUpdatedEvent.safeParse({
+      type: 'area:updated',
+      patch: {
+        partySeed: 'p', areaId: 'piazza',
+        status: 'intact', customName: null, notes: null
+      }
+    }).success).toBe(true)
+  })
+})
+
+describe('WeatherUpdatedEvent', () => {
+  it('accetta effective weather', () => {
+    expect(WeatherUpdatedEvent.safeParse({
+      type: 'weather:updated', areaId: 'piazza',
+      effective: { code: 'fog', intensity: 0.8, label: 'Nebbia' }
+    }).success).toBe(true)
+  })
+  it('accetta areaId null (globale)', () => {
+    expect(WeatherUpdatedEvent.safeParse({
+      type: 'weather:updated', areaId: null,
+      effective: { code: 'storm', intensity: 0.5, label: 'Tempesta' }
     }).success).toBe(true)
   })
 })
