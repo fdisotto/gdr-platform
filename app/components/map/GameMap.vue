@@ -24,6 +24,8 @@ const adjacentSet = computed(() => {
   return new Set<string>(ADJACENCY[currentAreaId.value] ?? [])
 })
 
+const isMaster = computed(() => party.me?.role === 'master')
+
 const stateById = computed(() => {
   const map = new Map<string, { status: 'intact' | 'infested' | 'ruined' | 'closed', customName: string | null }>()
   for (const s of party.areasState) {
@@ -168,6 +170,7 @@ function onAreaClick(areaId: AreaId) {
         :state="stateById.get(a.id) ?? null"
         :is-current="currentAreaId === a.id"
         :is-adjacent="adjacentSet.has(a.id)"
+        :is-master="isMaster"
         :player-count="(playersByArea.get(a.id)?.length ?? 0)"
         @click="onAreaClick(a.id)"
       />

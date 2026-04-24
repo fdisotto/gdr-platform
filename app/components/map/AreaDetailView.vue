@@ -44,7 +44,10 @@ const alreadyHere = computed(() => party.me?.currentAreaId === area.value?.id)
 
 const playersInArea = computed(() => {
   if (!area.value) return []
-  return party.players.filter(p => p.currentAreaId === area.value!.id)
+  // Il master non appare come pedina nel detail (non è un personaggio)
+  return party.players.filter(p =>
+    p.currentAreaId === area.value!.id && p.role !== 'master'
+  )
 })
 
 const zombiesInArea = computed(() => {

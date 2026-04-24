@@ -9,6 +9,7 @@ interface Props {
   } | null
   isCurrent: boolean
   isAdjacent: boolean
+  isMaster: boolean
   playerCount: number
 }
 const props = defineProps<Props>()
@@ -35,8 +36,17 @@ function opacity(): number {
   return 1
 }
 function cursorStyle(): string {
-  if (props.isAdjacent || props.isCurrent) return 'cursor: pointer'
-  return 'cursor: default'
+  // Master: sempre pointer (click apre detail per gestire)
+  if (props.isMaster) return 'cursor: pointer'
+  // Area corrente: solo "ispeziona", niente navigazione
+  if (props.isCurrent) return 'cursor: default'
+  const s = status()
+  // Aree chiuse per non-master: ingresso negato
+  if (s === 'closed') return 'cursor: not-allowed'
+  // Aree adiacenti raggiungibili
+  if (props.isAdjacent) return 'cursor: pointer'
+  // Altrimenti click = apri detail read-only
+  return 'cursor: help'
 }
 </script>
 
