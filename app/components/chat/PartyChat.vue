@@ -29,7 +29,7 @@ watch(messages, async () => {
 <template>
   <section
     class="flex flex-col"
-    style="background: var(--z-bg-800); border-top: 1px solid var(--z-border); height: 45vh"
+    style="background: var(--z-bg-800); border-top: 1px solid var(--z-border); height: 40vh; min-height: 260px; max-height: 50vh; flex-shrink: 0"
   >
     <div
       class="px-4 py-2 text-xs uppercase tracking-wide flex items-center justify-between"

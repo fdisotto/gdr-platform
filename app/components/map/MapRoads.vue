@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { AREAS, uniqueAdjacencyPairs, areaCenter, type AreaId } from '~~/shared/map/areas'
+import { AREAS, uniqueAdjacencyPairs, areaCenter, exitPoint, type AreaId } from '~~/shared/map/areas'
 
 const areaById = computed(() => {
   const m = new Map<AreaId, typeof AREAS[number]>()
@@ -14,9 +14,15 @@ const roads = computed(() => {
     const areaA = areaById.value.get(a)
     const areaB = areaById.value.get(b)
     if (!areaA || !areaB) return null
-    const ca = areaCenter(areaA)
-    const cb = areaCenter(areaB)
-    return { id: `${a}::${b}`, x1: ca.x, y1: ca.y, x2: cb.x, y2: cb.y }
+    const centerA = areaCenter(areaA)
+    const centerB = areaCenter(areaB)
+    const startPoint = exitPoint(areaA, centerB)
+    const endPoint = exitPoint(areaB, centerA)
+    return {
+      id: `${a}::${b}`,
+      x1: startPoint.x, y1: startPoint.y,
+      x2: endPoint.x, y2: endPoint.y
+    }
   }).filter((r): r is { id: string, x1: number, y1: number, x2: number, y2: number } => r !== null)
 })
 </script>

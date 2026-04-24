@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { AREAS, ADJACENCY, type AreaId } from '~~/shared/map/areas'
 import { usePartyStore } from '~/stores/party'
 import { useViewStore } from '~/stores/view'
+import { usePartyConnection } from '~/composables/usePartyConnection'
 import MapArea from '~/components/map/MapArea.vue'
 import MapAvatar from '~/components/map/MapAvatar.vue'
 import MapWeatherOverlay from '~/components/map/MapWeatherOverlay.vue'
@@ -12,7 +13,9 @@ import MapRoads from '~/components/map/MapRoads.vue'
 import MapDecor from '~/components/map/MapDecor.vue'
 
 const party = usePartyStore()
+const partyStore = party
 const viewStore = useViewStore()
+const connection = usePartyConnection()
 
 const currentAreaId = computed<AreaId | null>(() => (party.me?.currentAreaId as AreaId) ?? null)
 
@@ -42,14 +45,30 @@ const playersByArea = computed(() => {
 const { weather } = useAreaWeather(() => currentAreaId.value as AreaId | null)
 
 function onAreaClick(areaId: AreaId) {
+  if (!partyStore.me) return
+  const isMaster = partyStore.me.role === 'master'
+  if (isMaster) {
+    viewStore.openArea(areaId)
+    return
+  }
+  const myArea = partyStore.me.currentAreaId as AreaId
+  if (myArea === areaId) {
+    viewStore.openArea(areaId)
+    return
+  }
+  const adj = new Set<string>(ADJACENCY[myArea] ?? [])
+  if (adj.has(areaId)) {
+    connection.send({ type: 'move:request', toAreaId: areaId })
+    return
+  }
   viewStore.openArea(areaId)
 }
 </script>
 
 <template>
   <section
-    class="w-full relative"
-    style="height: 55vh; background: var(--z-bg-900)"
+    class="w-full relative flex-1 min-h-0"
+    style="background: var(--z-bg-900)"
   >
     <svg
       viewBox="0 0 1000 700"

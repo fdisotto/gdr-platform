@@ -85,8 +85,8 @@ function send() {
 
 <template>
   <section
-    class="w-full flex"
-    style="height: calc(55vh + 45vh); background: var(--z-bg-900)"
+    class="w-full flex flex-1 min-h-0"
+    style="background: var(--z-bg-900)"
   >
     <!-- Lista conversazioni (inbox) -->
     <aside

@@ -64,6 +64,19 @@ export function areaCenter(area: Area): { x: number, y: number } {
   }
 }
 
+export function exitPoint(area: Area, target: { x: number, y: number }): { x: number, y: number } {
+  const cx = area.svg.x + area.svg.w / 2
+  const cy = area.svg.y + area.svg.h / 2
+  const dx = target.x - cx
+  const dy = target.y - cy
+  const halfW = area.svg.w / 2
+  const halfH = area.svg.h / 2
+  const tX = Math.abs(dx) > 0.001 ? halfW / Math.abs(dx) : Infinity
+  const tY = Math.abs(dy) > 0.001 ? halfH / Math.abs(dy) : Infinity
+  const t = Math.min(tX, tY)
+  return { x: cx + dx * t, y: cy + dy * t }
+}
+
 // Coppie uniche di aree adiacenti (per disegnare strade senza duplicati).
 // Es. (piazza, chiesa) è la stessa di (chiesa, piazza), appare una volta.
 export function uniqueAdjacencyPairs(): Array<[AreaId, AreaId]> {

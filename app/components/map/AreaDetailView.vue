@@ -105,8 +105,8 @@ function playerPos(i: number) {
 <template>
   <section
     v-if="area"
-    class="w-full relative"
-    style="height: 55vh; background: var(--z-bg-900)"
+    class="w-full relative flex-1 min-h-0 flex flex-col"
+    style="background: var(--z-bg-900)"
   >
     <header
       class="absolute top-3 left-3 right-3 flex items-center justify-between gap-4 px-4 py-2 rounded-md z-10"
@@ -160,7 +160,7 @@ function playerPos(i: number) {
     <svg
       :viewBox="`0 0 ${VIEWBOX_W} ${VIEWBOX_H}`"
       preserveAspectRatio="xMidYMid meet"
-      style="width: 100%; height: 100%; display: block"
+      style="width: 100%; flex: 1; display: block; min-height: 0"
       :style="isMaster ? 'cursor: crosshair' : 'cursor: default'"
       @click="onSvgClick"
     >
@@ -260,8 +260,8 @@ function playerPos(i: number) {
   </section>
   <section
     v-else
-    class="w-full flex items-center justify-center"
-    style="height: 55vh; background: var(--z-bg-900)"
+    class="w-full flex items-center justify-center flex-1 min-h-0"
+    style="background: var(--z-bg-900)"
   >
     <p
       class="text-sm italic"

@@ -57,9 +57,9 @@ onBeforeRouteLeave(() => {
 </script>
 
 <template>
-  <div class="flex flex-col min-h-screen">
+  <div class="flex flex-col h-screen overflow-hidden">
     <template v-if="guardError">
-      <main class="flex-1 flex items-center justify-center p-8 text-center">
+      <main class="flex-1 flex items-center justify-center p-8 text-center overflow-auto">
         <div class="space-y-4">
           <p
             class="text-sm"
@@ -80,7 +80,7 @@ onBeforeRouteLeave(() => {
     <template v-else>
       <PartyHeader />
       <ConnectionBanner />
-      <div class="flex-1 flex flex-col overflow-hidden">
+      <div class="flex-1 flex flex-col overflow-hidden min-h-0">
         <GameMap v-if="viewStore.mainView === 'map'" />
         <AreaDetailView v-else-if="viewStore.mainView === 'area'" />
         <DirectMessagesView v-else-if="viewStore.mainView === 'dm'" />
