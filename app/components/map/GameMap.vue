@@ -125,6 +125,30 @@ function resetView() {
   panY.value = 0
 }
 
+// Ricentra sulla zona corrente del player con zoom 2×
+function centerOnMe() {
+  const myAreaId = party.me?.currentAreaId
+  if (!myAreaId) return
+  const area = AREAS.find(a => a.id === myAreaId)
+  if (!area) return
+  // Centro dell'area in coord logiche 1000x700
+  const logicalCx = area.svg.x + area.svg.w / 2
+  const logicalCy = area.svg.y + area.svg.h / 2
+  // Centro in viewBox dopo contentTransform (scaling + centering)
+  const s = contentScale.value
+  const tx = (containerW.value - LOGICAL_W * s) / 2
+  const ty = (containerH.value - LOGICAL_H * s) / 2
+  const vx = logicalCx * s + tx
+  const vy = logicalCy * s + ty
+  const targetZoom = 2
+  zoom.value = targetZoom
+  // Vogliamo che (vx, vy) appaia al centro del viewport: cx=containerW/2
+  // con transform translate(panX panY) scale(zoom): point (vx,vy) →
+  // (zoom*vx + panX, zoom*vy + panY). Set = (containerW/2, containerH/2).
+  panX.value = containerW.value / 2 - targetZoom * vx
+  panY.value = containerH.value / 2 - targetZoom * vy
+}
+
 function zoomAt(cx: number, cy: number, factor: number) {
   const newZoom = clampZoom(zoom.value * factor)
   if (newZoom === zoom.value) return
@@ -426,41 +450,63 @@ function onAreaClick(areaId: AreaId) {
     <MapLegend />
     <MapPlayersBox />
 
-    <!-- Controlli zoom: +/-/reset -->
+    <!-- Controlli zoom & pan manuali -->
     <div
-      class="absolute bottom-3 right-3 flex flex-col gap-1 rounded-md p-1"
+      class="absolute bottom-3 right-3 flex flex-col gap-1 rounded-md p-1 z-10"
       style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
     >
       <button
         type="button"
-        class="flex items-center justify-center size-7 rounded"
+        class="flex items-center justify-center size-8 rounded"
         style="background: var(--z-bg-700); color: var(--z-text-md)"
-        title="Zoom +"
+        title="Ingrandisci (rotella o pinch)"
         @click="zoomAt(containerW / 2, containerH / 2, 1.3)"
       >
         <UIcon
-          name="i-lucide-plus"
+          name="i-lucide-zoom-in"
           class="size-4"
         />
       </button>
+      <div
+        class="flex items-center justify-center h-5 text-xs font-mono-z"
+        style="color: var(--z-text-md)"
+        :title="`Zoom corrente: ${Math.round(zoom * 100)}%`"
+      >
+        {{ Math.round(zoom * 100) }}%
+      </div>
       <button
         type="button"
-        class="flex items-center justify-center size-7 rounded"
+        class="flex items-center justify-center size-8 rounded"
         style="background: var(--z-bg-700); color: var(--z-text-md)"
-        title="Zoom -"
+        title="Rimpicciolisci"
         @click="zoomAt(containerW / 2, containerH / 2, 1 / 1.3)"
       >
         <UIcon
-          name="i-lucide-minus"
+          name="i-lucide-zoom-out"
           class="size-4"
         />
       </button>
       <button
-        v-if="isZoomed"
         type="button"
-        class="flex items-center justify-center size-7 rounded"
+        class="flex items-center justify-center size-8 rounded"
         style="background: var(--z-bg-700); color: var(--z-text-md)"
-        title="Reset vista"
+        title="Centra sulla mia zona"
+        :disabled="!party.me"
+        @click="centerOnMe"
+      >
+        <UIcon
+          name="i-lucide-locate-fixed"
+          class="size-4"
+        />
+      </button>
+      <button
+        type="button"
+        class="flex items-center justify-center size-8 rounded"
+        :style="isZoomed
+          ? 'background: var(--z-rust-700); color: var(--z-rust-300)'
+          : 'background: var(--z-bg-700); color: var(--z-text-lo)'"
+        title="Reset zoom e pan"
+        :disabled="!isZoomed"
         @click="resetView"
       >
         <UIcon
