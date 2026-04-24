@@ -7,6 +7,7 @@ import MapArea from '~/components/map/MapArea.vue'
 import MapAvatar from '~/components/map/MapAvatar.vue'
 import MapWeatherOverlay from '~/components/map/MapWeatherOverlay.vue'
 import { useAreaWeather } from '~/composables/useAreaWeather'
+import MapLegend from '~/components/map/MapLegend.vue'
 
 const party = usePartyStore()
 const connection = usePartyConnection()
@@ -51,7 +52,7 @@ function onAreaClick(areaId: AreaId) {
 
 <template>
   <section
-    class="w-full"
+    class="w-full relative"
     style="height: 55vh; background: var(--z-bg-900)"
   >
     <svg
@@ -169,5 +170,6 @@ function onAreaClick(areaId: AreaId) {
 
       <MapWeatherOverlay :weather="weather" />
     </svg>
+    <MapLegend />
   </section>
 </template>

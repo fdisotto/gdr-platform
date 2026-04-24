@@ -77,27 +77,6 @@ onBeforeRouteLeave(() => {
       <PartyHeader />
       <ConnectionBanner />
       <div class="flex-1 flex flex-col overflow-hidden">
-        <nav
-          class="px-4 py-1 flex gap-2 text-xs"
-          style="background: var(--z-bg-800); border-bottom: 1px solid var(--z-border)"
-        >
-          <button
-            type="button"
-            class="px-2 py-1 rounded"
-            :style="viewStore.mainView === 'map' ? 'background: var(--z-green-700); color: var(--z-green-100)' : 'color: var(--z-text-md)'"
-            @click="viewStore.show('map')"
-          >
-            🗺 Mappa
-          </button>
-          <button
-            type="button"
-            class="px-2 py-1 rounded"
-            :style="viewStore.mainView === 'dm' ? 'background: var(--z-whisper-500); color: var(--z-bg-900)' : 'color: var(--z-text-md)'"
-            @click="viewStore.show('dm')"
-          >
-            💬 Messaggi
-          </button>
-        </nav>
         <GameMap v-if="viewStore.mainView === 'map'" />
         <DirectMessagesView v-else-if="viewStore.mainView === 'dm'" />
         <PartyChat />
