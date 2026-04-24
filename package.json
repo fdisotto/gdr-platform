@@ -13,7 +13,7 @@
     "test:watch": "pnpm db:bundle && vitest",
     "test:coverage": "pnpm db:bundle && vitest run --coverage",
     "db:generate": "drizzle-kit generate && pnpm db:bundle",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "drizzle-kit migrate && tsx scripts/seed-superadmin.ts",
     "db:bundle": "tsx scripts/bundle-migrations.ts",
     "smoke": "tsx scripts/smoke-load.ts"
   },
