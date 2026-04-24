@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { useSession } from '~/composables/useSession'
+import { useSession, _resetSessionForTests } from '~/composables/useSession'
 import { flushPromises } from '@vue/test-utils'
 
 describe('useSession', () => {
   beforeEach(() => {
     localStorage.clear()
+    _resetSessionForTests()
     vi.clearAllMocks()
   })
 

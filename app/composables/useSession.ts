@@ -7,6 +7,11 @@ export interface PartySession {
   joinedAt: number
 }
 
+// Stato a livello di modulo: singleton condiviso fra tutte le chiamate a
+// useSession() nei vari componenti. Senza questo il nickname settato in un
+// componente non si vedeva in un altro (ogni useSession creava un ref locale).
+let nicknameRef: Ref<string | null> | null = null
+
 const NICKNAME_KEY = 'gdr.nickname'
 const SESSIONS_KEY = 'gdr.sessions'
 const MASTER_TOKENS_KEY = 'gdr.masterTokens'
@@ -49,13 +54,15 @@ function writeMasterTokens(data: Record<string, string>) {
 }
 
 export function useSession() {
-  const nickname: Ref<string | null> = ref(readNickname())
-
-  watch(nickname, (v) => {
-    if (typeof localStorage === 'undefined') return
-    if (v === null || v === '') localStorage.removeItem(NICKNAME_KEY)
-    else localStorage.setItem(NICKNAME_KEY, v)
-  })
+  if (!nicknameRef) {
+    nicknameRef = ref(readNickname())
+    watch(nicknameRef, (v) => {
+      if (typeof localStorage === 'undefined') return
+      if (v === null || v === '') localStorage.removeItem(NICKNAME_KEY)
+      else localStorage.setItem(NICKNAME_KEY, v)
+    })
+  }
+  const nickname = nicknameRef
 
   function setNickname(v: string) {
     nickname.value = v.trim()
@@ -101,4 +108,10 @@ export function useSession() {
     listSessions, addSession, removeSession, getSession,
     setMasterToken, getMasterToken, removeMasterToken
   }
+}
+
+// Helper per i test: riallinea il ref singleton allo stato corrente del
+// localStorage. Da chiamare in `beforeEach` dopo `localStorage.clear()`.
+export function _resetSessionForTests() {
+  nicknameRef = null
 }
