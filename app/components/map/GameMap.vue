@@ -283,6 +283,47 @@ const playersByArea = computed(() => {
   return map
 })
 
+// Layout pallini dentro l'area: stessa aritmetica di MapAvatar (griglia
+// paddingX=14 paddingY=30, cell=18, start top-left). Calcoliamo qui quanti
+// pallini stanno dentro ai confini; se il totale eccede, tagliamo l'ultima
+// cella utile per far posto al pill "+N".
+const AVATAR_CELL = 18
+const AVATAR_PAD_X = 14
+const AVATAR_PAD_Y = 30
+const AVATAR_MAX_COLS = 4
+const AVATAR_BOTTOM_PAD = 14
+const AVATAR_RIGHT_PAD = 14
+
+function avatarCapacity(areaW: number, areaH: number): { cols: number, rows: number, max: number } {
+  const availW = areaW - AVATAR_PAD_X - AVATAR_RIGHT_PAD
+  const availH = areaH - AVATAR_PAD_Y - AVATAR_BOTTOM_PAD
+  const cols = Math.max(1, Math.min(AVATAR_MAX_COLS, Math.floor(availW / AVATAR_CELL)))
+  const rows = Math.max(1, Math.floor(availH / AVATAR_CELL))
+  return { cols, rows, max: cols * rows }
+}
+
+function visiblePlayersFor(area: typeof AREAS[number]): { visible: typeof party.players, hidden: number, overflowPos: { x: number, y: number } | null } {
+  const all = playersByArea.value.get(area.id) ?? []
+  const { cols, max } = avatarCapacity(area.svg.w, area.svg.h)
+  if (all.length <= max) {
+    return { visible: all, hidden: 0, overflowPos: null }
+  }
+  // Riserva l'ultima cella per il pill "+N"
+  const visible = all.slice(0, max - 1)
+  const hidden = all.length - visible.length
+  const lastIdx = max - 1
+  const col = lastIdx % cols
+  const row = Math.floor(lastIdx / cols)
+  return {
+    visible,
+    hidden,
+    overflowPos: {
+      x: area.svg.x + AVATAR_PAD_X + col * AVATAR_CELL,
+      y: area.svg.y + AVATAR_PAD_Y + row * AVATAR_CELL
+    }
+  }
+}
+
 const { weather } = useAreaWeather(() => currentAreaId.value as AreaId | null)
 
 function onAreaClick(areaId: AreaId) {
@@ -433,7 +474,7 @@ function onAreaClick(areaId: AreaId) {
             :key="`av-${a.id}`"
           >
             <MapAvatar
-              v-for="(p, i) in (playersByArea.get(a.id) ?? [])"
+              v-for="(p, i) in visiblePlayersFor(a).visible"
               :key="p.id"
               :player="p"
               :area="a"
@@ -441,6 +482,27 @@ function onAreaClick(areaId: AreaId) {
               :is-self="party.me?.id === p.id"
               @click="(ev) => onAvatarClick(ev, p)"
             />
+            <!-- Pill "+N" quando ci sono più player di quanti ne stiano -->
+            <g
+              v-if="visiblePlayersFor(a).hidden > 0 && visiblePlayersFor(a).overflowPos"
+              :transform="`translate(${visiblePlayersFor(a).overflowPos!.x}, ${visiblePlayersFor(a).overflowPos!.y})`"
+              style="pointer-events: none"
+            >
+              <title>Altri {{ visiblePlayersFor(a).hidden }} nella zona</title>
+              <circle
+                r="8"
+                fill="var(--z-bg-700)"
+                stroke="var(--z-green-300)"
+                stroke-width="1.2"
+              />
+              <text
+                text-anchor="middle"
+                y="3"
+                font-size="9"
+                font-weight="700"
+                fill="var(--z-green-300)"
+              >+{{ visiblePlayersFor(a).hidden }}</text>
+            </g>
           </template>
 
           <MapWeatherOverlay :weather="weather" />
