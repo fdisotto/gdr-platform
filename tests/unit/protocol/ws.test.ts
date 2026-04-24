@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { HelloEvent, MESSAGE_KINDS, ServerErrorEvent, ChatSendEvent, MessageNewEvent, TimeTickEvent, StateInitEvent, MoveRequestEvent, PlayerJoinedEvent, PlayerLeftEvent, PlayerMovedEvent, AreaUpdatedEvent, WeatherUpdatedEvent } from '~~/shared/protocol/ws'
+import { HelloEvent, MESSAGE_KINDS, ServerErrorEvent, ChatSendEvent, MessageNewEvent, TimeTickEvent, StateInitEvent, MoveRequestEvent, PlayerJoinedEvent, PlayerLeftEvent, PlayerMovedEvent, AreaUpdatedEvent, WeatherUpdatedEvent, HistoryFetchEvent, HistoryBatchEvent } from '~~/shared/protocol/ws'
 
 describe('HelloEvent', () => {
   it('accetta seed uuid e sessionToken', () => {
@@ -155,6 +155,43 @@ describe('WeatherUpdatedEvent', () => {
     expect(WeatherUpdatedEvent.safeParse({
       type: 'weather:updated', areaId: null,
       effective: { code: 'storm', intensity: 0.5, label: 'Tempesta' }
+    }).success).toBe(true)
+  })
+})
+
+describe('HistoryFetchEvent', () => {
+  it('accetta fetch per area', () => {
+    expect(HistoryFetchEvent.safeParse({
+      type: 'chat:history-before', areaId: 'piazza', before: 1000, limit: 50
+    }).success).toBe(true)
+  })
+  it('accetta fetch per threadKey', () => {
+    expect(HistoryFetchEvent.safeParse({
+      type: 'chat:history-before', threadKey: 'a::b', before: 1000, limit: 50
+    }).success).toBe(true)
+  })
+  it('rifiuta limit fuori range', () => {
+    expect(HistoryFetchEvent.safeParse({
+      type: 'chat:history-before', areaId: 'piazza', before: 1, limit: 5000
+    }).success).toBe(false)
+  })
+})
+
+describe('HistoryBatchEvent', () => {
+  it('accetta batch area', () => {
+    expect(HistoryBatchEvent.safeParse({
+      type: 'chat:history-batch',
+      areaId: 'piazza',
+      messages: [],
+      hasMore: true
+    }).success).toBe(true)
+  })
+  it('accetta batch thread', () => {
+    expect(HistoryBatchEvent.safeParse({
+      type: 'chat:history-batch',
+      threadKey: 'a::b',
+      messages: [],
+      hasMore: false
     }).success).toBe(true)
   })
 })

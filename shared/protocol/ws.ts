@@ -159,14 +159,32 @@ export const WeatherUpdatedEvent = z.object({
 })
 export type WeatherUpdatedEvent = z.infer<typeof WeatherUpdatedEvent>
 
+export const HistoryFetchEvent = z.object({
+  type: z.literal('chat:history-before'),
+  areaId: z.string().optional(),
+  threadKey: z.string().optional(),
+  before: z.number(),
+  limit: z.number().int().min(1).max(200)
+})
+export type HistoryFetchEvent = z.infer<typeof HistoryFetchEvent>
+
+export const HistoryBatchEvent = z.object({
+  type: z.literal('chat:history-batch'),
+  areaId: z.string().optional(),
+  threadKey: z.string().optional(),
+  messages: z.array(MessageRowSchema),
+  hasMore: z.boolean()
+})
+export type HistoryBatchEvent = z.infer<typeof HistoryBatchEvent>
+
 export const ServerEvent = z.discriminatedUnion('type', [
   StateInitEvent, MessageNewEvent, TimeTickEvent, ServerErrorEvent,
   PlayerJoinedEvent, PlayerLeftEvent, PlayerMovedEvent,
-  AreaUpdatedEvent, WeatherUpdatedEvent
+  AreaUpdatedEvent, WeatherUpdatedEvent, HistoryBatchEvent
 ])
 export type ServerEvent = z.infer<typeof ServerEvent>
 
 export const ClientEvent = z.discriminatedUnion('type', [
-  HelloEvent, ChatSendEvent, MoveRequestEvent
+  HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent
 ])
 export type ClientEvent = z.infer<typeof ClientEvent>
