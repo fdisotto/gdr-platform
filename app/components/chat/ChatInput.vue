@@ -117,6 +117,11 @@ const suggestions = computed<CommandSuggestion[]>(() => {
 
 // argIdx = indice dell argomento in corso (1 = primo dopo il comando)
 // Prefisso = tutti i token precedenti ricostruiti, così il template mantiene il contesto.
+// Token con spazi (nickname "Marco Rossi", npc "Poliziotto Robert") vengono
+// quotati automaticamente così parseSlash li riconosce come singolo arg.
+function quoteIfNeeded(s: string): string {
+  return s.includes(' ') ? `"${s}"` : s
+}
 const argSuggestions = computed<CommandSuggestion[]>(() => {
   const v = input.value.trimStart()
   if (!v.startsWith('/')) return []
@@ -124,15 +129,21 @@ const argSuggestions = computed<CommandSuggestion[]>(() => {
   if (parts.length < 2) return []
   const cmd = parts[0]!.toLowerCase()
   const argIdx = parts.length - 1
-  const partial = (parts[argIdx] ?? '').toLowerCase()
+  const rawPartial = parts[argIdx] ?? ''
+  // Se l'utente sta scrivendo un token quotato (/w "Mar...), rimuovi la
+  // virgoletta iniziale per matchare correttamente con il nome pieno.
+  const partial = rawPartial.replace(/^"/, '').toLowerCase()
   const prefix = parts.slice(0, argIdx).join(' ')
 
-  const mk = (value: string, hint: string, label = '', appendSpace = true): CommandSuggestion => ({
-    slash: value,
-    label,
-    hint,
-    template: `${prefix} ${value}${appendSpace ? ' ' : ''}`
-  })
+  const mk = (value: string, hint: string, label = '', appendSpace = true): CommandSuggestion => {
+    const quoted = quoteIfNeeded(value)
+    return {
+      slash: value,
+      label,
+      hint,
+      template: `${prefix} ${quoted}${appendSpace ? ' ' : ''}`
+    }
+  }
 
   // /npc NAME body — primo arg: nomi NPC esistenti
   if (cmd === '/npc' && argIdx === 1) {
