@@ -1,6 +1,9 @@
 import { createConnectionRegistry, type ConnectionRegistry, type ConnectionInfo } from '~~/server/ws/connections'
 import { createRateLimiter, type RateLimiter } from '~~/server/ws/rate-limit'
 import type { Zombie, PlayerPosition } from '~~/shared/protocol/ws'
+import type { Db } from '~~/server/db/client'
+import { listZombiesForParty } from '~~/server/services/zombies'
+import { listPartyPositions } from '~~/server/services/player-positions'
 
 export const registry: ConnectionRegistry = createConnectionRegistry()
 export const chatRateLimiter: RateLimiter = createRateLimiter({ windowMs: 1000, maxHits: 5 })
@@ -66,6 +69,29 @@ export function addZombies(zombies: Zombie[]): void {
 
 export function resetZombiesForParty(partySeed: string): void {
   zombiesByParty.delete(partySeed)
+}
+
+// Hydrate lazy: la prima volta che una party viene contattata dopo il boot
+// del server, carichiamo zombi e posizioni dal DB. Successive chiamate sono
+// no-op: la fonte di verità in-memory è già popolata e tenuta sincronizzata
+// dai write-through nei handler.
+const hydratedParties = new Set<string>()
+export function ensurePartyHydrated(db: Db, partySeed: string): void {
+  if (hydratedParties.has(partySeed)) return
+  hydratedParties.add(partySeed)
+  // Non pulisco le mappe (è possibile che un altro processo scriva; ma qui
+  // siamo single-node, quindi se il Set non lo contiene è boot fresh).
+  for (const z of listZombiesForParty(db, partySeed)) addZombie(z)
+  for (const pos of listPartyPositions(db, partySeed)) {
+    setPlayerPosition(partySeed, pos.playerId, pos.areaId, pos.x, pos.y)
+  }
+}
+
+// Helper per test: azzera lo stato hydrated
+export function _resetHydratedForTests(): void {
+  hydratedParties.clear()
+  zombiesByParty.clear()
+  positionsByParty.clear()
 }
 
 // positions: partySeed -> areaId -> playerId -> {x, y}

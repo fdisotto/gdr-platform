@@ -7,7 +7,9 @@ import { setOverride, clearOverride, listOverrides } from '~~/server/services/we
 import { partyMustExist } from '~~/server/services/parties'
 import { listAreasState, updateAreaState, findAreaState } from '~~/server/services/areas'
 import { listAreaMessages, insertMessage, listAreaMessagesBefore, listThreadMessagesBefore, listRecentDmsForPlayer, softDeleteMessage, editMessage, findMessage, type MessageRow } from '~~/server/services/messages'
-import { registry, sendJson, chatRateLimiter, listPartyZombies, addZombie, removeZombie, moveZombie, addZombies, listPlayerPositions, setPlayerPosition, resetPlayerPosition } from '~~/server/ws/state'
+import { registry, sendJson, chatRateLimiter, listPartyZombies, addZombie, removeZombie, moveZombie, addZombies, listPlayerPositions, setPlayerPosition, resetPlayerPosition, ensurePartyHydrated } from '~~/server/ws/state'
+import { insertZombie, insertZombies, deleteZombie, updateZombiePosition } from '~~/server/services/zombies'
+import { upsertPosition, deletePositionsForPlayer } from '~~/server/services/player-positions'
 import { pickFanoutRecipients } from '~~/server/ws/fanout'
 import { isAreaId, areAdjacent } from '~~/shared/map/areas'
 import { isAreaClosed } from '~~/server/services/area-access'
@@ -395,6 +397,7 @@ async function handleMoveRequest(peer: Peer, raw: unknown) {
 
   // Reset posizione dettaglio del player (era legata a una specifica area)
   resetPlayerPosition(conn.partySeed, conn.playerId)
+  deletePositionsForPlayer(db, conn.partySeed, conn.playerId)
   const resetEvent: PlayerPlacedEvent = {
     type: 'player:placed',
     playerId: conn.playerId,
@@ -556,6 +559,7 @@ async function handleMasterSpawnZombie(peer: Peer, raw: unknown) {
     npcRole: res.data.npcRole ?? null
   }
   addZombie(zombie)
+  insertZombie(db, zombie)
 
   const event: ZombieSpawnedEvent = { type: 'zombie:spawned', zombie }
   const payload = JSON.stringify(event)
@@ -585,6 +589,7 @@ async function handleMasterRemoveZombie(peer: Peer, raw: unknown) {
   }
   const removed = removeZombie(conn.partySeed, res.data.id)
   if (!removed) return
+  deleteZombie(db, conn.partySeed, removed.id)
 
   const event: ZombieRemovedEvent = { type: 'zombie:removed', id: removed.id }
   const payload = JSON.stringify(event)
@@ -617,6 +622,7 @@ async function handleMasterPlacePlayer(peer: Peer, raw: unknown) {
     return
   }
   setPlayerPosition(conn.partySeed, res.data.playerId, res.data.areaId, res.data.x, res.data.y)
+  upsertPosition(db, conn.partySeed, res.data.playerId, res.data.areaId, res.data.x, res.data.y)
   const event: PlayerPlacedEvent = {
     type: 'player:placed',
     playerId: res.data.playerId,
@@ -648,6 +654,7 @@ async function handleMasterMoveZombie(peer: Peer, raw: unknown) {
   }
   const z = moveZombie(conn.partySeed, res.data.id, res.data.x, res.data.y)
   if (!z) return
+  updateZombiePosition(db, conn.partySeed, z.id, z.x, z.y)
   const event: ZombieMovedEvent = { type: 'zombie:moved', id: z.id, x: z.x, y: z.y }
   const payload = JSON.stringify(event)
   for (const c of registry.listParty(conn.partySeed)) {
@@ -685,6 +692,7 @@ async function handleMasterSpawnZombies(peer: Peer, raw: unknown) {
     spawnedAt: now
   }))
   addZombies(newZombies)
+  insertZombies(db, newZombies)
   const event: ZombiesBatchSpawnedEvent = { type: 'zombies:batch-spawned', zombies: newZombies }
   const payload = JSON.stringify(event)
   for (const c of registry.listParty(conn.partySeed)) {
@@ -1142,6 +1150,7 @@ async function handleMasterMovePlayer(peer: Peer, raw: unknown) {
   updatePlayerArea(ctx.db, target.id, res.data.toAreaId)
   registry.updateArea(ctx.conn.partySeed, target.id, res.data.toAreaId)
   resetPlayerPosition(ctx.conn.partySeed, target.id)
+  deletePositionsForPlayer(ctx.db, ctx.conn.partySeed, target.id)
   logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'teleport', target: target.id, payload: { from: fromAreaId, to: res.data.toAreaId } })
 
   const moved: PlayerMovedEvent = {
@@ -1217,6 +1226,10 @@ async function handleHello(peer: Peer, seed: string, sessionToken: string) {
       playerId: player.id,
       areaId: player.currentAreaId
     })
+
+    // Lazy-hydrate lo stato in-memory (zombi + posizioni) dal DB la prima
+    // volta che qualcuno contatta questa party dopo il boot server.
+    ensurePartyHydrated(db, seed)
 
     const players = listOnlinePlayers(db, seed).map(p => ({
       id: p.id, nickname: p.nickname, role: p.role, currentAreaId: p.currentAreaId

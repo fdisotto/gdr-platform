@@ -93,3 +93,31 @@ export const bans = sqliteTable('bans', {
 }, t => [
   primaryKey({ columns: [t.partySeed, t.nicknameLower] })
 ])
+
+// zombi e NPC: stessa tabella, gli NPC sono zombie con npcName/npcRole.
+// Persistiti per sopravvivere al restart del server.
+export const zombies = sqliteTable('zombies', {
+  id: text('id').primaryKey(),
+  partySeed: text('party_seed').notNull().references(() => parties.seed, { onDelete: 'cascade' }),
+  areaId: text('area_id').notNull(),
+  x: real('x').notNull(),
+  y: real('y').notNull(),
+  spawnedAt: integer('spawned_at').notNull(),
+  npcName: text('npc_name'),
+  npcRole: text('npc_role')
+}, t => [
+  index('zombies_party_area_idx').on(t.partySeed, t.areaId)
+])
+
+// Posizione in-area del player dentro il dettaglio zona.
+// Una riga per (party, player, area) — cambia zona → riga sostituita.
+export const playerPositions = sqliteTable('player_positions', {
+  partySeed: text('party_seed').notNull().references(() => parties.seed, { onDelete: 'cascade' }),
+  playerId: text('player_id').notNull(),
+  areaId: text('area_id').notNull(),
+  x: real('x').notNull(),
+  y: real('y').notNull(),
+  setAt: integer('set_at').notNull()
+}, t => [
+  primaryKey({ columns: [t.partySeed, t.playerId, t.areaId] })
+])
