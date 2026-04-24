@@ -7,6 +7,10 @@ export default defineNuxtConfig({
     '@pinia/nuxt'
   ],
 
+  // MVP: app SPA puro. Non serve SSR per un gdr con stato realtime (WebSocket
+  // e localStorage). Disabilita anche il warning Reka-UI SSR-optimized slot.
+  ssr: false,
+
   devtools: { enabled: true },
 
   css: ['~/assets/css/main.css'],
@@ -21,7 +25,6 @@ export default defineNuxtConfig({
   },
 
   routeRules: {
-    '/': { prerender: false }
   },
 
   compatibilityDate: '2025-01-15',
