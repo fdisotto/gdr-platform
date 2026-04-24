@@ -4,6 +4,7 @@ import { usePartyStore } from '~/stores/party'
 import { useServerTime } from '~/composables/useServerTime'
 import { useViewStore } from '~/stores/view'
 import WeatherBadge from '~/components/layout/WeatherBadge.vue'
+import AudioToggle from '~/components/layout/AudioToggle.vue'
 
 const party = usePartyStore()
 const time = useServerTime()
@@ -59,6 +60,7 @@ const clock = computed(() => time.format())
     <!-- Destra: meteo, ora, nickname -->
     <div class="flex items-center gap-4">
       <WeatherBadge />
+      <AudioToggle />
       <div
         class="text-xs"
         style="color: var(--z-text-md)"
