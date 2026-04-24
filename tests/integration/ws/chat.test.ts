@@ -145,10 +145,11 @@ describe('chat:send (say/emote/ooc)', () => {
     const ooc = await nextMessage(ws)
     expect((ooc.message as { kind: string }).kind).toBe('ooc')
 
-    ws.send(JSON.stringify({ type: 'chat:send', kind: 'whisper', body: 'x', areaId: 'piazza' }))
+    // kind non valido (es. 'system' non è nella ChatKind enum) → invalid_payload
+    ws.send(JSON.stringify({ type: 'chat:send', kind: 'system', body: 'x', areaId: 'piazza' }))
     const err = await nextMessage(ws)
     expect(err.type).toBe('error')
-    expect(err.code).toBe('forbidden')
+    expect(err.code).toBe('invalid_payload')
 
     ws.close()
   })
