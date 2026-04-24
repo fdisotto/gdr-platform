@@ -1,12 +1,13 @@
-import { HelloEvent, ChatSendEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent } from '~~/shared/protocol/ws'
+import { HelloEvent, ChatSendEvent, MoveRequestEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent } from '~~/shared/protocol/ws'
 import { useDb } from '~~/server/utils/db'
-import { findPlayerBySession, listOnlinePlayers, touchPlayer } from '~~/server/services/players'
+import { findPlayerBySession, listOnlinePlayers, touchPlayer, updatePlayerArea } from '~~/server/services/players'
 import { partyMustExist } from '~~/server/services/parties'
 import { listAreasState } from '~~/server/services/areas'
 import { listAreaMessages, insertMessage, type MessageRow } from '~~/server/services/messages'
 import { registry, sendJson, chatRateLimiter } from '~~/server/ws/state'
 import { pickFanoutRecipients } from '~~/server/ws/fanout'
-import { isAreaId } from '~~/shared/map/areas'
+import { isAreaId, areAdjacent } from '~~/shared/map/areas'
+import { isAreaClosed } from '~~/server/services/area-access'
 
 const TIME_TICK_INTERVAL_MS = 60_000
 
@@ -70,6 +71,11 @@ export default defineWebSocketHandler({
 
     if (parsed.type === 'chat:send') {
       await handleChatSend(peer, parsed)
+      return
+    }
+
+    if (parsed.type === 'move:request') {
+      await handleMoveRequest(peer, parsed)
       return
     }
   },
@@ -148,6 +154,69 @@ async function handleChatSend(peer: Peer, raw: unknown) {
       r.ws.send(payload)
     } catch { /* skip */ }
   }
+}
+
+async function handleMoveRequest(peer: Peer, raw: unknown) {
+  const res = MoveRequestEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'move_request_malformed' })
+    return
+  }
+  const conn = registry.all().find(c => c.ws === peer)
+  if (!conn) {
+    sendJson(peer, { type: 'error', code: 'session_invalid' })
+    return
+  }
+  const toAreaId = res.data.toAreaId
+  if (!isAreaId(toAreaId)) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'unknown_area' })
+    return
+  }
+
+  const db = useDb()
+  const partyPlayers = listOnlinePlayers(db, conn.partySeed)
+  const me = partyPlayers.find(p => p.id === conn.playerId)
+  if (!me) {
+    sendJson(peer, { type: 'error', code: 'session_invalid' })
+    return
+  }
+
+  const fromAreaId = conn.areaId
+  if (fromAreaId === toAreaId) return // no-op
+
+  const isMaster = me.role === 'master'
+
+  // Non-master: valida adiacenza (isAreaId protegge il cast sotto)
+  if (!isMaster && !areAdjacent(fromAreaId as never, toAreaId as never)) {
+    sendJson(peer, { type: 'error', code: 'not_adjacent' })
+    return
+  }
+  // Non-master: valida area non chiusa
+  if (!isMaster && isAreaClosed(db, conn.partySeed, toAreaId)) {
+    sendJson(peer, { type: 'error', code: 'area_closed' })
+    return
+  }
+
+  updatePlayerArea(db, conn.playerId, toAreaId)
+  registry.updateArea(conn.partySeed, conn.playerId, toAreaId)
+
+  const moved: PlayerMovedEvent = {
+    type: 'player:moved',
+    playerId: conn.playerId,
+    fromAreaId,
+    toAreaId,
+    teleported: false
+  }
+  const payload = JSON.stringify(moved)
+  for (const c of registry.listParty(conn.partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
+
+  // Invia solo al mittente la history della nuova area per popolare la chat.
+  const messages = listAreaMessages(db, conn.partySeed, toAreaId, 100)
+  sendJson(peer, { type: 'area:entered', areaId: toAreaId, messages })
 }
 
 async function handleHello(peer: Peer, seed: string, sessionToken: string) {
