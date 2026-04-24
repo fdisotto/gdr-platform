@@ -8,6 +8,8 @@ import MapAvatar from '~/components/map/MapAvatar.vue'
 import MapWeatherOverlay from '~/components/map/MapWeatherOverlay.vue'
 import { useAreaWeather } from '~/composables/useAreaWeather'
 import MapLegend from '~/components/map/MapLegend.vue'
+import MapRoads from '~/components/map/MapRoads.vue'
+import MapDecor from '~/components/map/MapDecor.vue'
 
 const party = usePartyStore()
 const connection = usePartyConnection()
@@ -142,6 +144,9 @@ function onAreaClick(areaId: AreaId) {
         filter="url(#map-grain)"
         opacity="0.3"
       />
+
+      <MapDecor />
+      <MapRoads />
 
       <MapArea
         v-for="a in AREAS"

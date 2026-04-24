@@ -57,6 +57,29 @@ export const ADJACENCY: Record<AreaId, AreaId[]> = {
   ponte: ['benzinaio', 'porto', 'radio']
 }
 
+export function areaCenter(area: Area): { x: number, y: number } {
+  return {
+    x: area.svg.x + area.svg.w / 2,
+    y: area.svg.y + area.svg.h / 2
+  }
+}
+
+// Coppie uniche di aree adiacenti (per disegnare strade senza duplicati).
+// Es. (piazza, chiesa) è la stessa di (chiesa, piazza), appare una volta.
+export function uniqueAdjacencyPairs(): Array<[AreaId, AreaId]> {
+  const seen = new Set<string>()
+  const pairs: Array<[AreaId, AreaId]> = []
+  for (const a of AREA_IDS) {
+    for (const b of ADJACENCY[a]) {
+      const key = [a, b].sort().join('::')
+      if (seen.has(key)) continue
+      seen.add(key)
+      pairs.push([a, b])
+    }
+  }
+  return pairs
+}
+
 export function isAreaId(value: unknown): value is AreaId {
   return typeof value === 'string' && (AREA_IDS as readonly string[]).includes(value)
 }
