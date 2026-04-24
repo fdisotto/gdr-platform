@@ -101,3 +101,7 @@ export function findMaster(db: Db, seed: string): PlayerRow | null {
     .all()
   return (rows[0] as PlayerRow | undefined) ?? null
 }
+
+export function updatePlayerArea(db: Db, playerId: string, areaId: string) {
+  db.update(players).set({ currentAreaId: areaId }).where(eq(players.id, playerId)).run()
+}

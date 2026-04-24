@@ -3,7 +3,7 @@ import { createTestDb, type Db } from '~~/server/db/client'
 import { createParty } from '~~/server/services/parties'
 import {
   joinParty, findPlayerBySession, findPlayerByNickname,
-  isBanned, listOnlinePlayers, touchPlayer
+  isBanned, listOnlinePlayers, touchPlayer, updatePlayerArea
 } from '~~/server/services/players'
 import { bans } from '~~/server/db/schema'
 
@@ -74,5 +74,12 @@ describe('players service', () => {
     touchPlayer(db, p.id, later)
     const again = findPlayerBySession(db, seed, p.sessionToken)
     expect(again?.lastSeenAt).toBe(later)
+  })
+
+  it('updatePlayerArea scrive la nuova area corrente', () => {
+    const p = joinParty(db, seed, 'Anna')
+    updatePlayerArea(db, p.id, 'fogne')
+    const again = findPlayerBySession(db, seed, p.sessionToken)
+    expect(again?.currentAreaId).toBe('fogne')
   })
 })
