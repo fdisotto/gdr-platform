@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { usePartyStore } from '~/stores/party'
 import { useServerTime } from '~/composables/useServerTime'
+import WeatherBadge from '~/components/layout/WeatherBadge.vue'
 
 const party = usePartyStore()
 const time = useServerTime()
@@ -27,6 +28,7 @@ const seedShort = computed(() => party.party?.seed.slice(0, 8) ?? '…')
       >{{ seedShort }}</code>
     </div>
     <div class="flex items-baseline gap-4">
+      <WeatherBadge />
       <div
         class="text-xs"
         style="color: var(--z-text-md)"

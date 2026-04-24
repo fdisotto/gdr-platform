@@ -5,6 +5,8 @@ import { usePartyStore } from '~/stores/party'
 import { usePartyConnection } from '~/composables/usePartyConnection'
 import MapArea from '~/components/map/MapArea.vue'
 import MapAvatar from '~/components/map/MapAvatar.vue'
+import MapWeatherOverlay from '~/components/map/MapWeatherOverlay.vue'
+import { useAreaWeather } from '~/composables/useAreaWeather'
 
 const party = usePartyStore()
 const connection = usePartyConnection()
@@ -35,6 +37,8 @@ const playersByArea = computed(() => {
   }
   return map
 })
+
+const { weather } = useAreaWeather(() => currentAreaId.value as AreaId | null)
 
 function onAreaClick(areaId: AreaId) {
   if (!currentAreaId.value) return
@@ -162,6 +166,8 @@ function onAreaClick(areaId: AreaId) {
           :is-self="party.me?.id === p.id"
         />
       </template>
+
+      <MapWeatherOverlay :weather="weather" />
     </svg>
   </section>
 </template>
