@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { AREAS, ADJACENCY, type AreaId } from '~~/shared/map/areas'
 import { usePartyStore } from '~/stores/party'
-import { usePartyConnection } from '~/composables/usePartyConnection'
+import { useViewStore } from '~/stores/view'
 import MapArea from '~/components/map/MapArea.vue'
 import MapAvatar from '~/components/map/MapAvatar.vue'
 import MapWeatherOverlay from '~/components/map/MapWeatherOverlay.vue'
@@ -12,7 +12,7 @@ import MapRoads from '~/components/map/MapRoads.vue'
 import MapDecor from '~/components/map/MapDecor.vue'
 
 const party = usePartyStore()
-const connection = usePartyConnection()
+const viewStore = useViewStore()
 
 const currentAreaId = computed<AreaId | null>(() => (party.me?.currentAreaId as AreaId) ?? null)
 
@@ -20,8 +20,6 @@ const adjacentSet = computed(() => {
   if (!currentAreaId.value) return new Set<string>()
   return new Set<string>(ADJACENCY[currentAreaId.value] ?? [])
 })
-
-const isMaster = computed(() => party.me?.role === 'master')
 
 const stateById = computed(() => {
   const map = new Map<string, { status: 'intact' | 'infested' | 'ruined' | 'closed', customName: string | null }>()
@@ -44,11 +42,7 @@ const playersByArea = computed(() => {
 const { weather } = useAreaWeather(() => currentAreaId.value as AreaId | null)
 
 function onAreaClick(areaId: AreaId) {
-  if (!currentAreaId.value) return
-  if (currentAreaId.value === areaId) return
-  const canMove = isMaster.value || adjacentSet.value.has(areaId)
-  if (!canMove) return
-  connection.send({ type: 'move:request', toAreaId: areaId })
+  viewStore.openArea(areaId)
 }
 </script>
 

@@ -5,11 +5,13 @@ import { useSession } from '~/composables/useSession'
 import { usePartyStore } from '~/stores/party'
 import { useChatStore } from '~/stores/chat'
 import { useViewStore } from '~/stores/view'
+import { useZombiesStore } from '~/stores/zombies'
 import { usePartyConnection } from '~/composables/usePartyConnection'
 import PartyHeader from '~/components/layout/PartyHeader.vue'
 import ConnectionBanner from '~/components/layout/ConnectionBanner.vue'
 import PartyChat from '~/components/chat/PartyChat.vue'
 import GameMap from '~/components/map/GameMap.vue'
+import AreaDetailView from '~/components/map/AreaDetailView.vue'
 import DirectMessagesView from '~/components/dm/DirectMessagesView.vue'
 
 const route = useRoute()
@@ -18,6 +20,7 @@ const session = useSession()
 const partyStore = usePartyStore()
 const chatStore = useChatStore()
 const viewStore = useViewStore()
+const zombiesStore = useZombiesStore()
 const connection = usePartyConnection()
 
 const guardError = ref<string | null>(null)
@@ -48,6 +51,7 @@ onBeforeRouteLeave(() => {
   partyStore.reset()
   chatStore.reset()
   viewStore.reset()
+  zombiesStore.reset()
   return true
 })
 </script>
@@ -78,6 +82,7 @@ onBeforeRouteLeave(() => {
       <ConnectionBanner />
       <div class="flex-1 flex flex-col overflow-hidden">
         <GameMap v-if="viewStore.mainView === 'map'" />
+        <AreaDetailView v-else-if="viewStore.mainView === 'area'" />
         <DirectMessagesView v-else-if="viewStore.mainView === 'dm'" />
         <PartyChat />
       </div>

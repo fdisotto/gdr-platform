@@ -2,6 +2,8 @@ import { ref, type Ref } from 'vue'
 import { usePartyStore, type MeSnapshot, type PartySnapshot, type PlayerSnapshot, type AreaStateSnapshot } from '~/stores/party'
 import { useChatStore, type ChatMessage } from '~/stores/chat'
 import { useServerTime } from '~/composables/useServerTime'
+import { useZombiesStore } from '~/stores/zombies'
+import type { Zombie } from '~~/shared/protocol/ws'
 
 interface ConnectOptions {
   seed: string
@@ -38,6 +40,7 @@ export function usePartyConnection() {
   const partyStore = usePartyStore()
   const chatStore = useChatStore()
   const serverTime = useServerTime()
+  const zombiesStore = useZombiesStore()
 
   function scheduleReconnect() {
     if (closedFlag) return
@@ -134,6 +137,7 @@ export function usePartyConnection() {
           areasState: AreaStateSnapshot[]
           messagesByArea: Record<string, ChatMessage[]>
           dms: ChatMessage[]
+          zombies: Zombie[]
           serverTime: number
         }
         partyStore.hydrate({
@@ -142,6 +146,7 @@ export function usePartyConnection() {
         })
         chatStore.hydrate(init.messagesByArea ?? {})
         chatStore.hydrateDms(init.dms ?? [], init.me.id)
+        zombiesStore.hydrate(init.zombies ?? [])
         serverTime.sync(init.serverTime)
         break
       }
@@ -196,6 +201,16 @@ export function usePartyConnection() {
         } else if (payload.threadKey) {
           chatStore.prependThread(payload.threadKey, payload.messages, payload.hasMore)
         }
+        break
+      }
+      case 'zombie:spawned': {
+        const z = (data as { zombie: Zombie }).zombie
+        zombiesStore.add(z)
+        break
+      }
+      case 'zombie:removed': {
+        const id = (data as { id: string }).id
+        zombiesStore.remove(id)
         break
       }
       case 'area:updated': {

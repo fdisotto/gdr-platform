@@ -1,16 +1,17 @@
-import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent } from '~~/shared/protocol/ws'
+import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent } from '~~/shared/protocol/ws'
 import { useDb } from '~~/server/utils/db'
 import { findPlayerBySession, listOnlinePlayers, touchPlayer, updatePlayerArea } from '~~/server/services/players'
 import { partyMustExist } from '~~/server/services/parties'
 import { listAreasState, updateAreaState, findAreaState } from '~~/server/services/areas'
 import { listAreaMessages, insertMessage, listAreaMessagesBefore, listThreadMessagesBefore, listRecentDmsForPlayer, type MessageRow } from '~~/server/services/messages'
-import { registry, sendJson, chatRateLimiter } from '~~/server/ws/state'
+import { registry, sendJson, chatRateLimiter, listPartyZombies, addZombie, removeZombie } from '~~/server/ws/state'
 import { pickFanoutRecipients } from '~~/server/ws/fanout'
 import { isAreaId, areAdjacent } from '~~/shared/map/areas'
 import { isAreaClosed } from '~~/server/services/area-access'
 import { parseRoll } from '~~/shared/dice/parse'
 import { rollDice } from '~~/shared/dice/roll'
 import { mulberry32, seedFromString } from '~~/shared/seed/prng'
+import { generateUuid } from '~~/server/utils/crypto'
 
 const TIME_TICK_INTERVAL_MS = 60_000
 
@@ -89,6 +90,15 @@ export default defineWebSocketHandler({
 
     if (parsed.type === 'master:area') {
       await handleMasterArea(peer, parsed)
+      return
+    }
+
+    if (parsed.type === 'master:spawn-zombie') {
+      await handleMasterSpawnZombie(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:remove-zombie') {
+      await handleMasterRemoveZombie(peer, parsed)
       return
     }
   },
@@ -407,6 +417,76 @@ async function handleMasterArea(peer: Peer, raw: unknown) {
   }
 }
 
+async function handleMasterSpawnZombie(peer: Peer, raw: unknown) {
+  const res = MasterSpawnZombieEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'spawn_zombie_malformed' })
+    return
+  }
+  const conn = registry.all().find(c => c.ws === peer)
+  if (!conn) {
+    sendJson(peer, { type: 'error', code: 'session_invalid' })
+    return
+  }
+  const db = useDb()
+  const me = listOnlinePlayers(db, conn.partySeed).find(p => p.id === conn.playerId)
+  if (!me || me.role !== 'master') {
+    sendJson(peer, { type: 'error', code: 'master_only' })
+    return
+  }
+  if (!isAreaId(res.data.areaId)) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'unknown_area' })
+    return
+  }
+
+  const zombie: Zombie = {
+    id: generateUuid(),
+    partySeed: conn.partySeed,
+    areaId: res.data.areaId,
+    x: res.data.x,
+    y: res.data.y,
+    spawnedAt: Date.now()
+  }
+  addZombie(zombie)
+
+  const event: ZombieSpawnedEvent = { type: 'zombie:spawned', zombie }
+  const payload = JSON.stringify(event)
+  for (const c of registry.listParty(conn.partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
+}
+
+async function handleMasterRemoveZombie(peer: Peer, raw: unknown) {
+  const res = MasterRemoveZombieEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'remove_zombie_malformed' })
+    return
+  }
+  const conn = registry.all().find(c => c.ws === peer)
+  if (!conn) {
+    sendJson(peer, { type: 'error', code: 'session_invalid' })
+    return
+  }
+  const db = useDb()
+  const me = listOnlinePlayers(db, conn.partySeed).find(p => p.id === conn.playerId)
+  if (!me || me.role !== 'master') {
+    sendJson(peer, { type: 'error', code: 'master_only' })
+    return
+  }
+  const removed = removeZombie(conn.partySeed, res.data.id)
+  if (!removed) return
+
+  const event: ZombieRemovedEvent = { type: 'zombie:removed', id: removed.id }
+  const payload = JSON.stringify(event)
+  for (const c of registry.listParty(conn.partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
+}
+
 async function handleHello(peer: Peer, seed: string, sessionToken: string) {
   try {
     const db = useDb()
@@ -431,6 +511,7 @@ async function handleHello(peer: Peer, seed: string, sessionToken: string) {
     const messagesByArea: Record<string, MessageRow[]> = {}
     messagesByArea[player.currentAreaId] = listAreaMessages(db, seed, player.currentAreaId, 100)
     const dms = listRecentDmsForPlayer(db, seed, player.id, 50)
+    const zombies = listPartyZombies(seed)
 
     const init: StateInitEvent = {
       type: 'state:init',
@@ -440,6 +521,7 @@ async function handleHello(peer: Peer, seed: string, sessionToken: string) {
       areasState,
       messagesByArea: messagesByArea as never,
       dms,
+      zombies,
       serverTime: Date.now()
     }
     sendJson(peer, init)

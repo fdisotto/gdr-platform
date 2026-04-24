@@ -89,6 +89,7 @@ describe('StateInitEvent', () => {
       areasState: [],
       messagesByArea: {},
       dms: [],
+      zombies: [],
       serverTime: 1
     }).success).toBe(true)
   })

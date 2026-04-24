@@ -94,6 +94,14 @@ export const StateInitEvent = z.object({
   areasState: z.array(AreaStateSnapshot),
   messagesByArea: z.record(z.array(MessageRowSchema)),
   dms: z.array(MessageRowSchema),
+  zombies: z.array(z.object({
+    id: z.string(),
+    partySeed: z.string(),
+    areaId: z.string(),
+    x: z.number(),
+    y: z.number(),
+    spawnedAt: z.number()
+  })),
   serverTime: z.number()
 })
 export type StateInitEvent = z.infer<typeof StateInitEvent>
@@ -187,14 +195,52 @@ export const MasterAreaEvent = z.object({
 })
 export type MasterAreaEvent = z.infer<typeof MasterAreaEvent>
 
+export const ZombieSchema = z.object({
+  id: z.string(),
+  partySeed: z.string(),
+  areaId: z.string(),
+  x: z.number(),
+  y: z.number(),
+  spawnedAt: z.number()
+})
+export type Zombie = z.infer<typeof ZombieSchema>
+
+export const MasterSpawnZombieEvent = z.object({
+  type: z.literal('master:spawn-zombie'),
+  areaId: z.string(),
+  x: z.number(),
+  y: z.number()
+})
+export type MasterSpawnZombieEvent = z.infer<typeof MasterSpawnZombieEvent>
+
+export const MasterRemoveZombieEvent = z.object({
+  type: z.literal('master:remove-zombie'),
+  id: z.string()
+})
+export type MasterRemoveZombieEvent = z.infer<typeof MasterRemoveZombieEvent>
+
+export const ZombieSpawnedEvent = z.object({
+  type: z.literal('zombie:spawned'),
+  zombie: ZombieSchema
+})
+export type ZombieSpawnedEvent = z.infer<typeof ZombieSpawnedEvent>
+
+export const ZombieRemovedEvent = z.object({
+  type: z.literal('zombie:removed'),
+  id: z.string()
+})
+export type ZombieRemovedEvent = z.infer<typeof ZombieRemovedEvent>
+
 export const ServerEvent = z.discriminatedUnion('type', [
   StateInitEvent, MessageNewEvent, TimeTickEvent, ServerErrorEvent,
   PlayerJoinedEvent, PlayerLeftEvent, PlayerMovedEvent,
-  AreaUpdatedEvent, WeatherUpdatedEvent, HistoryBatchEvent
+  AreaUpdatedEvent, WeatherUpdatedEvent, HistoryBatchEvent,
+  ZombieSpawnedEvent, ZombieRemovedEvent
 ])
 export type ServerEvent = z.infer<typeof ServerEvent>
 
 export const ClientEvent = z.discriminatedUnion('type', [
-  HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent
+  HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent,
+  MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent
 ])
 export type ClientEvent = z.infer<typeof ClientEvent>
