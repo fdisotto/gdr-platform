@@ -1,9 +1,9 @@
-import { HelloEvent, ChatSendEvent, MoveRequestEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent } from '~~/shared/protocol/ws'
+import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent } from '~~/shared/protocol/ws'
 import { useDb } from '~~/server/utils/db'
 import { findPlayerBySession, listOnlinePlayers, touchPlayer, updatePlayerArea } from '~~/server/services/players'
 import { partyMustExist } from '~~/server/services/parties'
 import { listAreasState } from '~~/server/services/areas'
-import { listAreaMessages, insertMessage, type MessageRow } from '~~/server/services/messages'
+import { listAreaMessages, insertMessage, listAreaMessagesBefore, listThreadMessagesBefore, type MessageRow } from '~~/server/services/messages'
 import { registry, sendJson, chatRateLimiter } from '~~/server/ws/state'
 import { pickFanoutRecipients } from '~~/server/ws/fanout'
 import { isAreaId, areAdjacent } from '~~/shared/map/areas'
@@ -79,6 +79,11 @@ export default defineWebSocketHandler({
 
     if (parsed.type === 'move:request') {
       await handleMoveRequest(peer, parsed)
+      return
+    }
+
+    if (parsed.type === 'chat:history-before') {
+      await handleHistoryFetch(peer, parsed)
       return
     }
   },
@@ -276,6 +281,63 @@ async function handleMoveRequest(peer: Peer, raw: unknown) {
   // Invia solo al mittente la history della nuova area per popolare la chat.
   const messages = listAreaMessages(db, conn.partySeed, toAreaId, 100)
   sendJson(peer, { type: 'area:entered', areaId: toAreaId, messages })
+}
+
+async function handleHistoryFetch(peer: Peer, raw: unknown) {
+  const res = HistoryFetchEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'history_malformed' })
+    return
+  }
+  const conn = registry.all().find(c => c.ws === peer)
+  if (!conn) {
+    sendJson(peer, { type: 'error', code: 'session_invalid' })
+    return
+  }
+  const db = useDb()
+  const limit = Math.min(res.data.limit, 200)
+
+  if (res.data.areaId) {
+    const messagesBatch = listAreaMessagesBefore(db, conn.partySeed, res.data.areaId, res.data.before, limit)
+    const hasMore = messagesBatch.length === limit
+    const event: HistoryBatchEvent = {
+      type: 'chat:history-batch',
+      areaId: res.data.areaId,
+      messages: messagesBatch,
+      hasMore
+    }
+    sendJson(peer, event)
+    return
+  }
+
+  if (res.data.threadKey) {
+    const parts = res.data.threadKey.split('::')
+    if (parts.length !== 2) {
+      sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'bad_thread_key' })
+      return
+    }
+    const [a, b] = parts as [string, string]
+    // Restrizione: il conn deve essere una delle due parti (salvo master che può osservare)
+    const partyPlayers = listOnlinePlayers(db, conn.partySeed)
+    const me = partyPlayers.find(p => p.id === conn.playerId)
+    const isMaster = me?.role === 'master'
+    if (!isMaster && conn.playerId !== a && conn.playerId !== b) {
+      sendJson(peer, { type: 'error', code: 'forbidden', detail: 'not_a_thread_party' })
+      return
+    }
+    const messagesBatch = listThreadMessagesBefore(db, conn.partySeed, a, b, res.data.before, limit)
+    const hasMore = messagesBatch.length === limit
+    const event: HistoryBatchEvent = {
+      type: 'chat:history-batch',
+      threadKey: res.data.threadKey,
+      messages: messagesBatch,
+      hasMore
+    }
+    sendJson(peer, event)
+    return
+  }
+
+  sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'missing_area_or_thread' })
 }
 
 async function handleHello(peer: Peer, seed: string, sessionToken: string) {

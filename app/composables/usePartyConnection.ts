@@ -161,6 +161,15 @@ export function usePartyConnection() {
         chatStore.messagesByArea[payload.areaId] = payload.messages
         break
       }
+      case 'chat:history-batch': {
+        const payload = data as { areaId?: string, threadKey?: string, messages: ChatMessage[], hasMore: boolean }
+        if (payload.areaId) {
+          chatStore.prependArea(payload.areaId, payload.messages, payload.hasMore)
+        } else if (payload.threadKey) {
+          chatStore.prependThread(payload.threadKey, payload.messages, payload.hasMore)
+        }
+        break
+      }
       case 'error': {
         console.warn('[ws error]', data)
         break

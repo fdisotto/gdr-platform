@@ -87,3 +87,34 @@ export function findMessage(db: Db, messageId: string): MessageRow | null {
   const rows = db.select().from(messages).where(eq(messages.id, messageId)).all()
   return (rows[0] as MessageRow | undefined) ?? null
 }
+
+export function listAreaMessagesBefore(db: Db, seed: string, areaId: string, beforeMs: number, limit: number): MessageRow[] {
+  const rows = db.select().from(messages)
+    .where(and(eq(messages.partySeed, seed), eq(messages.areaId, areaId)))
+    .all() as MessageRow[]
+  return rows
+    .filter(m => m.createdAt < beforeMs)
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, limit)
+    .reverse()
+}
+
+export function listThreadMessagesBefore(db: Db, seed: string, playerIdA: string, playerIdB: string, beforeMs: number, limit: number): MessageRow[] {
+  const rows = db.select().from(messages)
+    .where(and(eq(messages.partySeed, seed), eq(messages.kind, 'dm')))
+    .all() as MessageRow[]
+  return rows
+    .filter((m) => {
+      if (m.createdAt >= beforeMs) return false
+      const a = m.authorPlayerId
+      const b = m.targetPlayerId
+      if (!a || !b) return false
+      return (
+        (a === playerIdA && b === playerIdB)
+        || (a === playerIdB && b === playerIdA)
+      )
+    })
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, limit)
+    .reverse()
+}

@@ -22,6 +22,10 @@ export const useChatStore = defineStore('chat', () => {
   const dmsByThread = ref<Record<string, ChatMessage[]>>({})
   const inputDraft = ref('')
 
+  // Flag hasMore per canale, usato dalla UI per decidere "carica più"
+  const areaHasMore = ref<Record<string, boolean>>({})
+  const threadHasMore = ref<Record<string, boolean>>({})
+
   function hydrate(payload: Record<string, ChatMessage[]>) {
     messagesByArea.value = { ...payload }
   }
@@ -86,16 +90,46 @@ export const useChatStore = defineStore('chat', () => {
     )
   }
 
+  function prependArea(areaId: string, batch: ChatMessage[], hasMore: boolean) {
+    const existing = messagesByArea.value[areaId] ?? []
+    // Dedup sugli id, nel caso un messaggio sia arrivato real-time prima della batch.
+    const existingIds = new Set(existing.map(m => m.id))
+    const deduped = batch.filter(m => !existingIds.has(m.id))
+    messagesByArea.value[areaId] = [...deduped, ...existing]
+    areaHasMore.value[areaId] = hasMore
+  }
+
+  function prependThread(threadKey: string, batch: ChatMessage[], hasMore: boolean) {
+    const existing = dmsByThread.value[threadKey] ?? []
+    const existingIds = new Set(existing.map(m => m.id))
+    const deduped = batch.filter(m => !existingIds.has(m.id))
+    dmsByThread.value[threadKey] = [...deduped, ...existing]
+    threadHasMore.value[threadKey] = hasMore
+  }
+
+  function areaHasMoreFor(areaId: string): boolean {
+    return areaHasMore.value[areaId] ?? true
+  }
+
+  function threadHasMoreFor(key: string): boolean {
+    return threadHasMore.value[key] ?? true
+  }
+
   function reset() {
     messagesByArea.value = {}
     dmsByThread.value = {}
+    areaHasMore.value = {}
+    threadHasMore.value = {}
     inputDraft.value = ''
   }
 
   return {
     messagesByArea, dmsByThread, inputDraft,
+    areaHasMore, threadHasMore,
     hydrate, append, update, forArea, forThread,
     appendDm, listDmThreads, threadKey,
+    prependArea, prependThread,
+    areaHasMoreFor, threadHasMoreFor,
     reset
   }
 })
