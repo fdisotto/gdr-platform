@@ -20,7 +20,11 @@ const errorRef: Ref<string | null> = ref(null)
 // In modalità ptt, è true solo mentre l'utente tiene premuto il tasto
 // configurato (desktop) o l'icona mic (mobile).
 const isTransmittingRef: Ref<boolean> = ref(false)
+// isSelfSpeaking: true quando il VAD locale rileva audio sopra soglia.
+// Usato per animazione visiva dell'icona mic.
+const isSelfSpeakingRef: Ref<boolean> = ref(false)
 let audioContextForVad: AudioContext | null = null
+let selfVadAttached = false
 
 function applyTrackEnabled(enabled: boolean) {
   if (!localStreamRef.value) return
@@ -49,11 +53,48 @@ async function ensureLocalStream(): Promise<MediaStream | null> {
     // base a mode (continuous → on, ptt → on solo durante press).
     for (const t of stream.getAudioTracks()) t.enabled = false
     localStreamRef.value = stream
+    attachLocalVad(stream)
     return stream
   } catch (e) {
     errorRef.value = (e as Error).message ?? 'getUserMedia failed'
     return null
   }
+}
+
+// VAD sul local stream: monitora il volume del mic per animare l'icona.
+// Va in idle (isSelfSpeaking=false) se il track è disabled (caso PTT non
+// premuto o voce off) così non pulsa quando non stiamo trasmettendo.
+function attachLocalVad(stream: MediaStream) {
+  if (selfVadAttached) return
+  if (typeof window === 'undefined') return
+  if (!audioContextForVad) {
+    audioContextForVad = new AudioContext()
+  }
+  const ctx = audioContextForVad
+  const source = ctx.createMediaStreamSource(stream)
+  const analyser = ctx.createAnalyser()
+  analyser.fftSize = 512
+  source.connect(analyser)
+  const data = new Uint8Array(analyser.frequencyBinCount)
+  selfVadAttached = true
+  const loop = () => {
+    analyser.getByteFrequencyData(data)
+    let sum = 0
+    for (const v of data) sum += v
+    const avg = sum / data.length
+    // Soglia leggermente più alta del peer VAD (12) per evitare che
+    // rumore di fondo del mic acceso triggeri l'animazione.
+    const rawSpeaking = avg > 15
+    // Se il track è disabled (PTT off, voce off), forza speaking=false
+    const tracks = stream.getAudioTracks()
+    const active = tracks.length > 0 && tracks.some(t => t.enabled)
+    const speaking = rawSpeaking && active
+    if (isSelfSpeakingRef.value !== speaking) {
+      isSelfSpeakingRef.value = speaking
+    }
+    requestAnimationFrame(loop)
+  }
+  requestAnimationFrame(loop)
 }
 
 function attachVad(peerId: string, stream: MediaStream) {
@@ -351,6 +392,7 @@ export function useVoiceChat() {
     speakingPeers: speakingPeersRef,
     error: errorRef,
     isTransmitting: isTransmittingRef,
+    isSelfSpeaking: isSelfSpeakingRef,
     startTransmit,
     stopTransmit
   }

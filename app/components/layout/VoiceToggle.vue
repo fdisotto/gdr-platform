@@ -120,7 +120,8 @@ if (typeof window !== 'undefined') {
     <div class="flex items-center gap-1">
       <button
         type="button"
-        class="text-xs px-2 py-1 rounded flex items-center gap-1"
+        class="mic-btn relative text-xs px-2 py-1 rounded flex items-center gap-1"
+        :class="{ 'mic-pulse': voice.isSelfSpeaking.value }"
         :title="settings.voiceEnabled ? 'Disattiva voce' : 'Attiva voce'"
         :style="voice.isTransmitting.value
           ? 'background: var(--z-blood-500); color: var(--z-bg-900)'
@@ -318,3 +319,26 @@ if (typeof window !== 'undefined') {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Pulse ring: quando parlo (VAD locale) appare un anello che si espande
+   e svanisce intorno al bottone mic. Usa box-shadow per non influire
+   sul layout/dimensione. */
+.mic-btn {
+  transition: box-shadow 0.15s ease-out;
+}
+.mic-pulse {
+  animation: mic-ring 1s ease-out infinite;
+}
+@keyframes mic-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(124, 190, 121, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(124, 190, 121, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(124, 190, 121, 0);
+  }
+}
+</style>

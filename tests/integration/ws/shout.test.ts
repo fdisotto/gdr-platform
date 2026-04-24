@@ -103,11 +103,13 @@ describe('shout propaga ad aree adiacenti', () => {
     wsB.send(JSON.stringify({ type: 'move:request', toAreaId: 'chiesa' }))
     await nextMessageMatching(wsB, m => m.type === 'player:moved')
 
-    // C muove a case (adiacente a piazza), poi a ospedale (non adiacente a piazza)
-    wsC.send(JSON.stringify({ type: 'move:request', toAreaId: 'case' }))
-    await nextMessageMatching(wsC, m => m.type === 'player:moved')
+    // C muove a polizia (adiacente a piazza), poi a ospedale (adiacente a
+    // polizia ma NON a piazza — quindi non riceve shout da piazza).
+    // Il match filtra su toAreaId per evitare race con i broadcast di B.
+    wsC.send(JSON.stringify({ type: 'move:request', toAreaId: 'polizia' }))
+    await nextMessageMatching(wsC, m => m.type === 'player:moved' && (m as { toAreaId?: string }).toAreaId === 'polizia')
     wsC.send(JSON.stringify({ type: 'move:request', toAreaId: 'ospedale' }))
-    await nextMessageMatching(wsC, m => m.type === 'player:moved')
+    await nextMessageMatching(wsC, m => m.type === 'player:moved' && (m as { toAreaId?: string }).toAreaId === 'ospedale')
 
     // Ora: M piazza, B chiesa, C ospedale.
     // M grida da piazza.
