@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute, onBeforeRouteLeave } from 'vue-router'
-import { useSession } from '~/composables/useSession'
 import { usePartyStore } from '~/stores/party'
 import { useChatStore } from '~/stores/chat'
 import { useViewStore } from '~/stores/view'
@@ -10,7 +9,9 @@ import { usePlayerPositionsStore } from '~/stores/player-positions'
 import { useWeatherOverridesStore } from '~/stores/weather-overrides'
 import { useMasterToolsStore } from '~/stores/master-tools'
 import { useFeedbackStore } from '~/stores/feedback'
+import { useAuthStore } from '~/stores/auth'
 import { usePartyConnection } from '~/composables/usePartyConnection'
+import { useErrorFeedback } from '~/composables/useErrorFeedback'
 import PartyHeader from '~/components/layout/PartyHeader.vue'
 import ConnectionBanner from '~/components/layout/ConnectionBanner.vue'
 import PartyChat from '~/components/chat/PartyChat.vue'
@@ -21,7 +22,6 @@ import MasterPanel from '~/components/master/MasterPanel.vue'
 
 const route = useRoute()
 const seed = String(route.params.seed)
-const session = useSession()
 const partyStore = usePartyStore()
 const chatStore = useChatStore()
 const viewStore = useViewStore()
@@ -30,30 +30,51 @@ const playerPositionsStore = usePlayerPositionsStore()
 const weatherOverridesStore = useWeatherOverridesStore()
 const masterToolsStore = useMasterToolsStore()
 const feedbackStore = useFeedbackStore()
+const authStore = useAuthStore()
 const connection = usePartyConnection()
-
-const guardError = ref<string | null>(null)
-
-onMounted(async () => {
-  const local = session.getSession(seed)
-  if (!local) {
-    guardError.value = 'Nessuna sessione locale per questa party. Torna alla home.'
-    return
-  }
-  try {
-    await $fetch(`/api/parties/${seed}/resume`, {
-      method: 'POST',
-      body: { sessionToken: local.sessionToken }
-    })
-  } catch {
-    guardError.value = 'Sessione non valida: torna alla home e unisciti di nuovo.'
-    session.removeSession(seed)
-    return
-  }
-  connection.connect({ seed, sessionToken: local.sessionToken })
-})
+const feedback = useErrorFeedback()
 
 useSeoMeta({ title: () => partyStore.party?.cityName ?? 'GDR Zombi' })
+
+// Join form (mostrato se il ws si chiude 4003 not_member)
+const joinDisplayName = ref('')
+const joining = ref(false)
+
+// Quando notMember diventa true dopo il close 4003, precompila il displayName
+// con l'username così l'utente di solito conferma e basta.
+watch(
+  () => connection.notMember.value,
+  (nm) => {
+    if (nm && !joinDisplayName.value && authStore.identity?.username) {
+      joinDisplayName.value = authStore.identity.username
+    }
+  }
+)
+
+async function tryConnect() {
+  connection.connect({ seed })
+}
+
+async function doJoin() {
+  if (joining.value) return
+  joining.value = true
+  try {
+    await $fetch(`/api/parties/${seed}/join`, {
+      method: 'POST',
+      body: { displayName: joinDisplayName.value }
+    })
+    feedbackStore.pushToast({ level: 'info', title: 'Ti sei unito alla party' })
+    connection.notMember.value = false
+    tryConnect()
+  } catch (err) {
+    feedback.reportFromError(err)
+  } finally {
+    joining.value = false
+  }
+}
+
+// Al mount: prova a connettere. Se non siamo membri → flag notMember, form.
+tryConnect()
 
 onBeforeRouteLeave(() => {
   connection.disconnect()
@@ -71,25 +92,72 @@ onBeforeRouteLeave(() => {
 
 <template>
   <div class="flex flex-col h-screen overflow-hidden">
-    <template v-if="guardError">
-      <main class="flex-1 flex items-center justify-center p-8 text-center overflow-auto">
-        <div class="space-y-4">
-          <p
-            class="text-sm"
-            style="color: var(--z-blood-300)"
-          >
-            {{ guardError }}
-          </p>
-          <NuxtLink
-            to="/"
-            class="text-sm underline"
+    <!-- Form "unisciti a questa party" (only se il server ha risposto not_member) -->
+    <main
+      v-if="connection.notMember.value"
+      class="flex-1 flex items-center justify-center p-8"
+    >
+      <div class="w-full max-w-sm space-y-6">
+        <header class="text-center space-y-2">
+          <h1
+            class="text-2xl font-bold"
             style="color: var(--z-green-300)"
           >
-            Torna alla home
+            Unisciti alla party
+          </h1>
+          <p
+            class="text-sm"
+            style="color: var(--z-text-md)"
+          >
+            Non sei ancora membro di questa party. Scegli un display name
+            per entrare.
+          </p>
+        </header>
+        <form
+          class="space-y-3 rounded p-4"
+          style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
+          @submit.prevent="doJoin"
+        >
+          <div>
+            <label
+              class="block text-xs uppercase tracking-wide mb-1"
+              style="color: var(--z-text-md)"
+            >Display name</label>
+            <input
+              v-model="joinDisplayName"
+              type="text"
+              autofocus
+              required
+              minlength="2"
+              maxlength="24"
+              class="w-full px-3 py-2 rounded font-mono-z text-sm"
+              style="background: var(--z-bg-700); border: 1px solid var(--z-border); color: var(--z-text-hi); outline: none"
+            >
+            <p
+              class="text-xs mt-1"
+              style="color: var(--z-text-lo)"
+            >
+              2–24 caratteri; come ti vedranno gli altri in questa party.
+            </p>
+          </div>
+          <UButton
+            type="submit"
+            block
+            color="primary"
+            :loading="joining"
+          >
+            Entra
+          </UButton>
+          <NuxtLink
+            to="/"
+            class="block text-xs text-center"
+            style="color: var(--z-text-md); text-decoration: underline"
+          >
+            ← Annulla
           </NuxtLink>
-        </div>
-      </main>
-    </template>
+        </form>
+      </div>
+    </main>
     <template v-else>
       <PartyHeader />
       <ConnectionBanner />

@@ -13,7 +13,6 @@ import type { Zombie, PlayerPosition } from '~~/shared/protocol/ws'
 
 interface ConnectOptions {
   seed: string
-  sessionToken: string
 }
 
 type Status = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed'
@@ -27,6 +26,10 @@ let statusRef: Ref<Status> | null = null
 let pendingQueueRef: Ref<Record<string, unknown>[]> | null = null
 let reconnectAtRef: Ref<number | null> | null = null
 let reconnectAttemptsRef: Ref<number> | null = null
+// v2a: notMember true se il server chiude il ws col codice 4003 (user
+// autenticato ma non iscritto a questa party). La page /party/[seed]
+// mostra di conseguenza il form "unisciti".
+let notMemberRef: Ref<boolean> | null = null
 let closedFlag = false
 let pendingOpts: ConnectOptions | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -42,12 +45,14 @@ export function usePartyConnection() {
   if (!pendingQueueRef) pendingQueueRef = ref<Record<string, unknown>[]>([])
   if (!reconnectAtRef) reconnectAtRef = ref<number | null>(null)
   if (!reconnectAttemptsRef) reconnectAttemptsRef = ref<number>(0)
+  if (!notMemberRef) notMemberRef = ref<boolean>(false)
 
   const ws = wsRef
   const status = statusRef
   const pendingQueue = pendingQueueRef
   const reconnectAt = reconnectAtRef
   const reconnectAttempts = reconnectAttemptsRef
+  const notMember = notMemberRef
 
   const partyStore = usePartyStore()
   const chatStore = useChatStore()
@@ -84,18 +89,18 @@ export function usePartyConnection() {
   }
 
   function connect(opts: ConnectOptions) {
-    // Idempotente: se già connesso allo stesso seed+token, non riconnettere.
+    // Idempotente: se già connesso allo stesso seed, non riconnettere.
     if (
       ws.value
       && (status.value === 'connecting' || status.value === 'open')
       && pendingOpts
       && pendingOpts.seed === opts.seed
-      && pendingOpts.sessionToken === opts.sessionToken
     ) {
       return
     }
     pendingOpts = opts
     closedFlag = false
+    notMember.value = false
     status.value = 'connecting'
     const sock = new WebSocket(wsUrl())
     ws.value = sock
@@ -104,7 +109,8 @@ export function usePartyConnection() {
       reconnectAttempts.value = 0
       reconnectAt.value = null
       status.value = 'open'
-      sock.send(JSON.stringify({ type: 'hello', seed: opts.seed, sessionToken: opts.sessionToken }))
+      // v2a: niente sessionToken nel hello, il server autentica via cookie gdr_session
+      sock.send(JSON.stringify({ type: 'hello', seed: opts.seed }))
       // Flush pending messages accumulati durante reconnecting.
       if (pendingQueue.value.length > 0) {
         const toFlush = pendingQueue.value
@@ -126,8 +132,16 @@ export function usePartyConnection() {
       } catch { /* ignore malformed */ }
     })
 
-    sock.addEventListener('close', () => {
+    sock.addEventListener('close', (ev) => {
       ws.value = null
+      // 4003 = not_member → l'utente deve prima fare join; non riconnettere
+      // in loop, esponi il flag così la page mostra il form di join.
+      if (ev.code === 4003) {
+        notMember.value = true
+        closedFlag = true
+        status.value = 'closed'
+        return
+      }
       if (!closedFlag) scheduleReconnect()
       else status.value = 'closed'
     })
@@ -355,7 +369,7 @@ export function usePartyConnection() {
     }
   }
 
-  return { ws, status, pendingQueue, reconnectAt, reconnectAttempts, connect, disconnect, send, retryNow }
+  return { ws, status, pendingQueue, reconnectAt, reconnectAttempts, notMember, connect, disconnect, send, retryNow }
 }
 
 // Helper per i test: azzera il singleton.
@@ -365,6 +379,7 @@ export function _resetPartyConnectionForTests() {
   pendingQueueRef = null
   reconnectAtRef = null
   reconnectAttemptsRef = null
+  notMemberRef = null
   closedFlag = false
   pendingOpts = null
   if (reconnectTimer) {

@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { ref, onBeforeUnmount } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { usePartyStore } from '~/stores/party'
-import { useSession } from '~/composables/useSession'
+import { useAuth } from '~/composables/useAuth'
 import { usePartyConnection } from '~/composables/usePartyConnection'
 
 const party = usePartyStore()
-const session = useSession()
+const auth = useAuth()
 const connection = usePartyConnection()
-const route = useRoute()
 const router = useRouter()
 
 const open = ref(false)
@@ -21,17 +20,16 @@ function close() {
   open.value = false
 }
 
-function logout() {
-  const seed = route.params.seed
-  if (typeof seed === 'string') session.removeSession(seed)
+async function logout() {
   connection.disconnect()
   close()
-  router.push('/')
+  await auth.logout()
+  await router.push('/login')
 }
 
-function profile() {
-  // placeholder per post-auth: profilo utente con caratteristiche/abilità
+async function profile() {
   close()
+  await router.push('/me')
 }
 
 function onDocClick(e: MouseEvent) {
@@ -109,16 +107,14 @@ if (typeof window !== 'undefined') {
       <button
         type="button"
         class="flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm"
-        style="color: var(--z-text-lo); cursor: not-allowed"
-        disabled
-        title="Disponibile post-autenticazione"
+        style="color: var(--z-text-hi)"
         @click="profile"
       >
         <UIcon
           name="i-lucide-user"
           class="size-4"
         />
-        Profilo <span class="ml-auto text-xs italic">(presto)</span>
+        Profilo
       </button>
       <button
         type="button"

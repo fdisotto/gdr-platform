@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { useFeedbackStore } from '~/stores/feedback'
-import { useSession } from '~/composables/useSession'
-import { useRoute, useRouter } from 'vue-router'
+import { useAuth } from '~/composables/useAuth'
+import { useRouter } from 'vue-router'
 
 const feedback = useFeedbackStore()
-const session = useSession()
-const route = useRoute()
+const auth = useAuth()
 const router = useRouter()
 
 const TOAST_STYLES: Record<string, string> = {
@@ -18,11 +17,17 @@ function toastStyle(level: string): string {
   return TOAST_STYLES[level] ?? TOAST_STYLES.info!
 }
 
-function returnHome() {
-  const seed = route.params.seed
-  if (typeof seed === 'string') session.removeSession(seed)
+async function returnHome() {
+  const code = feedback.blocking?.code
   feedback.clearBlocking()
-  router.push('/')
+  // session_expired: logout client-side + redirect al login; altri bloccanti
+  // (kicked/banned/session_invalid) riportano alla home con sessione intatta.
+  if (code === 'session_expired') {
+    await auth.logout()
+    await router.push('/login')
+    return
+  }
+  await router.push('/')
 }
 </script>
 
