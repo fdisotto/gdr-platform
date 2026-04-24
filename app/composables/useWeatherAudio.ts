@@ -8,6 +8,10 @@ interface AudioState {
   windNoise: AudioNode | null
   windGain: GainNode | null
   master: GainNode | null
+  // Memoria dell ultimo meteo applicato, così quando l audio viene attivato
+  // a posteriori possiamo riapplicare lo stato corrente.
+  lastCode: string | null
+  lastIntensity: number
 }
 
 const state: AudioState = {
@@ -16,7 +20,9 @@ const state: AudioState = {
   rainGain: null,
   windNoise: null,
   windGain: null,
-  master: null
+  master: null,
+  lastCode: null,
+  lastIntensity: 0
 }
 
 function createWhiteNoise(ctx: AudioContext): AudioBufferSourceNode {
@@ -107,6 +113,10 @@ export function useWeatherAudio() {
 
   function applyWeather(code: string | null, intensity: number) {
     if (typeof window === 'undefined') return
+    // Memorizza sempre l ultimo stato, così se l audio viene riattivato
+    // dopo riusciamo a "soffiare" il suono giusto subito.
+    state.lastCode = code
+    state.lastIntensity = intensity
     if (!settings.weatherAudio) {
       setLevel(state.master, 0)
       return
@@ -167,7 +177,10 @@ export function useWeatherAudio() {
         if (state.ctx?.state === 'suspended') {
           state.ctx.resume().catch(() => {})
         }
-        if (state.master) setLevel(state.master, 1)
+        // Riapplica subito l ultimo stato meteo conosciuto (rain/wind gain)
+        // così l utente sente l audio immediatamente al toggle, senza dover
+        // aspettare un cambio meteo.
+        applyWeather(state.lastCode, state.lastIntensity)
       } else {
         if (state.master) setLevel(state.master, 0)
       }
