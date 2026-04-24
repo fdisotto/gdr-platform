@@ -187,6 +187,26 @@ export function useWeatherAudio() {
         setLevel(state.master, 0)
       }
     })
+
+    // Auto-unlock dell'AudioContext alla prima interazione utente: il browser
+    // blocca AudioContext finché non c'è una gesture. Se l'utente refresha la
+    // pagina con audio già attivo, niente parte fino a un click. Qui ascoltiamo
+    // il primo click/keydown e facciamo resume + applyWeather, così il refresh
+    // non costringe a rimuovere e rimettere il volume per riattivare l'audio.
+    if (typeof document !== 'undefined') {
+      const unlock = () => {
+        document.removeEventListener('pointerdown', unlock)
+        document.removeEventListener('keydown', unlock)
+        if (settings.weatherVolume <= 0) return
+        ensureContext()
+        if (state.ctx?.state === 'suspended') {
+          state.ctx.resume().catch(() => {})
+        }
+        applyWeather(state.lastCode, state.lastIntensity)
+      }
+      document.addEventListener('pointerdown', unlock, { passive: true })
+      document.addEventListener('keydown', unlock, { passive: true })
+    }
   }
 
   return { applyWeather, thunder }
