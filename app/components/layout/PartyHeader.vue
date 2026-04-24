@@ -7,6 +7,7 @@ import WeatherBadge from '~/components/layout/WeatherBadge.vue'
 import AudioToggle from '~/components/layout/AudioToggle.vue'
 import VoiceToggle from '~/components/layout/VoiceToggle.vue'
 import NotificationsToggle from '~/components/layout/NotificationsToggle.vue'
+import NickMenu from '~/components/layout/NickMenu.vue'
 
 const party = usePartyStore()
 const time = useServerTime()
@@ -91,23 +92,7 @@ const clock = computed(() => time.format())
         >{{ clock }}</span>
         <span v-else>… sync</span>
       </div>
-      <div
-        v-if="party.me"
-        class="text-xs md:text-sm flex items-center gap-1 md:gap-2 min-w-0"
-      >
-        <span
-          class="truncate max-w-[5rem] md:max-w-none"
-          style="color: var(--z-text-md)"
-        >{{ party.me.nickname }}</span>
-        <span
-          class="hidden md:inline px-2 py-0.5 text-xs rounded"
-          :style="party.me.role === 'master'
-            ? 'background: var(--z-blood-700); color: var(--z-blood-300)'
-            : 'background: var(--z-bg-700); color: var(--z-text-md)'"
-        >
-          {{ party.me.role }}
-        </span>
-      </div>
+      <NickMenu />
     </div>
   </header>
 </template>
