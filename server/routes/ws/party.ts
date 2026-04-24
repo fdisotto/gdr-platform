@@ -1,10 +1,10 @@
-import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent } from '~~/shared/protocol/ws'
+import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent } from '~~/shared/protocol/ws'
 import { useDb } from '~~/server/utils/db'
 import { findPlayerBySession, listOnlinePlayers, touchPlayer, updatePlayerArea } from '~~/server/services/players'
 import { partyMustExist } from '~~/server/services/parties'
 import { listAreasState, updateAreaState, findAreaState } from '~~/server/services/areas'
 import { listAreaMessages, insertMessage, listAreaMessagesBefore, listThreadMessagesBefore, listRecentDmsForPlayer, type MessageRow } from '~~/server/services/messages'
-import { registry, sendJson, chatRateLimiter, listPartyZombies, addZombie, removeZombie } from '~~/server/ws/state'
+import { registry, sendJson, chatRateLimiter, listPartyZombies, addZombie, removeZombie, listPlayerPositions, setPlayerPosition, resetPlayerPosition } from '~~/server/ws/state'
 import { pickFanoutRecipients } from '~~/server/ws/fanout'
 import { isAreaId, areAdjacent } from '~~/shared/map/areas'
 import { isAreaClosed } from '~~/server/services/area-access'
@@ -99,6 +99,11 @@ export default defineWebSocketHandler({
     }
     if (parsed.type === 'master:remove-zombie') {
       await handleMasterRemoveZombie(peer, parsed)
+      return
+    }
+
+    if (parsed.type === 'master:place-player') {
+      await handleMasterPlacePlayer(peer, parsed)
       return
     }
   },
@@ -303,6 +308,22 @@ async function handleMoveRequest(peer: Peer, raw: unknown) {
     } catch { /* skip */ }
   }
 
+  // Reset posizione dettaglio del player (era legata a una specifica area)
+  resetPlayerPosition(conn.partySeed, conn.playerId)
+  const resetEvent: PlayerPlacedEvent = {
+    type: 'player:placed',
+    playerId: conn.playerId,
+    areaId: toAreaId,
+    x: null,
+    y: null
+  }
+  const resetPayload = JSON.stringify(resetEvent)
+  for (const c of registry.listParty(conn.partySeed)) {
+    try {
+      c.ws.send(resetPayload)
+    } catch { /* skip */ }
+  }
+
   // Invia solo al mittente la history della nuova area per popolare la chat.
   const messages = listAreaMessages(db, conn.partySeed, toAreaId, 100)
   sendJson(peer, { type: 'area:entered', areaId: toAreaId, messages })
@@ -487,6 +508,43 @@ async function handleMasterRemoveZombie(peer: Peer, raw: unknown) {
   }
 }
 
+async function handleMasterPlacePlayer(peer: Peer, raw: unknown) {
+  const res = MasterPlacePlayerEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'place_player_malformed' })
+    return
+  }
+  const conn = registry.all().find(c => c.ws === peer)
+  if (!conn) {
+    sendJson(peer, { type: 'error', code: 'session_invalid' })
+    return
+  }
+  const db = useDb()
+  const me = listOnlinePlayers(db, conn.partySeed).find(p => p.id === conn.playerId)
+  if (!me || me.role !== 'master') {
+    sendJson(peer, { type: 'error', code: 'master_only' })
+    return
+  }
+  if (!isAreaId(res.data.areaId)) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'unknown_area' })
+    return
+  }
+  setPlayerPosition(conn.partySeed, res.data.playerId, res.data.areaId, res.data.x, res.data.y)
+  const event: PlayerPlacedEvent = {
+    type: 'player:placed',
+    playerId: res.data.playerId,
+    areaId: res.data.areaId,
+    x: res.data.x,
+    y: res.data.y
+  }
+  const payload = JSON.stringify(event)
+  for (const c of registry.listParty(conn.partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
+}
+
 async function handleHello(peer: Peer, seed: string, sessionToken: string) {
   try {
     const db = useDb()
@@ -512,6 +570,7 @@ async function handleHello(peer: Peer, seed: string, sessionToken: string) {
     messagesByArea[player.currentAreaId] = listAreaMessages(db, seed, player.currentAreaId, 100)
     const dms = listRecentDmsForPlayer(db, seed, player.id, 50)
     const zombies = listPartyZombies(seed)
+    const playerPositions = listPlayerPositions(seed)
 
     const init: StateInitEvent = {
       type: 'state:init',
@@ -522,6 +581,7 @@ async function handleHello(peer: Peer, seed: string, sessionToken: string) {
       messagesByArea: messagesByArea as never,
       dms,
       zombies,
+      playerPositions,
       serverTime: Date.now()
     }
     sendJson(peer, init)

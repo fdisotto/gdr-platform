@@ -3,7 +3,8 @@ import { usePartyStore, type MeSnapshot, type PartySnapshot, type PlayerSnapshot
 import { useChatStore, type ChatMessage } from '~/stores/chat'
 import { useServerTime } from '~/composables/useServerTime'
 import { useZombiesStore } from '~/stores/zombies'
-import type { Zombie } from '~~/shared/protocol/ws'
+import { usePlayerPositionsStore } from '~/stores/player-positions'
+import type { Zombie, PlayerPosition } from '~~/shared/protocol/ws'
 
 interface ConnectOptions {
   seed: string
@@ -41,6 +42,7 @@ export function usePartyConnection() {
   const chatStore = useChatStore()
   const serverTime = useServerTime()
   const zombiesStore = useZombiesStore()
+  const playerPositionsStore = usePlayerPositionsStore()
 
   function scheduleReconnect() {
     if (closedFlag) return
@@ -138,6 +140,7 @@ export function usePartyConnection() {
           messagesByArea: Record<string, ChatMessage[]>
           dms: ChatMessage[]
           zombies: Zombie[]
+          playerPositions: PlayerPosition[]
           serverTime: number
         }
         partyStore.hydrate({
@@ -147,6 +150,7 @@ export function usePartyConnection() {
         chatStore.hydrate(init.messagesByArea ?? {})
         chatStore.hydrateDms(init.dms ?? [], init.me.id)
         zombiesStore.hydrate(init.zombies ?? [])
+        playerPositionsStore.hydrate(init.playerPositions ?? [])
         serverTime.sync(init.serverTime)
         break
       }
@@ -187,6 +191,13 @@ export function usePartyConnection() {
         if (partyStore.me && partyStore.me.id === payload.playerId) {
           partyStore.me = { ...partyStore.me, currentAreaId: payload.toAreaId }
         }
+        // La posizione dettaglio è legata a un'area specifica; reset per il player
+        playerPositionsStore.resetForPlayer(payload.playerId)
+        break
+      }
+      case 'player:placed': {
+        const p = data as { playerId: string, areaId: string, x: number | null, y: number | null }
+        playerPositionsStore.set(p.playerId, p.areaId, p.x, p.y)
         break
       }
       case 'area:entered': {

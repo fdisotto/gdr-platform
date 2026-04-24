@@ -86,6 +86,14 @@ const AreaStateSnapshot = z.object({
   notes: z.string().nullable()
 })
 
+export const PlayerPositionSchema = z.object({
+  playerId: z.string(),
+  areaId: z.string(),
+  x: z.number(),
+  y: z.number()
+})
+export type PlayerPosition = z.infer<typeof PlayerPositionSchema>
+
 export const StateInitEvent = z.object({
   type: z.literal('state:init'),
   me: PlayerSnapshot,
@@ -102,6 +110,7 @@ export const StateInitEvent = z.object({
     y: z.number(),
     spawnedAt: z.number()
   })),
+  playerPositions: z.array(PlayerPositionSchema),
   serverTime: z.number()
 })
 export type StateInitEvent = z.infer<typeof StateInitEvent>
@@ -231,16 +240,36 @@ export const ZombieRemovedEvent = z.object({
 })
 export type ZombieRemovedEvent = z.infer<typeof ZombieRemovedEvent>
 
+export const MasterPlacePlayerEvent = z.object({
+  type: z.literal('master:place-player'),
+  playerId: z.string(),
+  areaId: z.string(),
+  x: z.number(),
+  y: z.number()
+})
+export type MasterPlacePlayerEvent = z.infer<typeof MasterPlacePlayerEvent>
+
+export const PlayerPlacedEvent = z.object({
+  type: z.literal('player:placed'),
+  playerId: z.string(),
+  areaId: z.string(),
+  x: z.number().nullable(),
+  y: z.number().nullable()
+})
+export type PlayerPlacedEvent = z.infer<typeof PlayerPlacedEvent>
+
 export const ServerEvent = z.discriminatedUnion('type', [
   StateInitEvent, MessageNewEvent, TimeTickEvent, ServerErrorEvent,
   PlayerJoinedEvent, PlayerLeftEvent, PlayerMovedEvent,
   AreaUpdatedEvent, WeatherUpdatedEvent, HistoryBatchEvent,
-  ZombieSpawnedEvent, ZombieRemovedEvent
+  ZombieSpawnedEvent, ZombieRemovedEvent,
+  PlayerPlacedEvent
 ])
 export type ServerEvent = z.infer<typeof ServerEvent>
 
 export const ClientEvent = z.discriminatedUnion('type', [
   HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent,
-  MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent
+  MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent,
+  MasterPlacePlayerEvent
 ])
 export type ClientEvent = z.infer<typeof ClientEvent>

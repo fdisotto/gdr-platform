@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { AREAS, ADJACENCY, type AreaId } from '~~/shared/map/areas'
 import { usePartyStore } from '~/stores/party'
 import { useZombiesStore } from '~/stores/zombies'
 import { useViewStore } from '~/stores/view'
+import { usePlayerPositionsStore } from '~/stores/player-positions'
 import { usePartyConnection } from '~/composables/usePartyConnection'
 import { useAreaWeather } from '~/composables/useAreaWeather'
 import MapWeatherOverlay from '~/components/map/MapWeatherOverlay.vue'
@@ -11,6 +12,7 @@ import MapWeatherOverlay from '~/components/map/MapWeatherOverlay.vue'
 const party = usePartyStore()
 const zombies = useZombiesStore()
 const viewStore = useViewStore()
+const playerPositionsStore = usePlayerPositionsStore()
 const connection = usePartyConnection()
 
 const VIEWBOX_W = 800
@@ -94,11 +96,71 @@ function removeZombie(id: string) {
   connection.send({ type: 'master:remove-zombie', id })
 }
 
-// Avatar position grid: semplice layout
-function playerPos(i: number) {
-  const col = i % 5
-  const row = Math.floor(i / 5)
-  return { x: 60 + col * 30, y: VIEWBOX_H - 80 + row * 30 }
+const DEFAULT_CENTER_X = VIEWBOX_W / 2
+const DEFAULT_CENTER_Y = VIEWBOX_H * 0.55
+
+function defaultPlayerPos(index: number, total: number): { x: number, y: number } {
+  if (total === 1) {
+    return { x: DEFAULT_CENTER_X, y: DEFAULT_CENTER_Y }
+  }
+  const radius = Math.min(120, 40 + total * 12)
+  const startAngle = -Math.PI / 2
+  const a = startAngle + (index / total) * Math.PI * 2
+  return {
+    x: DEFAULT_CENTER_X + Math.cos(a) * radius,
+    y: DEFAULT_CENTER_Y + Math.sin(a) * radius
+  }
+}
+
+function playerMarkerPos(player: { id: string }, index: number, total: number): { x: number, y: number } {
+  if (!area.value) return { x: 0, y: 0 }
+  const stored = playerPositionsStore.get(player.id, area.value.id)
+  if (stored) return stored
+  return defaultPlayerPos(index, total)
+}
+
+// Drag logic (solo master)
+const dragging = ref<string | null>(null)
+
+function startDrag(e: MouseEvent, playerId: string) {
+  if (!isMaster.value) return
+  e.stopPropagation()
+  dragging.value = playerId
+  window.addEventListener('mousemove', onDrag)
+  window.addEventListener('mouseup', endDrag)
+}
+
+function onDrag(e: MouseEvent) {
+  if (!dragging.value || !area.value) return
+  const svg = document.querySelector('#area-detail-svg') as SVGSVGElement | null
+  if (!svg) return
+  const pt = svg.createSVGPoint()
+  pt.x = e.clientX
+  pt.y = e.clientY
+  const ctm = svg.getScreenCTM()?.inverse()
+  if (!ctm) return
+  const loc = pt.matrixTransform(ctm)
+  playerPositionsStore.set(dragging.value, area.value.id, loc.x, loc.y)
+}
+
+function endDrag() {
+  window.removeEventListener('mousemove', onDrag)
+  window.removeEventListener('mouseup', endDrag)
+  if (!dragging.value || !area.value) {
+    dragging.value = null
+    return
+  }
+  const pos = playerPositionsStore.get(dragging.value, area.value.id)
+  if (pos) {
+    connection.send({
+      type: 'master:place-player',
+      playerId: dragging.value,
+      areaId: area.value.id,
+      x: pos.x,
+      y: pos.y
+    })
+  }
+  dragging.value = null
 }
 </script>
 
@@ -158,6 +220,7 @@ function playerPos(i: number) {
     </header>
 
     <svg
+      id="area-detail-svg"
       :viewBox="`0 0 ${VIEWBOX_W} ${VIEWBOX_H}`"
       preserveAspectRatio="xMidYMid meet"
       style="width: 100%; flex: 1; display: block; min-height: 0"
@@ -239,21 +302,23 @@ function playerPos(i: number) {
       <g
         v-for="(p, i) in playersInArea"
         :key="p.id"
-        :transform="`translate(${playerPos(i).x}, ${playerPos(i).y})`"
-        pointer-events="none"
+        :transform="`translate(${playerMarkerPos(p, i, playersInArea.length).x}, ${playerMarkerPos(p, i, playersInArea.length).y})`"
+        :style="isMaster ? 'cursor: grab' : undefined"
+        @mousedown="startDrag($event, p.id)"
       >
-        <title>{{ p.nickname }}</title>
+        <title>{{ p.nickname }}{{ isMaster ? ' — trascina per muovere' : '' }}</title>
         <circle
-          r="10"
+          r="12"
           :fill="p.role === 'master' ? 'var(--z-blood-500)' : 'var(--z-green-300)'"
           stroke="var(--z-bg-900)"
           stroke-width="2"
         />
         <text
           text-anchor="middle"
-          :y="-14"
+          :y="-18"
           font-size="11"
           :fill="p.role === 'master' ? 'var(--z-blood-300)' : 'var(--z-green-100)'"
+          style="pointer-events: none; user-select: none"
         >{{ p.nickname }}</text>
       </g>
     </svg>

@@ -6,6 +6,7 @@ import { usePartyStore } from '~/stores/party'
 import { useChatStore } from '~/stores/chat'
 import { useViewStore } from '~/stores/view'
 import { useZombiesStore } from '~/stores/zombies'
+import { usePlayerPositionsStore } from '~/stores/player-positions'
 import { usePartyConnection } from '~/composables/usePartyConnection'
 import PartyHeader from '~/components/layout/PartyHeader.vue'
 import ConnectionBanner from '~/components/layout/ConnectionBanner.vue'
@@ -21,6 +22,7 @@ const partyStore = usePartyStore()
 const chatStore = useChatStore()
 const viewStore = useViewStore()
 const zombiesStore = useZombiesStore()
+const playerPositionsStore = usePlayerPositionsStore()
 const connection = usePartyConnection()
 
 const guardError = ref<string | null>(null)
@@ -52,6 +54,7 @@ onBeforeRouteLeave(() => {
   chatStore.reset()
   viewStore.reset()
   zombiesStore.reset()
+  playerPositionsStore.reset()
   return true
 })
 </script>

@@ -90,6 +90,7 @@ describe('StateInitEvent', () => {
       messagesByArea: {},
       dms: [],
       zombies: [],
+      playerPositions: [],
       serverTime: 1
     }).success).toBe(true)
   })

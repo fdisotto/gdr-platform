@@ -1,6 +1,6 @@
 import { createConnectionRegistry, type ConnectionRegistry, type ConnectionInfo } from '~~/server/ws/connections'
 import { createRateLimiter, type RateLimiter } from '~~/server/ws/rate-limit'
-import type { Zombie } from '~~/shared/protocol/ws'
+import type { Zombie, PlayerPosition } from '~~/shared/protocol/ws'
 
 export const registry: ConnectionRegistry = createConnectionRegistry()
 export const chatRateLimiter: RateLimiter = createRateLimiter({ windowMs: 1000, maxHits: 5 })
@@ -48,4 +48,34 @@ export function removeZombie(partySeed: string, id: string): Zombie | null {
 
 export function resetZombiesForParty(partySeed: string): void {
   zombiesByParty.delete(partySeed)
+}
+
+// positions: partySeed -> areaId -> playerId -> {x, y}
+const positionsByParty = new Map<string, Map<string, Map<string, { x: number, y: number }>>>()
+
+export function listPlayerPositions(partySeed: string): PlayerPosition[] {
+  const byArea = positionsByParty.get(partySeed)
+  if (!byArea) return []
+  const out: PlayerPosition[] = []
+  for (const [areaId, byPlayer] of byArea) {
+    for (const [playerId, pos] of byPlayer) {
+      out.push({ playerId, areaId, x: pos.x, y: pos.y })
+    }
+  }
+  return out
+}
+
+export function setPlayerPosition(partySeed: string, playerId: string, areaId: string, x: number, y: number): void {
+  if (!positionsByParty.has(partySeed)) positionsByParty.set(partySeed, new Map())
+  const byArea = positionsByParty.get(partySeed)!
+  if (!byArea.has(areaId)) byArea.set(areaId, new Map())
+  byArea.get(areaId)!.set(playerId, { x, y })
+}
+
+export function resetPlayerPosition(partySeed: string, playerId: string): void {
+  const byArea = positionsByParty.get(partySeed)
+  if (!byArea) return
+  for (const byPlayer of byArea.values()) {
+    byPlayer.delete(playerId)
+  }
 }
