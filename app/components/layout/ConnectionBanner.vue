@@ -17,7 +17,9 @@ const attempts = computed(() => connection.reconnectAttempts.value)
 const now = ref(Date.now())
 let ticker: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
-  ticker = setInterval(() => { now.value = Date.now() }, 500)
+  ticker = setInterval(() => {
+    now.value = Date.now()
+  }, 500)
 })
 onBeforeUnmount(() => {
   if (ticker) clearInterval(ticker)

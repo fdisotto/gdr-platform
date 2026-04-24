@@ -411,40 +411,40 @@ function onAreaClick(areaId: AreaId) {
 
       <!-- User zoom/pan applicato sopra al fit-to-container -->
       <g :transform="userTransform">
-      <!-- Contenuto logico 1000x700 scalato uniformemente e centrato -->
-      <g :transform="contentTransform">
-        <MapDecor />
-        <MapRoads />
+        <!-- Contenuto logico 1000x700 scalato uniformemente e centrato -->
+        <g :transform="contentTransform">
+          <MapDecor />
+          <MapRoads />
 
-        <MapArea
-          v-for="a in AREAS"
-          :key="a.id"
-          :area="a"
-          :state="stateById.get(a.id) ?? null"
-          :is-current="currentAreaId === a.id"
-          :is-adjacent="adjacentSet.has(a.id)"
-          :is-master="isMaster"
-          :player-count="(playersByArea.get(a.id)?.length ?? 0)"
-          @click="onAreaClick(a.id)"
-        />
-
-        <template
-          v-for="a in AREAS"
-          :key="`av-${a.id}`"
-        >
-          <MapAvatar
-            v-for="(p, i) in (playersByArea.get(a.id) ?? [])"
-            :key="p.id"
-            :player="p"
+          <MapArea
+            v-for="a in AREAS"
+            :key="a.id"
             :area="a"
-            :index="i"
-            :is-self="party.me?.id === p.id"
-            @click="(ev) => onAvatarClick(ev, p)"
+            :state="stateById.get(a.id) ?? null"
+            :is-current="currentAreaId === a.id"
+            :is-adjacent="adjacentSet.has(a.id)"
+            :is-master="isMaster"
+            :player-count="(playersByArea.get(a.id)?.length ?? 0)"
+            @click="onAreaClick(a.id)"
           />
-        </template>
 
-        <MapWeatherOverlay :weather="weather" />
-      </g>
+          <template
+            v-for="a in AREAS"
+            :key="`av-${a.id}`"
+          >
+            <MapAvatar
+              v-for="(p, i) in (playersByArea.get(a.id) ?? [])"
+              :key="p.id"
+              :player="p"
+              :area="a"
+              :index="i"
+              :is-self="party.me?.id === p.id"
+              @click="(ev) => onAvatarClick(ev, p)"
+            />
+          </template>
+
+          <MapWeatherOverlay :weather="weather" />
+        </g>
       </g>
     </svg>
     <MapLegend />
