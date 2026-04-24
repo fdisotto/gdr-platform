@@ -6,6 +6,7 @@ import { usePartyStore } from '~/stores/party'
 import { useChatStore } from '~/stores/chat'
 import { usePartyConnection } from '~/composables/usePartyConnection'
 import PartyHeader from '~/components/layout/PartyHeader.vue'
+import ConnectionBanner from '~/components/layout/ConnectionBanner.vue'
 import PartyChat from '~/components/chat/PartyChat.vue'
 import GameMap from '~/components/map/GameMap.vue'
 
@@ -70,6 +71,7 @@ onBeforeRouteLeave(() => {
     </template>
     <template v-else>
       <PartyHeader />
+      <ConnectionBanner />
       <div class="flex-1 flex flex-col overflow-hidden">
         <GameMap />
         <PartyChat />

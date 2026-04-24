@@ -15,6 +15,7 @@ export function usePartyConnection() {
 
   const ws = ref<WebSocket | null>(null)
   const status = ref<'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed'>('idle')
+  const pendingQueue = ref<Record<string, unknown>[]>([])
   let closed = false
   let reconnectAttempts = 0
   let pendingOpts: ConnectOptions | null = null
@@ -45,6 +46,18 @@ export function usePartyConnection() {
       reconnectAttempts = 0
       status.value = 'open'
       sock.send(JSON.stringify({ type: 'hello', seed: opts.seed, sessionToken: opts.sessionToken }))
+      // Flush pending messages accumulati durante reconnecting.
+      if (pendingQueue.value.length > 0) {
+        const toFlush = pendingQueue.value
+        pendingQueue.value = []
+        setTimeout(() => {
+          for (const ev of toFlush) {
+            if (ws.value && ws.value.readyState === WebSocket.OPEN) {
+              ws.value.send(JSON.stringify(ev))
+            }
+          }
+        }, 200)
+      }
     })
 
     sock.addEventListener('message', (ev) => {
@@ -77,6 +90,11 @@ export function usePartyConnection() {
   function send(event: Record<string, unknown>) {
     if (ws.value && ws.value.readyState === WebSocket.OPEN) {
       ws.value.send(JSON.stringify(event))
+      return
+    }
+    // Se stiamo riconnettendo, accoda.
+    if (status.value === 'reconnecting' || status.value === 'connecting') {
+      pendingQueue.value = [...pendingQueue.value, event]
     }
   }
 
@@ -150,5 +168,5 @@ export function usePartyConnection() {
     disconnect()
   })
 
-  return { ws, status, connect, disconnect, send }
+  return { ws, status, pendingQueue, connect, disconnect, send }
 }

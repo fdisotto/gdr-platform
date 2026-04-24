@@ -51,9 +51,9 @@ describe('pickFanoutRecipients', () => {
 describe('shout fanout', () => {
   it('shout arriva in area origine + aree adiacenti + master', () => {
     const connections = [
-      conn('alice', 'piazza', 'user'),      // origine
-      conn('bob', 'chiesa', 'user'),        // adiacente a piazza
-      conn('carla', 'rifugio', 'user'),     // non adiacente
+      conn('alice', 'piazza', 'user'), // origine
+      conn('bob', 'chiesa', 'user'), // adiacente a piazza
+      conn('carla', 'rifugio', 'user'), // non adiacente
       conn('master', 'scuola', 'master')
     ]
     const result = pickFanoutRecipients(connections, { kind: 'shout', areaId: 'piazza' })
