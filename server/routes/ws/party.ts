@@ -1,4 +1,4 @@
-import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent } from '~~/shared/protocol/ws'
+import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent } from '~~/shared/protocol/ws'
 import { useDb } from '~~/server/utils/db'
 import { findPlayerBySession, listOnlinePlayers, touchPlayer, updatePlayerArea } from '~~/server/services/players'
 import { partyMustExist } from '~~/server/services/parties'
@@ -113,6 +113,12 @@ export default defineWebSocketHandler({
     }
     if (parsed.type === 'master:spawn-zombies') {
       await handleMasterSpawnZombies(peer, parsed)
+      return
+    }
+
+    if (parsed.type === 'voice:offer' || parsed.type === 'voice:answer'
+      || parsed.type === 'voice:ice' || parsed.type === 'voice:leave') {
+      await handleVoiceSignal(peer, parsed)
       return
     }
   },
@@ -614,6 +620,49 @@ async function handleMasterSpawnZombies(peer: Peer, raw: unknown) {
       c.ws.send(payload)
     } catch { /* skip */ }
   }
+}
+
+async function handleVoiceSignal(peer: Peer, raw: Record<string, unknown>) {
+  let targetPlayerId: string | null = null
+  let signal: VoiceSignalEvent['signal'] | null = null
+
+  if (raw.type === 'voice:offer') {
+    const r = VoiceOfferEvent.safeParse(raw)
+    if (!r.success) return
+    targetPlayerId = r.data.targetPlayerId
+    signal = { kind: 'offer', sdp: r.data.sdp }
+  } else if (raw.type === 'voice:answer') {
+    const r = VoiceAnswerEvent.safeParse(raw)
+    if (!r.success) return
+    targetPlayerId = r.data.targetPlayerId
+    signal = { kind: 'answer', sdp: r.data.sdp }
+  } else if (raw.type === 'voice:ice') {
+    const r = VoiceIceEvent.safeParse(raw)
+    if (!r.success) return
+    targetPlayerId = r.data.targetPlayerId
+    signal = { kind: 'ice', candidate: r.data.candidate }
+  } else if (raw.type === 'voice:leave') {
+    const r = VoiceLeaveEvent.safeParse(raw)
+    if (!r.success) return
+    targetPlayerId = r.data.targetPlayerId
+    signal = { kind: 'leave' }
+  }
+
+  if (!targetPlayerId || !signal) return
+
+  const conn = registry.all().find(c => c.ws === peer)
+  if (!conn) return
+  const targetConn = registry.getPlayerConn(conn.partySeed, targetPlayerId)
+  if (!targetConn) return
+
+  const event: VoiceSignalEvent = {
+    type: 'voice:signal',
+    fromPlayerId: conn.playerId,
+    signal
+  }
+  try {
+    targetConn.ws.send(JSON.stringify(event))
+  } catch { /* skip */ }
 }
 
 async function handleHello(peer: Peer, seed: string, sessionToken: string) {

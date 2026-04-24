@@ -287,13 +287,54 @@ export const ZombiesBatchSpawnedEvent = z.object({
 })
 export type ZombiesBatchSpawnedEvent = z.infer<typeof ZombiesBatchSpawnedEvent>
 
+export const VoiceOfferEvent = z.object({
+  type: z.literal('voice:offer'),
+  targetPlayerId: z.string(),
+  sdp: z.string()
+})
+export type VoiceOfferEvent = z.infer<typeof VoiceOfferEvent>
+
+export const VoiceAnswerEvent = z.object({
+  type: z.literal('voice:answer'),
+  targetPlayerId: z.string(),
+  sdp: z.string()
+})
+export type VoiceAnswerEvent = z.infer<typeof VoiceAnswerEvent>
+
+export const VoiceIceEvent = z.object({
+  type: z.literal('voice:ice'),
+  targetPlayerId: z.string(),
+  candidate: z.string() // JSON-serialized RTCIceCandidateInit
+})
+export type VoiceIceEvent = z.infer<typeof VoiceIceEvent>
+
+export const VoiceLeaveEvent = z.object({
+  type: z.literal('voice:leave'),
+  targetPlayerId: z.string()
+})
+export type VoiceLeaveEvent = z.infer<typeof VoiceLeaveEvent>
+
+// Evento inoltrato: server → client (con fromPlayerId)
+export const VoiceSignalEvent = z.object({
+  type: z.literal('voice:signal'),
+  fromPlayerId: z.string(),
+  signal: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('offer'), sdp: z.string() }),
+    z.object({ kind: z.literal('answer'), sdp: z.string() }),
+    z.object({ kind: z.literal('ice'), candidate: z.string() }),
+    z.object({ kind: z.literal('leave') })
+  ])
+})
+export type VoiceSignalEvent = z.infer<typeof VoiceSignalEvent>
+
 export const ServerEvent = z.discriminatedUnion('type', [
   StateInitEvent, MessageNewEvent, TimeTickEvent, ServerErrorEvent,
   PlayerJoinedEvent, PlayerLeftEvent, PlayerMovedEvent,
   AreaUpdatedEvent, WeatherUpdatedEvent, HistoryBatchEvent,
   ZombieSpawnedEvent, ZombieRemovedEvent,
   PlayerPlacedEvent,
-  ZombieMovedEvent, ZombiesBatchSpawnedEvent
+  ZombieMovedEvent, ZombiesBatchSpawnedEvent,
+  VoiceSignalEvent
 ])
 export type ServerEvent = z.infer<typeof ServerEvent>
 
@@ -301,6 +342,7 @@ export const ClientEvent = z.discriminatedUnion('type', [
   HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent,
   MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent,
   MasterPlacePlayerEvent,
-  MasterMoveZombieEvent, MasterSpawnZombiesEvent
+  MasterMoveZombieEvent, MasterSpawnZombiesEvent,
+  VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent
 ])
 export type ClientEvent = z.infer<typeof ClientEvent>

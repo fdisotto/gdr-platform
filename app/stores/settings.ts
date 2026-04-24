@@ -7,10 +7,11 @@ interface StoredSettings {
   colorNicknames: boolean
   // 0..1; 0 = muto. Retro-compat: vecchio bool weatherAudio mappato a 0.7/0.
   weatherVolume: number
+  voiceEnabled: boolean
 }
 
 function readStored(): StoredSettings {
-  const fallback: StoredSettings = { colorNicknames: true, weatherVolume: 0 }
+  const fallback: StoredSettings = { colorNicknames: true, weatherVolume: 0, voiceEnabled: false }
   if (typeof localStorage === 'undefined') return fallback
   const raw = localStorage.getItem(STORAGE_KEY)
   if (!raw) return fallback
@@ -23,7 +24,8 @@ function readStored(): StoredSettings {
     weatherVolume = Math.min(1, Math.max(0, weatherVolume))
     return {
       colorNicknames: parsed.colorNicknames ?? true,
-      weatherVolume
+      weatherVolume,
+      voiceEnabled: false // never restored: requires fresh gesture each session
     }
   } catch {
     return fallback
@@ -34,12 +36,17 @@ export const useSettingsStore = defineStore('settings', () => {
   const initial = readStored()
   const colorNicknames = ref(initial.colorNicknames)
   const weatherVolume = ref(initial.weatherVolume)
+  // voiceEnabled: non persistito — off all'avvio per safety (microfono richiede gesture esplicita)
+  const voiceEnabled = ref(false)
+  const voicePerPeerVolumes = ref<Record<string, number>>({})
+  const voiceMutedPeers = ref<Set<string>>(new Set())
 
   function persist() {
     if (typeof localStorage === 'undefined') return
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       colorNicknames: colorNicknames.value,
       weatherVolume: weatherVolume.value
+      // voiceEnabled not persisted: requires fresh gesture each session
     }))
   }
   watch(colorNicknames, persist)
@@ -58,11 +65,30 @@ export const useSettingsStore = defineStore('settings', () => {
     weatherVolume.value = target
   }
 
+  function enableVoice() {
+    voiceEnabled.value = true
+  }
+  function disableVoice() {
+    voiceEnabled.value = false
+  }
+
+  function setPeerVolume(peerId: string, vol: number) {
+    voicePerPeerVolumes.value = { ...voicePerPeerVolumes.value, [peerId]: Math.min(1, Math.max(0, vol)) }
+  }
+  function togglePeerMute(peerId: string) {
+    const next = new Set(voiceMutedPeers.value)
+    if (next.has(peerId)) next.delete(peerId)
+    else next.add(peerId)
+    voiceMutedPeers.value = next
+  }
+
   // Computed retro-compat per i consumer che vogliono solo "audio on"
   const weatherAudio = computed(() => weatherVolume.value > 0)
 
   return {
     colorNicknames, weatherVolume, weatherAudio,
-    toggleColorNicknames, setWeatherVolume, muteWeather, unmuteWeather
+    toggleColorNicknames, setWeatherVolume, muteWeather, unmuteWeather,
+    voiceEnabled, enableVoice, disableVoice,
+    voicePerPeerVolumes, voiceMutedPeers, setPeerVolume, togglePeerMute
   }
 })

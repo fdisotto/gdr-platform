@@ -246,6 +246,12 @@ export function usePartyConnection() {
         }
         break
       }
+      case 'voice:signal': {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('gdr:voice-signal', { detail: data }))
+        }
+        break
+      }
       case 'error': {
         console.warn('[ws error]', data)
         break
