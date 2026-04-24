@@ -98,7 +98,7 @@ if (typeof window !== 'undefined') {
       >
         <UIcon
           name="i-lucide-chevron-down"
-          class="size-4"
+          class="size-3"
         />
       </button>
     </div>

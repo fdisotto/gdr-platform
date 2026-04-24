@@ -40,37 +40,49 @@ const clock = computed(() => time.format())
     <nav class="flex items-center gap-1">
       <button
         type="button"
-        class="text-xs px-2 md:px-3 py-1.5 rounded"
+        class="text-xs px-2 md:px-3 py-1.5 rounded flex items-center gap-1.5"
         :title="'Mappa'"
         :style="view.mainView === 'map'
           ? 'background: var(--z-green-700); color: var(--z-green-100)'
           : 'background: transparent; color: var(--z-text-md)'"
         @click="view.show('map')"
       >
-        🗺<span class="hidden md:inline ml-1">Mappa</span>
+        <UIcon
+          name="i-lucide-map"
+          class="size-4"
+        />
+        <span class="hidden md:inline">Mappa</span>
       </button>
       <button
         type="button"
-        class="text-xs px-2 md:px-3 py-1.5 rounded"
+        class="text-xs px-2 md:px-3 py-1.5 rounded flex items-center gap-1.5"
         :title="'Missive'"
         :style="view.mainView === 'dm'
           ? 'background: var(--z-whisper-500); color: var(--z-bg-900)'
           : 'background: transparent; color: var(--z-text-md)'"
         @click="view.show('dm')"
       >
-        ✉<span class="hidden md:inline ml-1">Missive</span>
+        <UIcon
+          name="i-lucide-mail"
+          class="size-4"
+        />
+        <span class="hidden md:inline">Missive</span>
       </button>
       <button
         v-if="party.me?.role === 'master'"
         type="button"
-        class="text-xs px-2 md:px-3 py-1.5 rounded"
+        class="text-xs px-2 md:px-3 py-1.5 rounded flex items-center gap-1.5"
         :title="'Master'"
         :style="view.mainView === 'master'
           ? 'background: var(--z-blood-700); color: var(--z-blood-300)'
           : 'background: transparent; color: var(--z-text-md)'"
         @click="view.show('master')"
       >
-        🛠<span class="hidden md:inline ml-1">Master</span>
+        <UIcon
+          name="i-lucide-wrench"
+          class="size-4"
+        />
+        <span class="hidden md:inline">Master</span>
       </button>
     </nav>
 

@@ -119,14 +119,18 @@ watch(messages, async (newList) => {
         <button
           v-if="!viewStore.chatCollapsed"
           type="button"
-          class="text-xs px-2 py-0.5 rounded"
+          class="text-xs px-2 py-0.5 rounded flex items-center gap-1"
           :title="settings.colorNicknames ? 'Disattiva colori nickname' : 'Attiva colori nickname'"
           :style="settings.colorNicknames
             ? 'background: var(--z-green-700); color: var(--z-green-100)'
             : 'background: var(--z-bg-700); color: var(--z-text-md)'"
           @click="settings.toggleColorNicknames()"
         >
-          🎨 nick {{ settings.colorNicknames ? 'on' : 'off' }}
+          <UIcon
+            name="i-lucide-palette"
+            class="size-3.5"
+          />
+          <span>nick {{ settings.colorNicknames ? 'on' : 'off' }}</span>
         </button>
         <button
           type="button"
