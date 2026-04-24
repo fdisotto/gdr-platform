@@ -5,6 +5,7 @@ import { usePartyStore } from '~/stores/party'
 import { useZombiesStore } from '~/stores/zombies'
 import { useViewStore } from '~/stores/view'
 import { usePlayerPositionsStore } from '~/stores/player-positions'
+import { useChatStore } from '~/stores/chat'
 import { usePartyConnection } from '~/composables/usePartyConnection'
 import { useAreaWeather } from '~/composables/useAreaWeather'
 import MapWeatherOverlay from '~/components/map/MapWeatherOverlay.vue'
@@ -14,6 +15,7 @@ const party = usePartyStore()
 const zombies = useZombiesStore()
 const viewStore = useViewStore()
 const playerPositionsStore = usePlayerPositionsStore()
+const chatStore = useChatStore()
 const connection = usePartyConnection()
 
 // ViewBox dinamico: width fisso, height calcolata dal rapporto del
@@ -871,6 +873,46 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
           :fill="p.role === 'master' ? 'var(--z-blood-300)' : 'var(--z-green-100)'"
           style="pointer-events: none; user-select: none"
         >{{ p.nickname }}</text>
+        <!-- Badge "ha appena parlato" -->
+        <g
+          v-if="chatStore.lastSpeakerPlayerId === p.id"
+          transform="translate(11, -10)"
+          style="pointer-events: none"
+        >
+          <title>Ha parlato di recente</title>
+          <ellipse
+            rx="9"
+            ry="7"
+            fill="var(--z-bg-900)"
+            stroke="var(--z-green-300)"
+            stroke-width="1.5"
+          />
+          <path
+            d="M -3 6 L 0 11 L 2 6 Z"
+            fill="var(--z-bg-900)"
+            stroke="var(--z-green-300)"
+            stroke-width="1.5"
+            stroke-linejoin="round"
+          />
+          <circle
+            cx="-4"
+            cy="0"
+            r="1.2"
+            fill="var(--z-green-300)"
+          />
+          <circle
+            cx="0"
+            cy="0"
+            r="1.2"
+            fill="var(--z-green-300)"
+          />
+          <circle
+            cx="4"
+            cy="0"
+            r="1.2"
+            fill="var(--z-green-300)"
+          />
+        </g>
       </g>
     </svg>
 
