@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onBeforeUnmount } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { AREAS, ADJACENCY, type AreaId } from '~~/shared/map/areas'
 import { usePartyStore } from '~/stores/party'
 import { useViewStore } from '~/stores/view'
@@ -9,6 +9,7 @@ import MapAvatar from '~/components/map/MapAvatar.vue'
 import MapWeatherOverlay from '~/components/map/MapWeatherOverlay.vue'
 import { useAreaWeather } from '~/composables/useAreaWeather'
 import MapLegend from '~/components/map/MapLegend.vue'
+import MapPlayersBox from '~/components/map/MapPlayersBox.vue'
 import MapRoads from '~/components/map/MapRoads.vue'
 import MapDecor from '~/components/map/MapDecor.vue'
 
@@ -76,8 +77,44 @@ if (typeof document !== 'undefined') {
   onBeforeUnmount(() => {
     document.removeEventListener('mousedown', onDocMouseDown)
     closePlayerMenu()
+    resizeObs?.disconnect()
+    resizeObs = null
   })
 }
+
+// ViewBox dinamico che matcha le dimensioni del contenitore: così il bg
+// gradient riempie sempre l'intera zona (niente letterbox visibile) e il
+// contenuto logico (1000x700) viene messo dentro in meet preservando aspetto
+// e leggibilità del testo.
+const LOGICAL_W = 1000
+const LOGICAL_H = 700
+const containerEl = ref<HTMLElement | null>(null)
+const containerW = ref<number>(LOGICAL_W)
+const containerH = ref<number>(LOGICAL_H)
+const viewBox = computed(() => `0 0 ${containerW.value} ${containerH.value}`)
+const contentScale = computed(() =>
+  Math.min(containerW.value / LOGICAL_W, containerH.value / LOGICAL_H)
+)
+const contentTransform = computed(() => {
+  const s = contentScale.value
+  const tx = (containerW.value - LOGICAL_W * s) / 2
+  const ty = (containerH.value - LOGICAL_H * s) / 2
+  return `translate(${tx}, ${ty}) scale(${s})`
+})
+let resizeObs: ResizeObserver | null = null
+onMounted(() => {
+  if (typeof window === 'undefined' || !containerEl.value) return
+  const rect = containerEl.value.getBoundingClientRect()
+  containerW.value = rect.width || LOGICAL_W
+  containerH.value = rect.height || LOGICAL_H
+  resizeObs = new ResizeObserver((entries) => {
+    for (const e of entries) {
+      containerW.value = e.contentRect.width
+      containerH.value = e.contentRect.height
+    }
+  })
+  resizeObs.observe(containerEl.value)
+})
 
 const currentAreaId = computed<AreaId | null>(() => (party.me?.currentAreaId as AreaId) ?? null)
 
@@ -110,32 +147,33 @@ const { weather } = useAreaWeather(() => currentAreaId.value as AreaId | null)
 
 function onAreaClick(areaId: AreaId) {
   if (!partyStore.me) return
-  const isMasterRole = partyStore.me.role === 'master'
-  // Master: sempre apre detail (per gestire la zona)
-  if (isMasterRole) {
+  const myArea = partyStore.me.currentAreaId as AreaId
+  // Già qui: il click apre il dettaglio dell'area
+  if (myArea === areaId) {
     viewStore.openArea(areaId)
     return
   }
-  // User: click utile solo se può effettivamente spostarsi.
-  const myArea = partyStore.me.currentAreaId as AreaId
-  if (myArea === areaId) return // già qui, niente da fare
-  const adj = new Set<string>(ADJACENCY[myArea] ?? [])
-  if (!adj.has(areaId)) return // non raggiungibile, no-op
-  // Non chiusa (lo stato chiuso lo gestisce il server, qui evitiamo richieste inutili)
-  const targetState = stateById.value.get(areaId)
-  if (targetState?.status === 'closed') return
+  const isMasterRole = partyStore.me.role === 'master'
+  // Master può muoversi ovunque; user solo in area adiacente e non chiusa
+  if (!isMasterRole) {
+    const adj = new Set<string>(ADJACENCY[myArea] ?? [])
+    if (!adj.has(areaId)) return // non raggiungibile, no-op
+    const targetState = stateById.value.get(areaId)
+    if (targetState?.status === 'closed') return
+  }
   connection.send({ type: 'move:request', toAreaId: areaId })
 }
 </script>
 
 <template>
   <section
+    ref="containerEl"
     class="w-full relative flex-1 min-h-0"
     style="background: var(--z-bg-900)"
   >
     <svg
-      viewBox="0 0 1000 700"
-      preserveAspectRatio="xMidYMid meet"
+      :viewBox="viewBox"
+      preserveAspectRatio="none"
       style="width: 100%; height: 100%; display: block"
     >
       <defs>
@@ -209,51 +247,56 @@ function onAreaClick(areaId: AreaId) {
           <feColorMatrix values="0 0 0 0 0.15 0 0 0 0 0.15 0 0 0 0 0.15 0 0 0 0.35 0" />
         </filter>
       </defs>
+      <!-- Bg + grain riempiono l'intero viewBox dinamico: no più letterbox -->
       <rect
-        width="1000"
-        height="700"
+        :width="containerW"
+        :height="containerH"
         fill="url(#map-bg)"
       />
       <rect
-        width="1000"
-        height="700"
+        :width="containerW"
+        :height="containerH"
         filter="url(#map-grain)"
         opacity="0.3"
       />
 
-      <MapDecor />
-      <MapRoads />
+      <!-- Contenuto logico 1000x700 scalato uniformemente e centrato -->
+      <g :transform="contentTransform">
+        <MapDecor />
+        <MapRoads />
 
-      <MapArea
-        v-for="a in AREAS"
-        :key="a.id"
-        :area="a"
-        :state="stateById.get(a.id) ?? null"
-        :is-current="currentAreaId === a.id"
-        :is-adjacent="adjacentSet.has(a.id)"
-        :is-master="isMaster"
-        :player-count="(playersByArea.get(a.id)?.length ?? 0)"
-        @click="onAreaClick(a.id)"
-      />
-
-      <template
-        v-for="a in AREAS"
-        :key="`av-${a.id}`"
-      >
-        <MapAvatar
-          v-for="(p, i) in (playersByArea.get(a.id) ?? [])"
-          :key="p.id"
-          :player="p"
+        <MapArea
+          v-for="a in AREAS"
+          :key="a.id"
           :area="a"
-          :index="i"
-          :is-self="party.me?.id === p.id"
-          @click="(ev) => onAvatarClick(ev, p)"
+          :state="stateById.get(a.id) ?? null"
+          :is-current="currentAreaId === a.id"
+          :is-adjacent="adjacentSet.has(a.id)"
+          :is-master="isMaster"
+          :player-count="(playersByArea.get(a.id)?.length ?? 0)"
+          @click="onAreaClick(a.id)"
         />
-      </template>
 
-      <MapWeatherOverlay :weather="weather" />
+        <template
+          v-for="a in AREAS"
+          :key="`av-${a.id}`"
+        >
+          <MapAvatar
+            v-for="(p, i) in (playersByArea.get(a.id) ?? [])"
+            :key="p.id"
+            :player="p"
+            :area="a"
+            :index="i"
+            :is-self="party.me?.id === p.id"
+            @click="(ev) => onAvatarClick(ev, p)"
+          />
+        </template>
+
+        <MapWeatherOverlay :weather="weather" />
+      </g>
     </svg>
     <MapLegend />
+    <MapPlayersBox />
     <div
       v-if="playerMenu"
       class="fixed z-40 rounded-md py-1"
