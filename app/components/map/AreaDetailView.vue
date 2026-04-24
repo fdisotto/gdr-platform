@@ -16,10 +16,39 @@ const viewStore = useViewStore()
 const playerPositionsStore = usePlayerPositionsStore()
 const connection = usePartyConnection()
 
-// ViewBox grande così la zona copre tutta la larghezza disponibile.
-// preserveAspectRatio="none" sotto stretcha l'svg al contenitore.
+// ViewBox dinamico: width fisso, height calcolata dal rapporto del
+// contenitore reale. Così l'svg riempie tutto lo spazio disponibile senza
+// distorcere zombi/avatar (preserveAspectRatio resta meet, niente stretch).
 const VIEWBOX_W = 1600
-const VIEWBOX_H = 900
+const containerEl = ref<HTMLElement | null>(null)
+const containerH = ref<number>(900)
+const containerW = ref<number>(1600)
+const VIEWBOX_H = computed(() => {
+  if (containerW.value <= 0) return 900
+  const ratio = containerH.value / containerW.value
+  return Math.max(400, Math.round(VIEWBOX_W * ratio))
+})
+
+let resizeObs: ResizeObserver | null = null
+onMounted(() => {
+  if (typeof window === 'undefined') return
+  if (containerEl.value) {
+    const rect = containerEl.value.getBoundingClientRect()
+    containerW.value = rect.width
+    containerH.value = rect.height
+    resizeObs = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        containerW.value = entry.contentRect.width
+        containerH.value = entry.contentRect.height
+      }
+    })
+    resizeObs.observe(containerEl.value)
+  }
+})
+onBeforeUnmount(() => {
+  resizeObs?.disconnect()
+  resizeObs = null
+})
 
 const area = computed(() => {
   const id = viewStore.viewedAreaId
@@ -165,7 +194,7 @@ function svgPoint(e: MouseEvent): { x: number, y: number } | null {
   const margin = 8
   return {
     x: Math.max(margin, Math.min(VIEWBOX_W - margin, loc.x)),
-    y: Math.max(margin, Math.min(VIEWBOX_H - margin, loc.y))
+    y: Math.max(margin, Math.min(VIEWBOX_H.value - margin, loc.y))
   }
 }
 
@@ -509,18 +538,19 @@ function endDrag() {
 }
 
 const DEFAULT_CENTER_X = VIEWBOX_W / 2
-const DEFAULT_CENTER_Y = VIEWBOX_H * 0.55
+const defaultCenterY = computed(() => VIEWBOX_H.value * 0.55)
+const weatherScaleY = computed(() => VIEWBOX_H.value / 700)
 
 function defaultPlayerPos(index: number, total: number): { x: number, y: number } {
   if (total === 1) {
-    return { x: DEFAULT_CENTER_X, y: DEFAULT_CENTER_Y }
+    return { x: DEFAULT_CENTER_X, y: defaultCenterY.value }
   }
   const radius = Math.min(120, 40 + total * 12)
   const startAngle = -Math.PI / 2
   const a = startAngle + (index / total) * Math.PI * 2
   return {
     x: DEFAULT_CENTER_X + Math.cos(a) * radius,
-    y: DEFAULT_CENTER_Y + Math.sin(a) * radius
+    y: defaultCenterY.value + Math.sin(a) * radius
   }
 }
 
@@ -535,6 +565,7 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
 <template>
   <section
     v-if="area"
+    ref="containerEl"
     class="w-full relative flex-1 min-h-0 flex flex-col"
     style="background: var(--z-bg-900)"
   >
@@ -614,7 +645,7 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
     <svg
       id="area-detail-svg"
       :viewBox="`0 0 ${VIEWBOX_W} ${VIEWBOX_H}`"
-      preserveAspectRatio="none"
+      preserveAspectRatio="xMidYMid meet"
       style="width: 100%; flex: 1; display: block; min-height: 0"
       :style="cursorForTool"
       @mousedown="onSvgMouseDown"
@@ -665,7 +696,7 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
       />
       <!-- Weather overlay scalato in questo viewBox -->
       <g
-        :transform="`scale(${VIEWBOX_W / 1000}, ${VIEWBOX_H / 700})`"
+        :transform="`scale(${VIEWBOX_W / 1000}, ${weatherScaleY})`"
         pointer-events="none"
       >
         <MapWeatherOverlay :weather="weather" />

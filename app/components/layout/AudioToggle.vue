@@ -51,7 +51,10 @@ if (typeof window !== 'undefined') {
 </script>
 
 <template>
-  <div ref="wrapper" class="relative">
+  <div
+    ref="wrapper"
+    class="relative"
+  >
     <button
       type="button"
       class="text-xs px-2 py-1 rounded flex items-center gap-1"

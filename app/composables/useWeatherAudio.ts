@@ -103,7 +103,9 @@ function setLevel(gain: GainNode | null, target: number) {
   if (!gain || !state.ctx) return
   const now = state.ctx.currentTime
   gain.gain.cancelScheduledValues(now)
-  gain.gain.setTargetAtTime(target, now, 0.5)
+  // Ramp lineare 50ms: cambio percepito immediato, evita pop/click.
+  gain.gain.setValueAtTime(gain.gain.value, now)
+  gain.gain.linearRampToValueAtTime(target, now + 0.05)
 }
 
 let installed = false
