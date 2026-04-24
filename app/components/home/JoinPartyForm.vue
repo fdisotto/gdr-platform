@@ -46,7 +46,10 @@ async function join() {
 </script>
 
 <template>
-  <form class="space-y-3" @submit.prevent="join">
+  <form
+    class="space-y-3"
+    @submit.prevent="join"
+  >
     <div class="flex gap-2">
       <UButton
         size="sm"
@@ -65,7 +68,12 @@ async function join() {
         Come master
       </UButton>
     </div>
-    <UInput v-model="seedInput" placeholder="Seed della party" size="lg" class="font-mono-z" />
+    <UInput
+      v-model="seedInput"
+      placeholder="Seed della party"
+      size="lg"
+      class="font-mono-z"
+    />
     <UInput
       v-if="role === 'master'"
       v-model="masterTokenInput"
@@ -83,6 +91,12 @@ async function join() {
     >
       Unisciti
     </UButton>
-    <p v-if="error" class="text-sm" style="color: var(--z-blood-300)">{{ error }}</p>
+    <p
+      v-if="error"
+      class="text-sm"
+      style="color: var(--z-blood-300)"
+    >
+      {{ error }}
+    </p>
   </form>
 </template>

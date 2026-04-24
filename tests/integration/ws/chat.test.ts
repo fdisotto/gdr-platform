@@ -32,7 +32,7 @@ async function openWs(seed: string, sessionToken: string): Promise<WebSocket> {
   const ws = new WebSocket(urlStr)
   await new Promise<void>((resolve, reject) => {
     ws.once('open', () => resolve())
-    ws.once('error', (e) => reject(e))
+    ws.once('error', e => reject(e))
   })
   ws.send(JSON.stringify({ type: 'hello', seed, sessionToken }))
   return ws
@@ -68,7 +68,7 @@ describe('chat:send (say/emote/ooc)', () => {
     }))
     const msg = await nextMessage(ws)
     expect(msg.type).toBe('message:new')
-    const m = (msg.message as { body: string, kind: string })
+    const m = msg.message as { body: string, kind: string }
     expect(m.body).toBe('ciao')
     expect(m.kind).toBe('say')
 

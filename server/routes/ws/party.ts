@@ -4,9 +4,8 @@ import { findPlayerBySession, listOnlinePlayers, touchPlayer } from '~~/server/s
 import { partyMustExist } from '~~/server/services/parties'
 import { listAreasState } from '~~/server/services/areas'
 import { listAreaMessages, insertMessage, type MessageRow } from '~~/server/services/messages'
-import { registry, sendJson } from '~~/server/ws/state'
+import { registry, sendJson, chatRateLimiter } from '~~/server/ws/state'
 import { pickFanoutRecipients } from '~~/server/ws/fanout'
-import { chatRateLimiter } from '~~/server/ws/state'
 import { isAreaId } from '~~/shared/map/areas'
 
 const TIME_TICK_INTERVAL_MS = 60_000
@@ -145,7 +144,9 @@ async function handleChatSend(peer: Peer, raw: unknown) {
     authorPlayerId: conn.playerId
   })
   for (const r of recipients) {
-    try { r.ws.send(payload) } catch { /* skip */ }
+    try {
+      r.ws.send(payload)
+    } catch { /* skip */ }
   }
 }
 

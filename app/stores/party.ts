@@ -37,8 +37,10 @@ export const usePartyStore = defineStore('party', () => {
   const areasState = ref<AreaStateSnapshot[]>([])
 
   function hydrate(payload: {
-    me: MeSnapshot, party: PartySnapshot,
-    players: PlayerSnapshot[], areasState: AreaStateSnapshot[]
+    me: MeSnapshot
+    party: PartySnapshot
+    players: PlayerSnapshot[]
+    areasState: AreaStateSnapshot[]
   }) {
     me.value = payload.me
     party.value = payload.party

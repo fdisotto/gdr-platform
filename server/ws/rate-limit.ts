@@ -3,7 +3,7 @@ export interface RateLimiter {
   clear(key: string): void
 }
 
-export function createRateLimiter(opts: { windowMs: number; maxHits: number }): RateLimiter {
+export function createRateLimiter(opts: { windowMs: number, maxHits: number }): RateLimiter {
   const store = new Map<string, number[]>()
 
   function prune(timestamps: number[], now: number): number[] {
@@ -25,6 +25,6 @@ export function createRateLimiter(opts: { windowMs: number; maxHits: number }): 
     },
     clear(key) {
       store.delete(key)
-    },
+    }
   }
 }

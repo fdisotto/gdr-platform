@@ -26,8 +26,14 @@ function forget(seed: string) {
 </script>
 
 <template>
-  <div v-if="sessions.length" class="space-y-3">
-    <h2 class="text-sm uppercase tracking-wide" style="color: var(--z-text-md)">
+  <div
+    v-if="sessions.length"
+    class="space-y-3"
+  >
+    <h2
+      class="text-sm uppercase tracking-wide"
+      style="color: var(--z-text-md)"
+    >
       Riprendi una partita
     </h2>
     <ul class="space-y-2">
@@ -38,17 +44,33 @@ function forget(seed: string) {
         style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
       >
         <div class="flex-1 min-w-0">
-          <div class="text-xs font-mono-z truncate" style="color: var(--z-text-md)">
+          <div
+            class="text-xs font-mono-z truncate"
+            style="color: var(--z-text-md)"
+          >
             {{ s.seed }}
           </div>
-          <div class="text-sm" style="color: var(--z-text-hi)">
+          <div
+            class="text-sm"
+            style="color: var(--z-text-hi)"
+          >
             Ruolo: <span style="color: var(--z-green-300)">{{ s.role }}</span>
           </div>
         </div>
-        <UButton size="sm" color="primary" variant="solid" @click="resume(s.seed)">
+        <UButton
+          size="sm"
+          color="primary"
+          variant="solid"
+          @click="resume(s.seed)"
+        >
           Riprendi
         </UButton>
-        <UButton size="sm" color="neutral" variant="ghost" @click="forget(s.seed)">
+        <UButton
+          size="sm"
+          color="neutral"
+          variant="ghost"
+          @click="forget(s.seed)"
+        >
           Dimentica
         </UButton>
       </li>

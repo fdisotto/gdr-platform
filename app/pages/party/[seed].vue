@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
-import { onBeforeRouteLeave } from 'vue-router'
+import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { useSession } from '~/composables/useSession'
 import { usePartyStore } from '~/stores/party'
 import { useChatStore } from '~/stores/chat'
@@ -52,8 +51,17 @@ onBeforeRouteLeave(() => {
     <template v-if="guardError">
       <main class="flex-1 flex items-center justify-center p-8 text-center">
         <div class="space-y-4">
-          <p class="text-sm" style="color: var(--z-blood-300)">{{ guardError }}</p>
-          <NuxtLink to="/" class="text-sm underline" style="color: var(--z-green-300)">
+          <p
+            class="text-sm"
+            style="color: var(--z-blood-300)"
+          >
+            {{ guardError }}
+          </p>
+          <NuxtLink
+            to="/"
+            class="text-sm underline"
+            style="color: var(--z-green-300)"
+          >
             Torna alla home
           </NuxtLink>
         </div>
@@ -62,13 +70,27 @@ onBeforeRouteLeave(() => {
     <template v-else>
       <PartyHeader />
       <div class="flex-1 flex flex-col overflow-hidden">
-        <section class="flex-1 flex items-center justify-center" style="background: var(--z-bg-900)">
+        <section
+          class="flex-1 flex items-center justify-center"
+          style="background: var(--z-bg-900)"
+        >
           <div class="text-center space-y-2">
-            <p class="text-sm uppercase tracking-wide" style="color: var(--z-text-md)">Area corrente</p>
-            <p class="text-2xl font-semibold" style="color: var(--z-green-300)">
+            <p
+              class="text-sm uppercase tracking-wide"
+              style="color: var(--z-text-md)"
+            >
+              Area corrente
+            </p>
+            <p
+              class="text-2xl font-semibold"
+              style="color: var(--z-green-300)"
+            >
               {{ partyStore.me?.currentAreaId ?? '…' }}
             </p>
-            <p class="text-xs" style="color: var(--z-text-lo)">
+            <p
+              class="text-xs"
+              style="color: var(--z-text-lo)"
+            >
               Connessione: {{ connection.status.value }}
             </p>
           </div>

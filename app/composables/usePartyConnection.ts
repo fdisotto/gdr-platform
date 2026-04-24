@@ -61,7 +61,9 @@ export function usePartyConnection() {
     })
 
     sock.addEventListener('error', () => {
-      try { sock.close() } catch { /* no-op */ }
+      try {
+        sock.close()
+      } catch { /* no-op */ }
     })
   }
 

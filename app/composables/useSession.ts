@@ -57,8 +57,12 @@ export function useSession() {
     else localStorage.setItem(NICKNAME_KEY, v)
   })
 
-  function setNickname(v: string) { nickname.value = v.trim() }
-  function clearNickname() { nickname.value = null }
+  function setNickname(v: string) {
+    nickname.value = v.trim()
+  }
+  function clearNickname() {
+    nickname.value = null
+  }
 
   function listSessions(): PartySession[] {
     return Object.values(readSessions())
@@ -70,8 +74,8 @@ export function useSession() {
   }
   function removeSession(seed: string) {
     const cur = readSessions()
-    delete cur[seed]
-    writeSessions(cur)
+    const { [seed]: _removed, ...rest } = cur
+    writeSessions(rest)
   }
   function getSession(seed: string): PartySession | null {
     return readSessions()[seed] ?? null
@@ -87,8 +91,8 @@ export function useSession() {
   }
   function removeMasterToken(seed: string) {
     const cur = readMasterTokens()
-    delete cur[seed]
-    writeMasterTokens(cur)
+    const { [seed]: _removed, ...rest } = cur
+    writeMasterTokens(rest)
   }
 
   return {

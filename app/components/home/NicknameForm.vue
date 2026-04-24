@@ -24,25 +24,50 @@ function reset() {
 
 <template>
   <div class="space-y-3">
-    <div v-if="session.nickname.value" class="flex items-center gap-3">
-      <span class="text-sm" style="color: var(--z-text-md)">Benvenuto,</span>
-      <span class="text-lg font-semibold" style="color: var(--z-green-300)">{{ session.nickname.value }}</span>
-      <UButton size="xs" variant="ghost" @click="reset">
+    <div
+      v-if="session.nickname.value"
+      class="flex items-center gap-3"
+    >
+      <span
+        class="text-sm"
+        style="color: var(--z-text-md)"
+      >Benvenuto,</span>
+      <span
+        class="text-lg font-semibold"
+        style="color: var(--z-green-300)"
+      >{{ session.nickname.value }}</span>
+      <UButton
+        size="xs"
+        variant="ghost"
+        @click="reset"
+      >
         Cambia
       </UButton>
     </div>
-    <form v-else class="flex gap-2" @submit.prevent="submit">
+    <form
+      v-else
+      class="flex gap-2"
+      @submit.prevent="submit"
+    >
       <UInput
         v-model="input"
         placeholder="Scegli un nickname"
         size="lg"
         class="flex-1"
       />
-      <UButton type="submit" size="lg" color="primary">
+      <UButton
+        type="submit"
+        size="lg"
+        color="primary"
+      >
         Avanti
       </UButton>
     </form>
-    <p v-if="error" class="text-sm" style="color: var(--z-blood-300)">
+    <p
+      v-if="error"
+      class="text-sm"
+      style="color: var(--z-blood-300)"
+    >
       {{ error }}
     </p>
   </div>

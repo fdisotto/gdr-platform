@@ -32,16 +32,16 @@ function classForKind(kind: string): string {
 function styleForKind(kind: string): Record<string, string> {
   switch (kind) {
     case 'emote': return { color: 'var(--z-rust-300)' }
-    case 'ooc':   return { color: 'var(--z-toxic-500)' }
-    default:      return { color: 'var(--z-text-hi)' }
+    case 'ooc': return { color: 'var(--z-toxic-500)' }
+    default: return { color: 'var(--z-text-hi)' }
   }
 }
 
 function prefixForKind(kind: string, display: string): string {
   switch (kind) {
     case 'emote': return `* ${display} `
-    case 'ooc':   return `((OOC)) ${display}: `
-    default:      return `${display}: `
+    case 'ooc': return `((OOC)) ${display}: `
+    default: return `${display}: `
   }
 }
 
@@ -69,7 +69,10 @@ watch(messages, async () => {
     class="flex flex-col"
     style="background: var(--z-bg-800); border-top: 1px solid var(--z-border); height: 45vh"
   >
-    <div class="px-4 py-2 text-xs uppercase tracking-wide" style="color: var(--z-text-md)">
+    <div
+      class="px-4 py-2 text-xs uppercase tracking-wide"
+      style="color: var(--z-text-md)"
+    >
       Chat · {{ currentAreaId || '…' }}
     </div>
     <div
@@ -83,10 +86,16 @@ watch(messages, async () => {
         :class="classForKind(m.kind)"
         :style="styleForKind(m.kind)"
       >
-        <span class="text-xs font-mono-z mr-2" style="color: var(--z-text-lo)">
+        <span
+          class="text-xs font-mono-z mr-2"
+          style="color: var(--z-text-lo)"
+        >
           {{ formatTime(m.createdAt) }}
         </span>
-        <span v-if="m.deletedAt" style="color: var(--z-text-lo); font-style: italic">
+        <span
+          v-if="m.deletedAt"
+          style="color: var(--z-text-lo); font-style: italic"
+        >
           [messaggio rimosso]
         </span>
         <template v-else>
@@ -94,7 +103,11 @@ watch(messages, async () => {
           <span>{{ m.body }}</span>
         </template>
       </div>
-      <div v-if="!messages.length" class="text-xs italic" style="color: var(--z-text-lo)">
+      <div
+        v-if="!messages.length"
+        class="text-xs italic"
+        style="color: var(--z-text-lo)"
+      >
         Nessun messaggio in questa area.
       </div>
     </div>
@@ -138,7 +151,11 @@ watch(messages, async () => {
         class="flex-1"
         autocomplete="off"
       />
-      <UButton type="submit" size="sm" color="primary">
+      <UButton
+        type="submit"
+        size="sm"
+        color="primary"
+      >
         Invia
       </UButton>
     </form>
