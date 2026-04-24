@@ -48,22 +48,21 @@ const { weather } = useAreaWeather(() => currentAreaId.value as AreaId | null)
 
 function onAreaClick(areaId: AreaId) {
   if (!partyStore.me) return
-  const isMaster = partyStore.me.role === 'master'
-  if (isMaster) {
+  const isMasterRole = partyStore.me.role === 'master'
+  // Master: sempre apre detail (per gestire la zona)
+  if (isMasterRole) {
     viewStore.openArea(areaId)
     return
   }
+  // User: click utile solo se può effettivamente spostarsi.
   const myArea = partyStore.me.currentAreaId as AreaId
-  if (myArea === areaId) {
-    viewStore.openArea(areaId)
-    return
-  }
+  if (myArea === areaId) return // già qui, niente da fare
   const adj = new Set<string>(ADJACENCY[myArea] ?? [])
-  if (adj.has(areaId)) {
-    connection.send({ type: 'move:request', toAreaId: areaId })
-    return
-  }
-  viewStore.openArea(areaId)
+  if (!adj.has(areaId)) return // non raggiungibile, no-op
+  // Non chiusa (lo stato chiuso lo gestisce il server, qui evitiamo richieste inutili)
+  const targetState = stateById.value.get(areaId)
+  if (targetState?.status === 'closed') return
+  connection.send({ type: 'move:request', toAreaId: areaId })
 }
 </script>
 

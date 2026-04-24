@@ -38,15 +38,15 @@ function opacity(): number {
 function cursorStyle(): string {
   // Master: sempre pointer (click apre detail per gestire)
   if (props.isMaster) return 'cursor: pointer'
-  // Area corrente: solo "ispeziona", niente navigazione
+  // Area corrente: niente azione
   if (props.isCurrent) return 'cursor: default'
   const s = status()
   // Aree chiuse per non-master: ingresso negato
   if (s === 'closed') return 'cursor: not-allowed'
   // Aree adiacenti raggiungibili
   if (props.isAdjacent) return 'cursor: pointer'
-  // Altrimenti click = apri detail read-only
-  return 'cursor: help'
+  // Aree remote: niente click utile per il giocatore
+  return 'cursor: default'
 }
 </script>
 
