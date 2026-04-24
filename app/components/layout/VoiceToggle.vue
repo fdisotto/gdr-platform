@@ -9,8 +9,10 @@ const party = usePartyStore()
 const voice = useVoiceChat()
 const open = ref(false)
 const wrapper = ref<HTMLElement | null>(null)
+const capturingKey = ref(false)
 
 const isMasterGlobal = computed(() => party.me?.role === 'master' && settings.masterVoiceScope === 'global')
+const isPtt = computed(() => settings.voiceMode === 'ptt')
 
 const visiblePeers = computed(() => {
   if (!party.me) return []
@@ -28,12 +30,53 @@ const speakingCount = computed(() => {
   return n
 })
 
+// Rende event.code in etichette IT leggibili per lo shortcut PTT.
+function keyLabel(code: string): string {
+  if (code === 'Space') return 'Spazio'
+  if (code.startsWith('Key')) return code.slice(3)
+  if (code.startsWith('Digit')) return code.slice(5)
+  if (code === 'AltLeft' || code === 'AltRight') return 'Alt'
+  if (code === 'ControlLeft' || code === 'ControlRight') return 'Ctrl'
+  if (code === 'ShiftLeft' || code === 'ShiftRight') return 'Shift'
+  if (code === 'MetaLeft' || code === 'MetaRight') return 'Meta'
+  return code
+}
+const pttKeyLabel = computed(() => keyLabel(settings.pttKey))
+
 function toggleOn() {
   if (settings.voiceEnabled) {
     settings.disableVoice()
   } else {
     settings.enableVoice()
   }
+}
+
+// Hold-to-talk (mobile): pointerdown inizia trasmissione, pointerup/cancel la ferma
+function onTalkPointerDown(e: PointerEvent) {
+  e.preventDefault()
+  voice.startTransmit()
+  ;(e.target as Element | null)?.setPointerCapture?.(e.pointerId)
+}
+function onTalkPointerUp(e: PointerEvent) {
+  voice.stopTransmit()
+  ;(e.target as Element | null)?.releasePointerCapture?.(e.pointerId)
+}
+
+// Cattura la prossima combinazione di tasti per lo shortcut PTT
+function startCaptureKey() {
+  capturingKey.value = true
+}
+function onCaptureKeyDown(e: KeyboardEvent) {
+  if (!capturingKey.value) return
+  e.preventDefault()
+  e.stopPropagation()
+  if (e.code === 'Escape') {
+    capturingKey.value = false
+    return
+  }
+  // ignora modifier-only: ci sono scenari (es. Tab) in cui ha senso ma limitiamo ai tasti utili
+  settings.setPttKey(e.code)
+  capturingKey.value = false
 }
 
 function toggleOpen(e: Event) {
@@ -57,9 +100,14 @@ function onKey(e: KeyboardEvent) {
 if (typeof window !== 'undefined') {
   document.addEventListener('mousedown', onDocClick)
   window.addEventListener('keydown', onKey)
+  // Il capture keydown per il PTT shortcut deve intercettare PRIMA del
+  // listener globale in useVoiceChat (capture: true lo mette al bubbling
+  // outer). Registriamo in cattura globale.
+  window.addEventListener('keydown', onCaptureKeyDown, { capture: true })
   onBeforeUnmount(() => {
     document.removeEventListener('mousedown', onDocClick)
     window.removeEventListener('keydown', onKey)
+    window.removeEventListener('keydown', onCaptureKeyDown, { capture: true })
   })
 }
 </script>
@@ -74,9 +122,11 @@ if (typeof window !== 'undefined') {
         type="button"
         class="text-xs px-2 py-1 rounded flex items-center gap-1"
         :title="settings.voiceEnabled ? 'Disattiva voce' : 'Attiva voce'"
-        :style="settings.voiceEnabled
-          ? 'background: var(--z-green-700); color: var(--z-green-100)'
-          : 'background: var(--z-bg-700); color: var(--z-text-md)'"
+        :style="voice.isTransmitting.value
+          ? 'background: var(--z-blood-500); color: var(--z-bg-900)'
+          : settings.voiceEnabled
+            ? 'background: var(--z-green-700); color: var(--z-green-100)'
+            : 'background: var(--z-bg-700); color: var(--z-text-md)'"
         @click="toggleOn"
       >
         <UIcon
@@ -84,9 +134,35 @@ if (typeof window !== 'undefined') {
           class="size-4"
         />
         <span
-          v-if="speakingCount > 0"
+          v-if="voice.isTransmitting.value"
+          class="font-mono-z"
+        >●</span>
+        <span
+          v-else-if="speakingCount > 0"
           class="font-mono-z"
         >&#x25CF;{{ speakingCount }}</span>
+      </button>
+      <!-- Hold-to-talk: visibile solo in PTT mode + voice enabled. Su mobile
+           l'utente tocca e tiene premuto questo bottone per parlare. -->
+      <button
+        v-if="settings.voiceEnabled && isPtt"
+        type="button"
+        class="text-xs px-2 py-1 rounded flex items-center gap-1 select-none"
+        :title="`Tieni premuto per parlare (${pttKeyLabel})`"
+        :style="voice.isTransmitting.value
+          ? 'background: var(--z-blood-500); color: var(--z-bg-900)'
+          : 'background: var(--z-rust-700); color: var(--z-rust-300)'"
+        style="touch-action: none"
+        @pointerdown="onTalkPointerDown"
+        @pointerup="onTalkPointerUp"
+        @pointercancel="onTalkPointerUp"
+        @pointerleave="onTalkPointerUp"
+      >
+        <UIcon
+          name="i-lucide-radio"
+          class="size-4"
+        />
+        <span class="hidden sm:inline">Parla</span>
       </button>
       <button
         v-if="settings.voiceEnabled"
@@ -138,6 +214,55 @@ if (typeof window !== 'undefined') {
         >
           {{ scope === 'zone' ? 'Zona' : 'Globale' }}
         </button>
+      </div>
+
+      <!-- Modalità mic: continua vs push-to-talk -->
+      <div class="mb-3">
+        <h5
+          class="text-xs uppercase tracking-wide mb-1"
+          style="color: var(--z-text-md)"
+        >
+          Modalità
+        </h5>
+        <div class="flex items-center gap-1">
+          <button
+            v-for="mode in (['continuous', 'ptt'] as const)"
+            :key="mode"
+            type="button"
+            class="text-xs px-2 py-0.5 rounded"
+            :style="settings.voiceMode === mode
+              ? 'background: var(--z-green-700); color: var(--z-green-100)'
+              : 'background: var(--z-bg-800); color: var(--z-text-md)'"
+            :title="mode === 'continuous' ? 'Mic sempre aperto mentre voce attiva' : 'Premi e tieni per parlare'"
+            @click="settings.setVoiceMode(mode)"
+          >
+            {{ mode === 'continuous' ? 'Continua' : 'Push-to-talk' }}
+          </button>
+        </div>
+        <div
+          v-if="isPtt"
+          class="mt-2 flex items-center gap-2 text-xs"
+        >
+          <span style="color: var(--z-text-lo)">Scorciatoia:</span>
+          <button
+            type="button"
+            class="px-2 py-0.5 rounded font-mono-z"
+            :style="capturingKey
+              ? 'background: var(--z-rust-500); color: var(--z-bg-900)'
+              : 'background: var(--z-bg-800); color: var(--z-text-hi)'"
+            :title="capturingKey ? 'Premi un tasto (ESC per annullare)' : 'Cambia scorciatoia'"
+            @click="startCaptureKey"
+          >
+            {{ capturingKey ? '…premi un tasto' : pttKeyLabel }}
+          </button>
+        </div>
+        <p
+          v-if="isPtt"
+          class="mt-1 text-xs"
+          style="color: var(--z-text-lo)"
+        >
+          Premi <span class="font-mono-z">{{ pttKeyLabel }}</span> o tieni premuto il pulsante <span style="color: var(--z-rust-300)">Parla</span> nell'header.
+        </p>
       </div>
       <ul
         v-if="visiblePeers.length"

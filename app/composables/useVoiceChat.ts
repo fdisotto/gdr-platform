@@ -15,7 +15,19 @@ const localStreamRef: Ref<MediaStream | null> = ref(null)
 const peerStatesRef: Ref<Map<string, PeerState>> = ref(new Map())
 const speakingPeersRef: Ref<Set<string>> = ref(new Set())
 const errorRef: Ref<string | null> = ref(null)
+// isTransmitting: true se il microfono locale sta effettivamente inviando
+// audio verso i peer. In modalità continuous coincide con voiceEnabled.
+// In modalità ptt, è true solo mentre l'utente tiene premuto il tasto
+// configurato (desktop) o l'icona mic (mobile).
+const isTransmittingRef: Ref<boolean> = ref(false)
 let audioContextForVad: AudioContext | null = null
+
+function applyTrackEnabled(enabled: boolean) {
+  if (!localStreamRef.value) return
+  for (const t of localStreamRef.value.getAudioTracks()) {
+    t.enabled = enabled
+  }
+}
 
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' }
@@ -33,6 +45,9 @@ async function ensureLocalStream(): Promise<MediaStream | null> {
   if (localStreamRef.value) return localStreamRef.value
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+    // Parti in silenzio: i watch in useVoiceChat abiliteranno i track in
+    // base a mode (continuous → on, ptt → on solo durante press).
+    for (const t of stream.getAudioTracks()) t.enabled = false
     localStreamRef.value = stream
     return stream
   } catch (e) {
@@ -234,6 +249,31 @@ export function useVoiceChat() {
     applyMutes(settings)
   }
 
+  // Gestione track.enabled in base a voiceEnabled + voiceMode + isTransmitting.
+  // continuous: track enabled = voiceEnabled
+  // ptt: track enabled = voiceEnabled && isTransmitting
+  function refreshTrackEnabled() {
+    if (!settings.voiceEnabled) {
+      applyTrackEnabled(false)
+      return
+    }
+    if (settings.voiceMode === 'continuous') {
+      applyTrackEnabled(true)
+    } else {
+      applyTrackEnabled(isTransmittingRef.value)
+    }
+  }
+
+  function startTransmit() {
+    if (!settings.voiceEnabled) return
+    isTransmittingRef.value = true
+    refreshTrackEnabled()
+  }
+  function stopTransmit() {
+    isTransmittingRef.value = false
+    refreshTrackEnabled()
+  }
+
   if (!installed) {
     installed = true
 
@@ -248,6 +288,20 @@ export function useVoiceChat() {
       { immediate: true, flush: 'post' }
     )
 
+    // Sync track.enabled quando cambia mode o voiceEnabled.
+    // In PTT, alla disattivazione della voce azzera anche isTransmitting
+    // per non lasciare lo stato sospeso.
+    watch(
+      () => [settings.voiceEnabled, settings.voiceMode],
+      () => {
+        if (!settings.voiceEnabled) isTransmittingRef.value = false
+        refreshTrackEnabled()
+      }
+    )
+    watch(isTransmittingRef, () => {
+      refreshTrackEnabled()
+    })
+
     watch(
       () => [settings.voiceMutedPeers.size, JSON.stringify(settings.voicePerPeerVolumes)],
       () => { applyMutes(settings) }
@@ -261,6 +315,33 @@ export function useVoiceChat() {
         }>).detail
         void handleSignal(connection, detail.fromPlayerId, detail.signal)
       })
+
+      // Listener globali tastiera per push-to-talk: attivi solo quando
+      // voiceEnabled E voiceMode === 'ptt'. Ignorano keypress ripetuti
+      // (repeat) e input in campi testuali per non interferire con la chat.
+      const isTextTarget = (t: EventTarget | null) => {
+        if (!t || !(t as HTMLElement).tagName) return false
+        const tag = (t as HTMLElement).tagName
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return true
+        if ((t as HTMLElement).isContentEditable) return true
+        return false
+      }
+      window.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (!settings.voiceEnabled || settings.voiceMode !== 'ptt') return
+        if (e.repeat) return
+        if (e.code !== settings.pttKey) return
+        if (isTextTarget(e.target)) return
+        startTransmit()
+      })
+      window.addEventListener('keyup', (e: KeyboardEvent) => {
+        if (settings.voiceMode !== 'ptt') return
+        if (e.code !== settings.pttKey) return
+        stopTransmit()
+      })
+      // Safety: se la finestra perde focus (alt-tab), ferma la trasmissione
+      window.addEventListener('blur', () => {
+        if (isTransmittingRef.value) stopTransmit()
+      })
     }
   }
 
@@ -268,6 +349,9 @@ export function useVoiceChat() {
     localStream: localStreamRef,
     peers: peerStatesRef,
     speakingPeers: speakingPeersRef,
-    error: errorRef
+    error: errorRef,
+    isTransmitting: isTransmittingRef,
+    startTransmit,
+    stopTransmit
   }
 }

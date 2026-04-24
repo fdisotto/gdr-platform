@@ -9,6 +9,10 @@ interface StoredSettings {
   weatherVolume: number
   voiceEnabled: boolean
   masterVoiceScope: 'zone' | 'global'
+  // Modalità voce: continuous = mic sempre aperto; ptt = push-to-talk (tastiera desktop o hold icona mobile)
+  voiceMode: 'continuous' | 'ptt'
+  // Nome tasto (event.code) per il push-to-talk su desktop. Default Space.
+  pttKey: string
   // Notifica suono all'arrivo di messaggi/missive
   notificationsEnabled: boolean
   // Se true: beep anche per messaggi di chat generali; se false: solo DM/whisper diretti
@@ -21,6 +25,8 @@ function readStored(): StoredSettings {
     weatherVolume: 0,
     voiceEnabled: false,
     masterVoiceScope: 'zone',
+    voiceMode: 'continuous',
+    pttKey: 'Space',
     notificationsEnabled: true,
     notificationsChatAll: false
   }
@@ -35,11 +41,15 @@ function readStored(): StoredSettings {
     }
     weatherVolume = Math.min(1, Math.max(0, weatherVolume))
     const masterVoiceScope = parsed.masterVoiceScope === 'global' ? 'global' : 'zone'
+    const voiceMode = parsed.voiceMode === 'ptt' ? 'ptt' : 'continuous'
+    const pttKey = typeof parsed.pttKey === 'string' && parsed.pttKey.length > 0 ? parsed.pttKey : 'Space'
     return {
       colorNicknames: parsed.colorNicknames ?? true,
       weatherVolume,
       voiceEnabled: false, // never restored: requires fresh gesture each session
       masterVoiceScope,
+      voiceMode,
+      pttKey,
       notificationsEnabled: parsed.notificationsEnabled ?? true,
       notificationsChatAll: parsed.notificationsChatAll ?? false
     }
@@ -57,6 +67,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const voicePerPeerVolumes = ref<Record<string, number>>({})
   const voiceMutedPeers = ref<Set<string>>(new Set())
   const masterVoiceScope = ref<'zone' | 'global'>(initial.masterVoiceScope)
+  const voiceMode = ref<'continuous' | 'ptt'>(initial.voiceMode)
+  const pttKey = ref<string>(initial.pttKey)
   const notificationsEnabled = ref(initial.notificationsEnabled)
   const notificationsChatAll = ref(initial.notificationsChatAll)
 
@@ -66,6 +78,8 @@ export const useSettingsStore = defineStore('settings', () => {
       colorNicknames: colorNicknames.value,
       weatherVolume: weatherVolume.value,
       masterVoiceScope: masterVoiceScope.value,
+      voiceMode: voiceMode.value,
+      pttKey: pttKey.value,
       notificationsEnabled: notificationsEnabled.value,
       notificationsChatAll: notificationsChatAll.value
       // voiceEnabled not persisted: requires fresh gesture each session
@@ -74,6 +88,8 @@ export const useSettingsStore = defineStore('settings', () => {
   watch(colorNicknames, persist)
   watch(weatherVolume, persist)
   watch(masterVoiceScope, persist)
+  watch(voiceMode, persist)
+  watch(pttKey, persist)
   watch(notificationsEnabled, persist)
   watch(notificationsChatAll, persist)
 
@@ -98,6 +114,12 @@ export const useSettingsStore = defineStore('settings', () => {
   }
   function setMasterVoiceScope(scope: 'zone' | 'global') {
     masterVoiceScope.value = scope
+  }
+  function setVoiceMode(mode: 'continuous' | 'ptt') {
+    voiceMode.value = mode
+  }
+  function setPttKey(key: string) {
+    pttKey.value = key
   }
   function toggleNotifications() {
     notificationsEnabled.value = !notificationsEnabled.value
@@ -125,6 +147,7 @@ export const useSettingsStore = defineStore('settings', () => {
     voiceEnabled, enableVoice, disableVoice,
     voicePerPeerVolumes, voiceMutedPeers, setPeerVolume, togglePeerMute,
     masterVoiceScope, setMasterVoiceScope,
+    voiceMode, pttKey, setVoiceMode, setPttKey,
     notificationsEnabled, notificationsChatAll, toggleNotifications, toggleNotificationsChatAll
   }
 })
