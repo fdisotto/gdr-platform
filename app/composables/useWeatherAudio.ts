@@ -123,12 +123,15 @@ export function useWeatherAudio() {
     ensureRain()
     ensureWind()
     if (state.master) {
-      setLevel(state.master, settings.weatherVolume)
+      // Curva esponenziale: percezione lineare dello slider (0..1) su gain
+      // molto più ridotto. White-noise filtrato è saliente, serve molto basso.
+      const masterGain = settings.weatherVolume ** 2.5
+      setLevel(state.master, masterGain)
     }
     const isRain = code === 'rain' || code === 'storm'
     const isWindy = code === 'storm' || code === 'fog' || code === 'ashfall'
-    setLevel(state.rainGain, isRain ? Math.max(0.2, Math.min(0.6, intensity * 0.6)) : 0)
-    setLevel(state.windGain, isWindy ? Math.max(0.1, Math.min(0.3, intensity * 0.3)) : 0)
+    setLevel(state.rainGain, isRain ? Math.max(0.05, Math.min(0.15, intensity * 0.15)) : 0)
+    setLevel(state.windGain, isWindy ? Math.max(0.03, Math.min(0.08, intensity * 0.08)) : 0)
   }
 
   function thunder() {
@@ -143,7 +146,7 @@ export function useWeatherAudio() {
     oscBass.frequency.exponentialRampToValueAtTime(30, now + 2)
     const oscGain = ctx.createGain()
     oscGain.gain.value = 0
-    oscGain.gain.linearRampToValueAtTime(0.7, now + 0.05)
+    oscGain.gain.linearRampToValueAtTime(0.3, now + 0.05)
     oscGain.gain.exponentialRampToValueAtTime(0.001, now + 2.5)
 
     const noise = createWhiteNoise(ctx)
@@ -152,7 +155,7 @@ export function useWeatherAudio() {
     noiseFilter.frequency.value = 800
     const noiseGain = ctx.createGain()
     noiseGain.gain.value = 0
-    noiseGain.gain.linearRampToValueAtTime(0.4, now + 0.02)
+    noiseGain.gain.linearRampToValueAtTime(0.18, now + 0.02)
     noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 1.5)
 
     oscBass.connect(oscGain)

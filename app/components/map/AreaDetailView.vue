@@ -16,8 +16,10 @@ const viewStore = useViewStore()
 const playerPositionsStore = usePlayerPositionsStore()
 const connection = usePartyConnection()
 
-const VIEWBOX_W = 800
-const VIEWBOX_H = 500
+// ViewBox grande così la zona copre tutta la larghezza disponibile.
+// preserveAspectRatio="none" sotto stretcha l'svg al contenitore.
+const VIEWBOX_W = 1600
+const VIEWBOX_H = 900
 
 const area = computed(() => {
   const id = viewStore.viewedAreaId
@@ -158,7 +160,13 @@ function svgPoint(e: MouseEvent): { x: number, y: number } | null {
   const ctm = svg.getScreenCTM()?.inverse()
   if (!ctm) return null
   const loc = pt.matrixTransform(ctm)
-  return { x: loc.x, y: loc.y }
+  // Clamp dentro il viewBox così zombie e marker non finiscono mai fuori
+  // dalla zona disegnata anche se il mouse esce per qualche pixel.
+  const margin = 8
+  return {
+    x: Math.max(margin, Math.min(VIEWBOX_W - margin, loc.x)),
+    y: Math.max(margin, Math.min(VIEWBOX_H - margin, loc.y))
+  }
 }
 
 function flushPaintBatch() {
@@ -606,7 +614,7 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
     <svg
       id="area-detail-svg"
       :viewBox="`0 0 ${VIEWBOX_W} ${VIEWBOX_H}`"
-      preserveAspectRatio="xMidYMid meet"
+      preserveAspectRatio="none"
       style="width: 100%; flex: 1; display: block; min-height: 0"
       :style="cursorForTool"
       @mousedown="onSvgMouseDown"

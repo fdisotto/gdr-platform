@@ -4,6 +4,7 @@ import { useSettingsStore } from '~/stores/settings'
 
 const settings = useSettingsStore()
 const open = ref(false)
+const wrapper = ref<HTMLElement | null>(null)
 
 const icon = computed(() => {
   const v = settings.weatherVolume
@@ -32,14 +33,25 @@ function onKeyDown(e: KeyboardEvent) {
   if (e.key === 'Escape') close()
 }
 
+function onDocClick(e: MouseEvent) {
+  if (!open.value) return
+  if (!wrapper.value) return
+  if (wrapper.value.contains(e.target as Node)) return
+  close()
+}
+
 if (typeof window !== 'undefined') {
   window.addEventListener('keydown', onKeyDown)
-  onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
+  document.addEventListener('mousedown', onDocClick)
+  onBeforeUnmount(() => {
+    window.removeEventListener('keydown', onKeyDown)
+    document.removeEventListener('mousedown', onDocClick)
+  })
 }
 </script>
 
 <template>
-  <div class="relative">
+  <div ref="wrapper" class="relative">
     <button
       type="button"
       class="text-xs px-2 py-1 rounded flex items-center gap-1"
