@@ -9,6 +9,7 @@ import { useZombiesStore } from '~/stores/zombies'
 import { usePlayerPositionsStore } from '~/stores/player-positions'
 import { useWeatherOverridesStore } from '~/stores/weather-overrides'
 import { useMasterToolsStore } from '~/stores/master-tools'
+import { useFeedbackStore } from '~/stores/feedback'
 import { usePartyConnection } from '~/composables/usePartyConnection'
 import PartyHeader from '~/components/layout/PartyHeader.vue'
 import ConnectionBanner from '~/components/layout/ConnectionBanner.vue'
@@ -28,6 +29,7 @@ const zombiesStore = useZombiesStore()
 const playerPositionsStore = usePlayerPositionsStore()
 const weatherOverridesStore = useWeatherOverridesStore()
 const masterToolsStore = useMasterToolsStore()
+const feedbackStore = useFeedbackStore()
 const connection = usePartyConnection()
 
 const guardError = ref<string | null>(null)
@@ -62,6 +64,7 @@ onBeforeRouteLeave(() => {
   playerPositionsStore.reset()
   weatherOverridesStore.reset()
   masterToolsStore.reset()
+  feedbackStore.reset()
   return true
 })
 </script>

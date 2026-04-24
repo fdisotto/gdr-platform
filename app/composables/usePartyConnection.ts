@@ -7,6 +7,8 @@ import { usePlayerPositionsStore } from '~/stores/player-positions'
 import { useWeatherOverridesStore } from '~/stores/weather-overrides'
 import { useViewStore } from '~/stores/view'
 import { playNotificationSound } from '~/composables/useNotificationSound'
+import { useErrorFeedback } from '~/composables/useErrorFeedback'
+import { useFeedbackStore } from '~/stores/feedback'
 import type { Zombie, PlayerPosition } from '~~/shared/protocol/ws'
 
 interface ConnectOptions {
@@ -48,6 +50,8 @@ export function usePartyConnection() {
   const playerPositionsStore = usePlayerPositionsStore()
   const weatherOverridesStore = useWeatherOverridesStore()
   const viewStore = useViewStore()
+  const errorFeedback = useErrorFeedback()
+  const feedbackStore = useFeedbackStore()
 
   function scheduleReconnect() {
     if (closedFlag) return
@@ -265,17 +269,30 @@ export function usePartyConnection() {
       }
       case 'player:muted': {
         const p = data as { playerId: string, muted: boolean, mutedUntil: number | null }
-        // TODO Plan 6: toast notification
-        console.info('[ws] player muted', p)
+        // Toast solo per self: se mi hanno mutato/riabilitato io
+        if (partyStore.me && p.playerId === partyStore.me.id) {
+          if (p.muted) {
+            const until = p.mutedUntil
+              ? ` fino alle ${new Date(p.mutedUntil).toLocaleTimeString()}`
+              : ' a tempo indeterminato'
+            feedbackStore.pushToast({
+              level: 'danger',
+              title: 'Sei stato silenziato' + until,
+              ttlMs: 7000
+            })
+          } else {
+            feedbackStore.pushToast({
+              level: 'info',
+              title: 'Puoi di nuovo scrivere in chat',
+              ttlMs: 4000
+            })
+          }
+        }
         break
       }
       case 'kicked': {
         const p = data as { reason: string | null }
-        console.warn('[ws] you were kicked:', p.reason)
-        if (typeof window !== 'undefined') {
-          window.alert(`Sei stato espulso dalla party${p.reason ? ': ' + p.reason : ''}.`)
-          window.location.href = '/'
-        }
+        errorFeedback.reportKicked(p.reason)
         break
       }
       case 'weather:updated': {
@@ -305,7 +322,8 @@ export function usePartyConnection() {
         break
       }
       case 'error': {
-        console.warn('[ws error]', data)
+        const p = data as { code?: string, detail?: string }
+        errorFeedback.reportError(p.code ?? 'unknown', p.detail ?? null)
         break
       }
     }

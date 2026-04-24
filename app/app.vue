@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import FeedbackToaster from '~/components/layout/FeedbackToaster.vue'
+
 useHead({
   htmlAttrs: {
     lang: 'it',
@@ -21,5 +23,6 @@ useSeoMeta({
 <template>
   <UApp>
     <NuxtPage />
+    <FeedbackToaster />
   </UApp>
 </template>
