@@ -246,6 +246,21 @@ export function usePartyConnection() {
         }
         break
       }
+      case 'player:muted': {
+        const p = data as { playerId: string, muted: boolean, mutedUntil: number | null }
+        // TODO Plan 6: toast notification
+        console.info('[ws] player muted', p)
+        break
+      }
+      case 'kicked': {
+        const p = data as { reason: string | null }
+        console.warn('[ws] you were kicked:', p.reason)
+        if (typeof window !== 'undefined') {
+          window.alert(`Sei stato espulso dalla party${p.reason ? ': ' + p.reason : ''}.`)
+          window.location.href = '/'
+        }
+        break
+      }
       case 'voice:signal': {
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('gdr:voice-signal', { detail: data }))

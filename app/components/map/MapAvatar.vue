@@ -10,6 +10,7 @@ interface Props {
   isSelf: boolean
 }
 const props = defineProps<Props>()
+const emit = defineEmits<{ (e: 'click', ev: MouseEvent): void }>()
 
 const AVATAR_COLORS = [
   '#7cbe79', '#9aa13a', '#d4965b', '#a8572a',
@@ -38,7 +39,11 @@ const isMaster = computed(() => props.player.role === 'master')
 </script>
 
 <template>
-  <g :transform="`translate(${area.svg.x + position.x}, ${area.svg.y + position.y})`">
+  <g
+    :transform="`translate(${area.svg.x + position.x}, ${area.svg.y + position.y})`"
+    style="cursor: pointer"
+    @click="(ev: MouseEvent) => emit('click', ev)"
+  >
     <title>{{ player.nickname }}{{ isMaster ? ' (master)' : '' }}</title>
     <circle
       r="7"

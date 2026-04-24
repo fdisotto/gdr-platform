@@ -194,6 +194,29 @@ function commandToWsEvent(cmd: SlashCommand, areaId: string | null): Record<stri
       return { type: 'master:area', areaId: cmd.areaId, status: 'closed' }
     case 'open':
       return { type: 'master:area', areaId: cmd.areaId, status: 'intact' }
+    case 'mute': {
+      const targetId = resolveTargetPlayerId(cmd.target)
+      if (!targetId) return { error: `giocatore non trovato: ${cmd.target}` }
+      return { type: 'master:mute', playerId: targetId, minutes: cmd.minutes }
+    }
+    case 'unmute': {
+      const targetId = resolveTargetPlayerId(cmd.target)
+      if (!targetId) return { error: `giocatore non trovato: ${cmd.target}` }
+      return { type: 'master:unmute', playerId: targetId }
+    }
+    case 'kick': {
+      const targetId = resolveTargetPlayerId(cmd.target)
+      if (!targetId) return { error: `giocatore non trovato: ${cmd.target}` }
+      return { type: 'master:kick', playerId: targetId, reason: cmd.reason }
+    }
+    case 'ban': {
+      const targetId = resolveTargetPlayerId(cmd.target)
+      if (!targetId) return { error: `giocatore non trovato: ${cmd.target}` }
+      return { type: 'master:ban', playerId: targetId, reason: cmd.reason }
+    }
+    case 'unban': {
+      return { type: 'master:unban', nicknameLower: cmd.target.toLowerCase() }
+    }
     default:
       return { error: 'comando master non ancora disponibile in questa versione' }
   }

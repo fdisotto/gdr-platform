@@ -327,6 +327,73 @@ export const VoiceSignalEvent = z.object({
 })
 export type VoiceSignalEvent = z.infer<typeof VoiceSignalEvent>
 
+export const MasterDeleteMessageEvent = z.object({
+  type: z.literal('master:delete-message'),
+  messageId: z.string()
+})
+export type MasterDeleteMessageEvent = z.infer<typeof MasterDeleteMessageEvent>
+
+export const MasterEditMessageEvent = z.object({
+  type: z.literal('master:edit-message'),
+  messageId: z.string(),
+  newBody: z.string().min(1).max(2000)
+})
+export type MasterEditMessageEvent = z.infer<typeof MasterEditMessageEvent>
+
+export const MasterMuteEvent = z.object({
+  type: z.literal('master:mute'),
+  playerId: z.string(),
+  minutes: z.number().int().min(1).max(10080).nullable() // null = permanente
+})
+export type MasterMuteEvent = z.infer<typeof MasterMuteEvent>
+
+export const MasterUnmuteEvent = z.object({
+  type: z.literal('master:unmute'),
+  playerId: z.string()
+})
+export type MasterUnmuteEvent = z.infer<typeof MasterUnmuteEvent>
+
+export const MasterKickEvent = z.object({
+  type: z.literal('master:kick'),
+  playerId: z.string(),
+  reason: z.string().nullable().optional()
+})
+export type MasterKickEvent = z.infer<typeof MasterKickEvent>
+
+export const MasterBanEvent = z.object({
+  type: z.literal('master:ban'),
+  playerId: z.string(),
+  reason: z.string().nullable().optional()
+})
+export type MasterBanEvent = z.infer<typeof MasterBanEvent>
+
+export const MasterUnbanEvent = z.object({
+  type: z.literal('master:unban'),
+  nicknameLower: z.string()
+})
+export type MasterUnbanEvent = z.infer<typeof MasterUnbanEvent>
+
+// Server → client
+export const MessageUpdateEvent = z.object({
+  type: z.literal('message:update'),
+  message: MessageRowSchema
+})
+export type MessageUpdateEvent = z.infer<typeof MessageUpdateEvent>
+
+export const PlayerMutedEvent = z.object({
+  type: z.literal('player:muted'),
+  playerId: z.string(),
+  muted: z.boolean(),
+  mutedUntil: z.number().nullable()
+})
+export type PlayerMutedEvent = z.infer<typeof PlayerMutedEvent>
+
+export const KickedEvent = z.object({
+  type: z.literal('kicked'),
+  reason: z.string().nullable()
+})
+export type KickedEvent = z.infer<typeof KickedEvent>
+
 export const ServerEvent = z.discriminatedUnion('type', [
   StateInitEvent, MessageNewEvent, TimeTickEvent, ServerErrorEvent,
   PlayerJoinedEvent, PlayerLeftEvent, PlayerMovedEvent,
@@ -334,7 +401,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   ZombieSpawnedEvent, ZombieRemovedEvent,
   PlayerPlacedEvent,
   ZombieMovedEvent, ZombiesBatchSpawnedEvent,
-  VoiceSignalEvent
+  VoiceSignalEvent,
+  MessageUpdateEvent, PlayerMutedEvent, KickedEvent
 ])
 export type ServerEvent = z.infer<typeof ServerEvent>
 
@@ -343,6 +411,9 @@ export const ClientEvent = z.discriminatedUnion('type', [
   MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent,
   MasterPlacePlayerEvent,
   MasterMoveZombieEvent, MasterSpawnZombiesEvent,
-  VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent
+  VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent,
+  MasterDeleteMessageEvent, MasterEditMessageEvent,
+  MasterMuteEvent, MasterUnmuteEvent,
+  MasterKickEvent, MasterBanEvent, MasterUnbanEvent
 ])
 export type ClientEvent = z.infer<typeof ClientEvent>

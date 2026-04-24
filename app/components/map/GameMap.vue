@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onBeforeUnmount } from 'vue'
 import { AREAS, ADJACENCY, type AreaId } from '~~/shared/map/areas'
 import { usePartyStore } from '~/stores/party'
 import { useViewStore } from '~/stores/view'
@@ -16,6 +16,68 @@ const party = usePartyStore()
 const partyStore = party
 const viewStore = useViewStore()
 const connection = usePartyConnection()
+
+// Master player actions menu
+interface PlayerSnapshot {
+  id: string
+  nickname: string
+  role: 'user' | 'master'
+  currentAreaId: string
+}
+const playerMenu = ref<{ playerId: string, nickname: string, role: string, isMuted: boolean, x: number, y: number } | null>(null)
+
+function onAvatarClick(e: MouseEvent, p: PlayerSnapshot) {
+  if (party.me?.role !== 'master' || p.id === party.me.id) return
+  e.stopPropagation()
+  playerMenu.value = {
+    playerId: p.id,
+    nickname: p.nickname,
+    role: p.role,
+    isMuted: false,
+    x: e.clientX,
+    y: e.clientY
+  }
+}
+
+function closePlayerMenu() {
+  playerMenu.value = null
+}
+
+function muteSelected(minutes: number | null) {
+  if (!playerMenu.value) return
+  connection.send({ type: 'master:mute', playerId: playerMenu.value.playerId, minutes })
+  closePlayerMenu()
+}
+function unmuteSelected() {
+  if (!playerMenu.value) return
+  connection.send({ type: 'master:unmute', playerId: playerMenu.value.playerId })
+  closePlayerMenu()
+}
+function kickSelected() {
+  if (!playerMenu.value) return
+  if (!confirm(`Espellere ${playerMenu.value.nickname}?`)) return
+  connection.send({ type: 'master:kick', playerId: playerMenu.value.playerId, reason: null })
+  closePlayerMenu()
+}
+function banSelected() {
+  if (!playerMenu.value) return
+  if (!confirm(`Bannare ${playerMenu.value.nickname}? Non potrà rientrare con questo nickname.`)) return
+  connection.send({ type: 'master:ban', playerId: playerMenu.value.playerId, reason: null })
+  closePlayerMenu()
+}
+
+function onDocMouseDown(_e: MouseEvent) {
+  if (!playerMenu.value) return
+  // Closing is handled here; menu itself uses @click.stop
+  closePlayerMenu()
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('mousedown', onDocMouseDown)
+  onBeforeUnmount(() => {
+    document.removeEventListener('mousedown', onDocMouseDown)
+    closePlayerMenu()
+  })
+}
 
 const currentAreaId = computed<AreaId | null>(() => (party.me?.currentAreaId as AreaId) ?? null)
 
@@ -185,11 +247,73 @@ function onAreaClick(areaId: AreaId) {
           :area="a"
           :index="i"
           :is-self="party.me?.id === p.id"
+          @click="(ev) => onAvatarClick(ev, p)"
         />
       </template>
 
       <MapWeatherOverlay :weather="weather" />
     </svg>
     <MapLegend />
+    <div
+      v-if="playerMenu"
+      class="fixed z-40 rounded-md py-1"
+      :style="`top: ${playerMenu.y + 6}px; left: ${playerMenu.x + 6}px; background: var(--z-bg-700); border: 1px solid var(--z-border); min-width: 180px`"
+      @click.stop
+    >
+      <header
+        class="px-3 py-1 text-xs uppercase"
+        style="color: var(--z-text-md); border-bottom: 1px solid var(--z-border)"
+      >
+        {{ playerMenu.nickname }} · {{ playerMenu.role }}
+      </header>
+      <button
+        type="button"
+        class="block w-full text-left px-3 py-1 text-xs"
+        style="color: var(--z-text-hi)"
+        @click="muteSelected(5)"
+      >
+        Muta 5 min
+      </button>
+      <button
+        type="button"
+        class="block w-full text-left px-3 py-1 text-xs"
+        style="color: var(--z-text-hi)"
+        @click="muteSelected(60)"
+      >
+        Muta 1 ora
+      </button>
+      <button
+        type="button"
+        class="block w-full text-left px-3 py-1 text-xs"
+        style="color: var(--z-text-hi)"
+        @click="muteSelected(null)"
+      >
+        Muta permanente
+      </button>
+      <button
+        type="button"
+        class="block w-full text-left px-3 py-1 text-xs"
+        style="color: var(--z-green-300)"
+        @click="unmuteSelected"
+      >
+        Smuta
+      </button>
+      <button
+        type="button"
+        class="block w-full text-left px-3 py-1 text-xs"
+        style="color: var(--z-rust-300)"
+        @click="kickSelected"
+      >
+        Kick
+      </button>
+      <button
+        type="button"
+        class="block w-full text-left px-3 py-1 text-xs"
+        style="color: var(--z-blood-300)"
+        @click="banSelected"
+      >
+        Ban
+      </button>
+    </div>
   </section>
 </template>

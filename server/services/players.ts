@@ -105,3 +105,23 @@ export function findMaster(db: Db, seed: string): PlayerRow | null {
 export function updatePlayerArea(db: Db, playerId: string, areaId: string) {
   db.update(players).set({ currentAreaId: areaId }).where(eq(players.id, playerId)).run()
 }
+
+export function setMute(db: Db, playerId: string, muted: boolean, mutedUntil: number | null = null) {
+  db.update(players).set({
+    isMuted: muted,
+    mutedUntil: muted ? mutedUntil : null
+  }).where(eq(players.id, playerId)).run()
+}
+
+export function kickPlayer(db: Db, playerId: string) {
+  db.update(players).set({
+    isKicked: true
+  }).where(eq(players.id, playerId)).run()
+}
+
+export function findPlayerById(db: Db, seed: string, playerId: string): PlayerRow | null {
+  const rows = db.select().from(players)
+    .where(and(eq(players.partySeed, seed), eq(players.id, playerId)))
+    .all()
+  return (rows[0] as PlayerRow | undefined) ?? null
+}

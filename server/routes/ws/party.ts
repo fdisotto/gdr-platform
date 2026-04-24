@@ -1,9 +1,11 @@
-import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent } from '~~/shared/protocol/ws'
+import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent, MasterDeleteMessageEvent, MasterEditMessageEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type PlayerMutedEvent, type KickedEvent } from '~~/shared/protocol/ws'
 import { useDb } from '~~/server/utils/db'
-import { findPlayerBySession, listOnlinePlayers, touchPlayer, updatePlayerArea } from '~~/server/services/players'
+import { findPlayerBySession, listOnlinePlayers, touchPlayer, updatePlayerArea, setMute, kickPlayer, findPlayerById, type PlayerRow } from '~~/server/services/players'
+import { addBan, removeBan } from '~~/server/services/bans'
+import { logMasterAction } from '~~/server/services/master-actions'
 import { partyMustExist } from '~~/server/services/parties'
 import { listAreasState, updateAreaState, findAreaState } from '~~/server/services/areas'
-import { listAreaMessages, insertMessage, listAreaMessagesBefore, listThreadMessagesBefore, listRecentDmsForPlayer, type MessageRow } from '~~/server/services/messages'
+import { listAreaMessages, insertMessage, listAreaMessagesBefore, listThreadMessagesBefore, listRecentDmsForPlayer, softDeleteMessage, editMessage, findMessage, type MessageRow } from '~~/server/services/messages'
 import { registry, sendJson, chatRateLimiter, listPartyZombies, addZombie, removeZombie, moveZombie, addZombies, listPlayerPositions, setPlayerPosition, resetPlayerPosition } from '~~/server/ws/state'
 import { pickFanoutRecipients } from '~~/server/ws/fanout'
 import { isAreaId, areAdjacent } from '~~/shared/map/areas'
@@ -121,6 +123,35 @@ export default defineWebSocketHandler({
       await handleVoiceSignal(peer, parsed)
       return
     }
+
+    if (parsed.type === 'master:delete-message') {
+      await handleMasterDeleteMessage(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:edit-message') {
+      await handleMasterEditMessage(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:mute') {
+      await handleMasterMute(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:unmute') {
+      await handleMasterUnmute(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:kick') {
+      await handleMasterKick(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:ban') {
+      await handleMasterBan(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:unban') {
+      await handleMasterUnban(peer, parsed)
+      return
+    }
   },
 
   close(peer: Peer) {
@@ -168,6 +199,16 @@ async function handleChatSend(peer: Peer, raw: unknown) {
   if (!me) {
     sendJson(peer, { type: 'error', code: 'session_invalid' })
     return
+  }
+
+  if (me.isMuted) {
+    if (me.mutedUntil && me.mutedUntil < Date.now()) {
+      // unmute lazy
+      setMute(db, me.id, false, null)
+    } else {
+      sendJson(peer, { type: 'error', code: 'muted' })
+      return
+    }
   }
 
   const kind = res.data.kind
@@ -663,6 +704,245 @@ async function handleVoiceSignal(peer: Peer, raw: Record<string, unknown>) {
   try {
     targetConn.ws.send(JSON.stringify(event))
   } catch { /* skip */ }
+}
+
+function requireMaster(peer: Peer): { db: ReturnType<typeof useDb>, conn: ReturnType<typeof registry.all>[number], me: PlayerRow } | null {
+  const conn = registry.all().find(c => c.ws === peer)
+  if (!conn) {
+    sendJson(peer, { type: 'error', code: 'session_invalid' })
+    return null
+  }
+  const db = useDb()
+  const me = findPlayerById(db, conn.partySeed, conn.playerId)
+  if (!me || me.role !== 'master') {
+    sendJson(peer, { type: 'error', code: 'master_only' })
+    return null
+  }
+  return { db, conn, me }
+}
+
+async function handleMasterDeleteMessage(peer: Peer, raw: unknown) {
+  const res = MasterDeleteMessageEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  const msg = findMessage(ctx.db, res.data.messageId)
+  if (!msg || msg.partySeed !== ctx.conn.partySeed) {
+    sendJson(peer, { type: 'error', code: 'not_found' })
+    return
+  }
+  softDeleteMessage(ctx.db, res.data.messageId, ctx.me.id)
+  logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'delete', target: res.data.messageId })
+  const updated = findMessage(ctx.db, res.data.messageId)
+  if (!updated) return
+  const event: MessageUpdateEvent = { type: 'message:update', message: updated }
+  const payload = JSON.stringify(event)
+  for (const c of registry.listParty(ctx.conn.partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
+}
+
+async function handleMasterEditMessage(peer: Peer, raw: unknown) {
+  const res = MasterEditMessageEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  const prev = findMessage(ctx.db, res.data.messageId)
+  if (!prev || prev.partySeed !== ctx.conn.partySeed) {
+    sendJson(peer, { type: 'error', code: 'not_found' })
+    return
+  }
+  editMessage(ctx.db, res.data.messageId, res.data.newBody)
+  logMasterAction(ctx.db, {
+    partySeed: ctx.conn.partySeed,
+    masterId: ctx.me.id,
+    action: 'edit',
+    target: res.data.messageId,
+    payload: { previousBody: prev.body }
+  })
+  const updated = findMessage(ctx.db, res.data.messageId)
+  if (!updated) return
+  const event: MessageUpdateEvent = { type: 'message:update', message: updated }
+  const payload = JSON.stringify(event)
+  for (const c of registry.listParty(ctx.conn.partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
+}
+
+async function handleMasterMute(peer: Peer, raw: unknown) {
+  const res = MasterMuteEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  const target = findPlayerById(ctx.db, ctx.conn.partySeed, res.data.playerId)
+  if (!target) {
+    sendJson(peer, { type: 'error', code: 'not_found' })
+    return
+  }
+  if (target.id === ctx.me.id) {
+    sendJson(peer, { type: 'error', code: 'forbidden', detail: 'cannot_mute_self' })
+    return
+  }
+  if (target.role === 'master') {
+    sendJson(peer, { type: 'error', code: 'forbidden', detail: 'cannot_mute_master' })
+    return
+  }
+  const until = res.data.minutes != null ? Date.now() + res.data.minutes * 60 * 1000 : null
+  setMute(ctx.db, target.id, true, until)
+  logMasterAction(ctx.db, {
+    partySeed: ctx.conn.partySeed,
+    masterId: ctx.me.id,
+    action: 'mute',
+    target: target.id,
+    payload: { minutes: res.data.minutes }
+  })
+  const event: PlayerMutedEvent = { type: 'player:muted', playerId: target.id, muted: true, mutedUntil: until }
+  const payload = JSON.stringify(event)
+  for (const c of registry.listParty(ctx.conn.partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
+}
+
+async function handleMasterUnmute(peer: Peer, raw: unknown) {
+  const res = MasterUnmuteEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  const target = findPlayerById(ctx.db, ctx.conn.partySeed, res.data.playerId)
+  if (!target) {
+    sendJson(peer, { type: 'error', code: 'not_found' })
+    return
+  }
+  setMute(ctx.db, target.id, false, null)
+  logMasterAction(ctx.db, {
+    partySeed: ctx.conn.partySeed,
+    masterId: ctx.me.id,
+    action: 'unmute',
+    target: target.id
+  })
+  const event: PlayerMutedEvent = { type: 'player:muted', playerId: target.id, muted: false, mutedUntil: null }
+  const payload = JSON.stringify(event)
+  for (const c of registry.listParty(ctx.conn.partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
+}
+
+function disconnectPlayer(partySeed: string, playerId: string, reason: string | null) {
+  const conn = registry.getPlayerConn(partySeed, playerId)
+  if (!conn) return
+  const kickedEv: KickedEvent = { type: 'kicked', reason }
+  try {
+    conn.ws.send(JSON.stringify(kickedEv))
+  } catch { /* skip */ }
+  try {
+    conn.ws.close(4002, 'kicked')
+  } catch { /* skip */ }
+  registry.unregister(conn.ws)
+  const leftEv: PlayerLeftEvent = { type: 'player:left', playerId, reason: reason ?? undefined }
+  const leftPayload = JSON.stringify(leftEv)
+  for (const c of registry.listParty(partySeed)) {
+    try {
+      c.ws.send(leftPayload)
+    } catch { /* skip */ }
+  }
+}
+
+async function handleMasterKick(peer: Peer, raw: unknown) {
+  const res = MasterKickEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  const target = findPlayerById(ctx.db, ctx.conn.partySeed, res.data.playerId)
+  if (!target) {
+    sendJson(peer, { type: 'error', code: 'not_found' })
+    return
+  }
+  if (target.id === ctx.me.id) {
+    sendJson(peer, { type: 'error', code: 'forbidden', detail: 'cannot_kick_self' })
+    return
+  }
+  if (target.role === 'master') {
+    sendJson(peer, { type: 'error', code: 'forbidden', detail: 'cannot_kick_master' })
+    return
+  }
+  kickPlayer(ctx.db, target.id)
+  logMasterAction(ctx.db, {
+    partySeed: ctx.conn.partySeed,
+    masterId: ctx.me.id,
+    action: 'kick',
+    target: target.id,
+    payload: { reason: res.data.reason ?? null }
+  })
+  disconnectPlayer(ctx.conn.partySeed, target.id, res.data.reason ?? null)
+}
+
+async function handleMasterBan(peer: Peer, raw: unknown) {
+  const res = MasterBanEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  const target = findPlayerById(ctx.db, ctx.conn.partySeed, res.data.playerId)
+  if (!target) {
+    sendJson(peer, { type: 'error', code: 'not_found' })
+    return
+  }
+  if (target.id === ctx.me.id || target.role === 'master') {
+    sendJson(peer, { type: 'error', code: 'forbidden' })
+    return
+  }
+  kickPlayer(ctx.db, target.id)
+  addBan(ctx.db, ctx.conn.partySeed, target.nickname.toLowerCase(), res.data.reason ?? null)
+  logMasterAction(ctx.db, {
+    partySeed: ctx.conn.partySeed,
+    masterId: ctx.me.id,
+    action: 'ban',
+    target: target.id,
+    payload: { reason: res.data.reason ?? null, nickname: target.nickname }
+  })
+  disconnectPlayer(ctx.conn.partySeed, target.id, res.data.reason ?? null)
+}
+
+async function handleMasterUnban(peer: Peer, raw: unknown) {
+  const res = MasterUnbanEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  removeBan(ctx.db, ctx.conn.partySeed, res.data.nicknameLower.toLowerCase())
+  logMasterAction(ctx.db, {
+    partySeed: ctx.conn.partySeed,
+    masterId: ctx.me.id,
+    action: 'unban',
+    target: res.data.nicknameLower
+  })
 }
 
 async function handleHello(peer: Peer, seed: string, sessionToken: string) {
