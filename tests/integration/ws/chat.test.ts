@@ -52,6 +52,26 @@ function nextMessage(ws: WebSocket): Promise<Record<string, unknown>> {
   })
 }
 
+function nextMessageMatching(ws: WebSocket, predicate: (m: Record<string, unknown>) => boolean, timeoutMs = 3000): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      ws.off('message', onMsg)
+      reject(new Error('timeout waiting for message'))
+    }, timeoutMs)
+    function onMsg(data: WebSocket.RawData) {
+      try {
+        const m = JSON.parse(String(data)) as Record<string, unknown>
+        if (predicate(m)) {
+          ws.off('message', onMsg)
+          clearTimeout(timer)
+          resolve(m)
+        }
+      } catch { /* skip */ }
+    }
+    ws.on('message', onMsg)
+  })
+}
+
 describe('chat:send (say/emote/ooc)', () => {
   it('master invia say e riceve message:new', async () => {
     const create = await $fetch('/api/parties', {
@@ -87,18 +107,18 @@ describe('chat:send (say/emote/ooc)', () => {
     }) as { sessionToken: string }
 
     const masterWs = await openWs(create.seed, create.sessionToken)
-    await nextMessage(masterWs)
+    await nextMessageMatching(masterWs, m => m.type === 'state:init')
 
     const annaWs = await openWs(create.seed, join.sessionToken)
-    await nextMessage(annaWs)
+    await nextMessageMatching(annaWs, m => m.type === 'state:init')
 
     annaWs.send(JSON.stringify({
       type: 'chat:send', kind: 'say', body: 'aiuto', areaId: 'piazza'
     }))
 
     const [annaEcho, masterReceive] = await Promise.all([
-      nextMessage(annaWs),
-      nextMessage(masterWs)
+      nextMessageMatching(annaWs, m => m.type === 'message:new'),
+      nextMessageMatching(masterWs, m => m.type === 'message:new')
     ])
     expect(annaEcho.type).toBe('message:new')
     expect(masterReceive.type).toBe('message:new')
