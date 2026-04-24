@@ -40,21 +40,24 @@ export const AREAS: readonly Area[] = [
   { id: 'ponte', name: 'Ponte', svg: { x: 860, y: 560, w: 120, h: 90, shape: 'rect' } }
 ]
 
+// Adjacency "a corto raggio": ogni collegamento ha senso geografico, niente
+// strade che attraversano diagonalmente tutta la mappa passando sopra altre
+// zone. Il grafo resta connesso (BFS da piazza raggiunge tutte le 14 zone).
 export const ADJACENCY: Record<AreaId, AreaId[]> = {
   piazza: ['chiesa', 'polizia', 'supermercato', 'giardino', 'case'],
-  giardino: ['piazza', 'scuola', 'case'],
-  supermercato: ['piazza', 'benzinaio', 'case'],
-  ospedale: ['scuola', 'fogne', 'case'],
-  chiesa: ['piazza', 'scuola', 'fogne'],
-  polizia: ['piazza', 'benzinaio', 'case'],
-  scuola: ['giardino', 'ospedale', 'chiesa'],
+  giardino: ['piazza', 'chiesa'],
+  supermercato: ['piazza', 'polizia', 'benzinaio'],
+  ospedale: ['polizia', 'scuola'],
+  chiesa: ['piazza', 'giardino', 'scuola'],
+  polizia: ['piazza', 'supermercato', 'ospedale', 'case'],
+  scuola: ['chiesa', 'ospedale'],
   rifugio: ['fogne', 'porto'],
-  benzinaio: ['supermercato', 'polizia', 'ponte'],
-  case: ['piazza', 'giardino', 'supermercato', 'ospedale', 'polizia'],
-  fogne: ['ospedale', 'chiesa', 'rifugio'],
-  porto: ['rifugio', 'ponte', 'radio'],
-  radio: ['porto', 'ponte'],
-  ponte: ['benzinaio', 'porto', 'radio']
+  benzinaio: ['supermercato', 'case', 'ponte'],
+  case: ['piazza', 'polizia', 'benzinaio', 'fogne'],
+  fogne: ['case', 'rifugio', 'porto'],
+  porto: ['fogne', 'rifugio', 'ponte', 'radio'],
+  radio: ['porto'],
+  ponte: ['benzinaio', 'porto']
 }
 
 export function areaCenter(area: Area): { x: number, y: number } {
