@@ -8,6 +8,9 @@ import { registry, sendJson, chatRateLimiter } from '~~/server/ws/state'
 import { pickFanoutRecipients } from '~~/server/ws/fanout'
 import { isAreaId, areAdjacent } from '~~/shared/map/areas'
 import { isAreaClosed } from '~~/server/services/area-access'
+import { parseRoll } from '~~/shared/dice/parse'
+import { rollDice } from '~~/shared/dice/roll'
+import { mulberry32, seedFromString } from '~~/shared/seed/prng'
 
 const TIME_TICK_INTERVAL_MS = 60_000
 
@@ -108,8 +111,7 @@ async function handleChatSend(peer: Peer, raw: unknown) {
     return
   }
 
-  // Plan 2: solo say/emote/ooc permessi. Plan 3: aggiunta shout.
-  if (!['say', 'emote', 'ooc', 'shout'].includes(res.data.kind)) {
+  if (!['say', 'emote', 'ooc', 'shout', 'whisper', 'dm', 'roll'].includes(res.data.kind)) {
     sendJson(peer, { type: 'error', code: 'forbidden', detail: `kind_${res.data.kind}_not_yet_implemented` })
     return
   }
@@ -117,16 +119,6 @@ async function handleChatSend(peer: Peer, raw: unknown) {
   const rateKey = `${conn.partySeed}:${conn.playerId}`
   if (!chatRateLimiter.tryHit(rateKey)) {
     sendJson(peer, { type: 'error', code: 'rate_limited' })
-    return
-  }
-
-  const areaId = res.data.areaId ?? conn.areaId
-  if (!isAreaId(areaId)) {
-    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'unknown_area' })
-    return
-  }
-  if (areaId !== conn.areaId) {
-    sendJson(peer, { type: 'error', code: 'forbidden', detail: 'not_in_area' })
     return
   }
 
@@ -138,13 +130,68 @@ async function handleChatSend(peer: Peer, raw: unknown) {
     return
   }
 
+  const kind = res.data.kind
+  let storedAreaId: string | null = null
+  let targetPlayerId: string | null = null
+  let body = res.data.body
+  let rollPayload: string | null = null
+
+  if (kind === 'dm') {
+    const targetIdentifier = res.data.targetPlayerId ?? ''
+    const target = partyPlayers.find(p => p.id === targetIdentifier || p.nickname.toLowerCase() === targetIdentifier.toLowerCase())
+    if (!target) {
+      sendJson(peer, { type: 'error', code: 'not_found', detail: 'target_not_found' })
+      return
+    }
+    targetPlayerId = target.id
+    storedAreaId = null
+  } else if (kind === 'whisper') {
+    const targetIdentifier = res.data.targetPlayerId ?? ''
+    const target = partyPlayers.find(p => p.id === targetIdentifier || p.nickname.toLowerCase() === targetIdentifier.toLowerCase())
+    if (!target) {
+      sendJson(peer, { type: 'error', code: 'not_found', detail: 'target_not_found' })
+      return
+    }
+    if (target.currentAreaId !== conn.areaId) {
+      sendJson(peer, { type: 'error', code: 'forbidden', detail: 'target_not_in_area' })
+      return
+    }
+    targetPlayerId = target.id
+    storedAreaId = conn.areaId
+  } else if (kind === 'roll') {
+    const expr = res.data.rollExpr ?? ''
+    const parsed = parseRoll(expr)
+    if (!parsed.ok) {
+      sendJson(peer, { type: 'error', code: 'bad_roll_expr', detail: parsed.error })
+      return
+    }
+    const rng = mulberry32(seedFromString(`${conn.partySeed}|${conn.playerId}|${Date.now()}`))
+    const rolled = rollDice(parsed.expr, rng)
+    rollPayload = JSON.stringify({ expr, ...rolled })
+    body = res.data.body || expr
+    storedAreaId = conn.areaId
+  } else {
+    const areaId = res.data.areaId ?? conn.areaId
+    if (!isAreaId(areaId)) {
+      sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'unknown_area' })
+      return
+    }
+    if (areaId !== conn.areaId) {
+      sendJson(peer, { type: 'error', code: 'forbidden', detail: 'not_in_area' })
+      return
+    }
+    storedAreaId = areaId
+  }
+
   const stored = insertMessage(db, {
     partySeed: conn.partySeed,
-    kind: res.data.kind,
+    kind,
     authorPlayerId: conn.playerId,
     authorDisplay: me.nickname,
-    areaId,
-    body: res.data.body
+    areaId: storedAreaId,
+    targetPlayerId,
+    body,
+    rollPayload
   })
 
   const broadcast: MessageNewEvent = { type: 'message:new', message: stored }
@@ -156,9 +203,10 @@ async function handleChatSend(peer: Peer, raw: unknown) {
     role: (roleById.get(c.playerId) ?? 'user') as 'user' | 'master'
   }))
   const recipients = pickFanoutRecipients(roleAware, {
-    kind: res.data.kind as 'say' | 'emote' | 'ooc' | 'shout',
-    areaId,
-    authorPlayerId: conn.playerId
+    kind,
+    areaId: storedAreaId,
+    authorPlayerId: conn.playerId,
+    targetPlayerId
   })
   for (const r of recipients) {
     try {

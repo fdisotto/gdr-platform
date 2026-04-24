@@ -28,7 +28,7 @@ const ChatKind = z.enum(['say', 'whisper', 'emote', 'ooc', 'shout', 'roll', 'dm'
 export const ChatSendEvent = z.object({
   type: z.literal('chat:send'),
   kind: ChatKind,
-  body: z.string().min(1).max(2000),
+  body: z.string().max(2000),
   areaId: z.string().optional().nullable(),
   targetPlayerId: z.string().optional().nullable(),
   rollExpr: z.string().optional()
