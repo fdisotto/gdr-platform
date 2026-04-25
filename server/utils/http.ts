@@ -8,6 +8,7 @@ export function toH3Error(e: unknown): never {
       not_found: 404,
       forbidden: 403,
       master_only: 403,
+      not_member: 403,
       rate_limited: 429,
       conflict: 409,
       muted: 403,

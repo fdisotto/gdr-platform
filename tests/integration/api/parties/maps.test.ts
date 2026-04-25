@@ -69,6 +69,28 @@ interface PartyMapResponse {
   zombieCount: number
 }
 
+interface PartyMapDetailResponse extends PartyMapResponse {
+  generatedMap: {
+    areas: Array<{ id: string }>
+    adjacency: Record<string, string[]>
+    spawnAreaId: string
+    edgeAreaIds: string[]
+    background: Record<string, unknown>
+  }
+}
+
+async function createMap(
+  cookie: string, seed: string, body: { mapTypeId: string, name: string, isSpawn?: boolean }
+): Promise<PartyMapResponse> {
+  const res = await fetch(`/api/parties/${seed}/maps`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify(body)
+  })
+  if (res.status !== 200) throw new Error(`createMap failed ${res.status}`)
+  return await res.json() as PartyMapResponse
+}
+
 describe('GET /api/parties/:seed/maps', () => {
   it('senza cookie → 401', async () => {
     const a = await registerApproveLogin(dbPath, uniqueUsername('a'))
@@ -257,6 +279,175 @@ describe('POST /api/parties/:seed/maps', () => {
     } finally {
       db.close()
     }
+  })
+})
+
+describe('GET /api/parties/:seed/maps/:mapId', () => {
+  it('master legge dettaglio: 200 + generatedMap.areas non vuoto', async () => {
+    const a = await registerApproveLogin(dbPath, uniqueUsername('a'))
+    const seed = await createParty(a.cookie, 'Master')
+    const created = await createMap(a.cookie, seed, { mapTypeId: 'city', name: 'Centro' })
+    const res = await fetch(`/api/parties/${seed}/maps/${created.id}`, {
+      headers: { cookie: a.cookie }
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json() as PartyMapDetailResponse
+    expect(body.id).toBe(created.id)
+    expect(body.partySeed).toBe(seed)
+    expect(body.mapTypeId).toBe('city')
+    expect(Array.isArray(body.generatedMap.areas)).toBe(true)
+    expect(body.generatedMap.areas.length).toBeGreaterThan(0)
+    expect(typeof body.generatedMap.spawnAreaId).toBe('string')
+  })
+
+  it('member non-master legge dettaglio: 200', async () => {
+    const a = await registerApproveLogin(dbPath, uniqueUsername('a'))
+    const seed = await createParty(a.cookie, 'Master')
+    const created = await createMap(a.cookie, seed, { mapTypeId: 'country', name: 'Distretto' })
+    const b = await registerApproveLogin(dbPath, uniqueUsername('b'))
+    await joinPartyApi(b.cookie, seed, 'Bob')
+    const res = await fetch(`/api/parties/${seed}/maps/${created.id}`, {
+      headers: { cookie: b.cookie }
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json() as PartyMapDetailResponse
+    expect(body.id).toBe(created.id)
+    expect(body.generatedMap.areas.length).toBeGreaterThan(0)
+  })
+
+  it('user non-member → 403 not_member', async () => {
+    const a = await registerApproveLogin(dbPath, uniqueUsername('a'))
+    const seed = await createParty(a.cookie, 'Master')
+    const created = await createMap(a.cookie, seed, { mapTypeId: 'city', name: 'Centro' })
+    const c = await registerApproveLogin(dbPath, uniqueUsername('c'))
+    const res = await fetch(`/api/parties/${seed}/maps/${created.id}`, {
+      headers: { cookie: c.cookie }
+    })
+    expect(res.status).toBe(403)
+    const body = await res.json() as { statusMessage?: string }
+    expect(body.statusMessage).toBe('not_member')
+  })
+
+  it('mapId inesistente → 404 map_not_found', async () => {
+    const a = await registerApproveLogin(dbPath, uniqueUsername('a'))
+    const seed = await createParty(a.cookie, 'Master')
+    const res = await fetch(`/api/parties/${seed}/maps/${randomUUID()}`, {
+      headers: { cookie: a.cookie }
+    })
+    expect(res.status).toBe(404)
+    const body = await res.json() as { statusMessage?: string }
+    expect(body.statusMessage).toBe('map_not_found')
+  })
+})
+
+describe('DELETE /api/parties/:seed/maps/:mapId', () => {
+  it('non-master → 403 master_only', async () => {
+    const a = await registerApproveLogin(dbPath, uniqueUsername('a'))
+    const seed = await createParty(a.cookie, 'Master')
+    const created = await createMap(a.cookie, seed, { mapTypeId: 'city', name: 'Centro' })
+    const b = await registerApproveLogin(dbPath, uniqueUsername('b'))
+    await joinPartyApi(b.cookie, seed, 'Bob')
+    const res = await fetch(`/api/parties/${seed}/maps/${created.id}`, {
+      method: 'DELETE',
+      headers: { cookie: b.cookie }
+    })
+    expect(res.status).toBe(403)
+    const body = await res.json() as { statusMessage?: string }
+    expect(body.statusMessage).toBe('master_only')
+  })
+
+  it('mappa spawn → 409 cannot_delete_spawn', async () => {
+    const a = await registerApproveLogin(dbPath, uniqueUsername('a'))
+    const seed = await createParty(a.cookie, 'Master')
+    const created = await createMap(a.cookie, seed,
+      { mapTypeId: 'city', name: 'Hub', isSpawn: true })
+    const res = await fetch(`/api/parties/${seed}/maps/${created.id}`, {
+      method: 'DELETE',
+      headers: { cookie: a.cookie }
+    })
+    expect(res.status).toBe(409)
+    const body = await res.json() as { statusMessage?: string }
+    expect(body.statusMessage).toBe('cannot_delete_spawn')
+  })
+
+  it('mappa vuota non-spawn → 200 + audit map.delete', async () => {
+    const a = await registerApproveLogin(dbPath, uniqueUsername('a'))
+    const seed = await createParty(a.cookie, 'Master')
+    const created = await createMap(a.cookie, seed, { mapTypeId: 'wasteland', name: 'Lande' })
+    const res = await fetch(`/api/parties/${seed}/maps/${created.id}`, {
+      method: 'DELETE',
+      headers: { cookie: a.cookie }
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json() as { ok: boolean }
+    expect(body.ok).toBe(true)
+
+    const db = new Database(dbPath)
+    try {
+      const row = db.prepare(
+        'SELECT action, target FROM master_actions WHERE party_seed = ? AND action = ? ORDER BY created_at DESC LIMIT 1'
+      ).get(seed, 'map.delete') as { action: string, target: string } | undefined
+      expect(row).toBeDefined()
+      expect(row!.target).toBe(created.id)
+      const stillThere = db.prepare(
+        'SELECT id FROM party_maps WHERE id = ?'
+      ).get(created.id) as { id: string } | undefined
+      expect(stillThere).toBeUndefined()
+    } finally {
+      db.close()
+    }
+  })
+})
+
+describe('POST /api/parties/:seed/maps/:mapId/set-spawn', () => {
+  it('master setta spawn: 200 + audit + isSpawn=true', async () => {
+    const a = await registerApproveLogin(dbPath, uniqueUsername('a'))
+    const seed = await createParty(a.cookie, 'Master')
+    const m1 = await createMap(a.cookie, seed,
+      { mapTypeId: 'city', name: 'Hub', isSpawn: true })
+    const m2 = await createMap(a.cookie, seed, { mapTypeId: 'country', name: 'Periferia' })
+
+    const res = await fetch(`/api/parties/${seed}/maps/${m2.id}/set-spawn`, {
+      method: 'POST',
+      headers: { cookie: a.cookie }
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json() as { ok: boolean }
+    expect(body.ok).toBe(true)
+
+    const db = new Database(dbPath)
+    try {
+      const row = db.prepare(
+        'SELECT is_spawn FROM party_maps WHERE id = ?'
+      ).get(m2.id) as { is_spawn: number }
+      expect(row.is_spawn).toBe(1)
+      const old = db.prepare(
+        'SELECT is_spawn FROM party_maps WHERE id = ?'
+      ).get(m1.id) as { is_spawn: number }
+      expect(old.is_spawn).toBe(0)
+      const audit = db.prepare(
+        'SELECT action, target FROM master_actions WHERE party_seed = ? AND action = ? ORDER BY created_at DESC LIMIT 1'
+      ).get(seed, 'map.set_spawn') as { action: string, target: string } | undefined
+      expect(audit).toBeDefined()
+      expect(audit!.target).toBe(m2.id)
+    } finally {
+      db.close()
+    }
+  })
+
+  it('non-master → 403 master_only', async () => {
+    const a = await registerApproveLogin(dbPath, uniqueUsername('a'))
+    const seed = await createParty(a.cookie, 'Master')
+    const created = await createMap(a.cookie, seed, { mapTypeId: 'city', name: 'Centro' })
+    const b = await registerApproveLogin(dbPath, uniqueUsername('b'))
+    await joinPartyApi(b.cookie, seed, 'Bob')
+    const res = await fetch(`/api/parties/${seed}/maps/${created.id}/set-spawn`, {
+      method: 'POST',
+      headers: { cookie: b.cookie }
+    })
+    expect(res.status).toBe(403)
+    const body = await res.json() as { statusMessage?: string }
+    expect(body.statusMessage).toBe('master_only')
   })
 })
 
