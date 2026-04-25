@@ -19,9 +19,27 @@ import MapDecor from '~/components/map/MapDecor.vue'
 // (path multi-mappa post-T20). In assenza, usa la mappa hardcoded legacy
 // in `shared/map/areas.ts` per non rompere call-site pre-T20 (es. test
 // e party legacy senza partyMaps).
+interface TransitionOutgoing {
+  id: string
+  fromMapId: string
+  fromAreaId: string
+  toMapId: string
+  toAreaId: string
+  label: string | null
+}
+
 const props = defineProps<{
   generatedMap?: GeneratedMap | null
+  // v2d T28: transitions outgoing dalla mappa attiva. Quando il player clicca
+  // un'area target di una transition, send move:request con toMapId+toAreaId.
+  transitions?: TransitionOutgoing[]
 }>()
+
+const transitionByFromArea = computed(() => {
+  const m = new Map<string, TransitionOutgoing>()
+  for (const t of props.transitions ?? []) m.set(t.fromAreaId, t)
+  return m
+})
 
 const areas = computed<readonly Area[]>(() => {
   if (props.generatedMap) {
@@ -398,6 +416,14 @@ function onAreaClick(areaId: AreaId) {
     if (!adj.has(areaId)) return // non raggiungibile, no-op
     const targetState = stateById.value.get(areaId)
     if (targetState?.status === 'closed') return
+  }
+  // v2d T28: se è la mia area corrente E ha una transition outgoing, lancia
+  // il cross-map move alla destinazione (toMapId+toAreaId). Altrimenti invio
+  // intra-map come prima.
+  const tr = transitionByFromArea.value.get(myArea)
+  if (tr && areaId === myArea) {
+    connection.send({ type: 'move:request', toAreaId: tr.toAreaId, toMapId: tr.toMapId })
+    return
   }
   connection.send({ type: 'move:request', toAreaId: areaId })
 }
