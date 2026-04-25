@@ -46,11 +46,11 @@ async function seedApprovedUser() {
   return u
 }
 
-async function seedSuperadmin(mustReset = false) {
+async function seedSuperadmin(mustReset = false, username = 'root') {
   const hash = await hashPassword('secret12')
   return insertSuperadmin(db, {
     id: generateUuid(),
-    username: 'root',
+    username,
     passwordHash: hash,
     mustReset
   })
@@ -166,6 +166,21 @@ describe('auth middleware', () => {
     const user = await seedApprovedUser()
     const token = generateSessionToken()
     createSession(db, { token, userId: user.id })
+    const ev = mockEvent(`gdr_session=${token}`)
+    await expect(requireSuperadmin(ev)).rejects.toMatchObject({
+      statusCode: 401,
+      statusMessage: 'session_expired'
+    })
+  })
+
+  it('requireSuperadmin lancia 401 se superadmin è stato revocato', async () => {
+    const sa = await seedSuperadmin(false, 'a')
+    const by = await seedSuperadmin(false, 'b')
+    const token = generateSessionToken()
+    createSession(db, { token, superadminId: sa.id })
+    // import inline per non sporcare il top-level
+    const { revokeSuperadmin } = await import('~~/server/services/superadmins')
+    revokeSuperadmin(db, sa.id, by.id)
     const ev = mockEvent(`gdr_session=${token}`)
     await expect(requireSuperadmin(ev)).rejects.toMatchObject({
       statusCode: 401,

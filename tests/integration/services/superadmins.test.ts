@@ -2,10 +2,13 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createTestDb, type Db } from '~~/server/db/client'
 import {
   insertSuperadmin, findSuperadminByUsername, findSuperadminById,
-  listSuperadmins, updatePassword, markMustReset, seedDefaultSuperadmin
+  listSuperadmins, updatePassword, markMustReset, seedDefaultSuperadmin,
+  revokeSuperadmin, findActiveSuperadminById, findActiveSuperadminByUsername,
+  listActiveSuperadmins, countActiveSuperadmins
 } from '~~/server/services/superadmins'
+import { createSession, findSession } from '~~/server/services/sessions'
 import { hashPassword, verifyPassword } from '~~/server/services/auth'
-import { generateUuid } from '~~/server/utils/crypto'
+import { generateToken, generateUuid } from '~~/server/utils/crypto'
 
 let db: Db
 beforeEach(() => {
@@ -93,5 +96,49 @@ describe('superadmins service', () => {
     expect(first).toBe(true)
     expect(second).toBe(false)
     expect(listSuperadmins(db)).toHaveLength(1)
+  })
+
+  // v2c: revoke + lookup attivi
+  it('revokeSuperadmin marca revokedAt + revokedBy e revoca le session attive', async () => {
+    const sa = await fakeSa({ username: 'a' })
+    const by = await fakeSa({ username: 'b' })
+    const token = generateToken(32)
+    createSession(db, { token, superadminId: sa.id })
+    expect(findSession(db, token)).not.toBeNull()
+    revokeSuperadmin(db, sa.id, by.id)
+    const after = findSuperadminById(db, sa.id)
+    expect(after?.revokedAt).toBeGreaterThan(0)
+    expect(after?.revokedBy).toBe(by.id)
+    expect(findSession(db, token)).toBeNull()
+  })
+
+  it('findActiveSuperadminById/Username escludono i revocati', async () => {
+    const sa = await fakeSa({ username: 'a' })
+    const by = await fakeSa({ username: 'b' })
+    revokeSuperadmin(db, sa.id, by.id)
+    expect(findActiveSuperadminById(db, sa.id)).toBeNull()
+    expect(findActiveSuperadminByUsername(db, 'a')).toBeNull()
+    // i lookup raw continuano a vederli
+    expect(findSuperadminById(db, sa.id)).not.toBeNull()
+  })
+
+  it('listActiveSuperadmins/countActiveSuperadmins ignorano i revocati', async () => {
+    const sa1 = await fakeSa({ username: 'a' })
+    await fakeSa({ username: 'b' })
+    const by = await fakeSa({ username: 'c' })
+    expect(countActiveSuperadmins(db)).toBe(3)
+    revokeSuperadmin(db, sa1.id, by.id)
+    expect(countActiveSuperadmins(db)).toBe(2)
+    expect(listActiveSuperadmins(db).map(s => s.username).sort()).toEqual(['b', 'c'])
+  })
+
+  it('revokeSuperadmin è idempotente: secondo invocation non sovrascrive revokedAt', async () => {
+    const sa = await fakeSa({ username: 'a' })
+    const by = await fakeSa({ username: 'b' })
+    revokeSuperadmin(db, sa.id, by.id)
+    const first = findSuperadminById(db, sa.id)?.revokedAt
+    revokeSuperadmin(db, sa.id, by.id)
+    const second = findSuperadminById(db, sa.id)?.revokedAt
+    expect(second).toBe(first)
   })
 })

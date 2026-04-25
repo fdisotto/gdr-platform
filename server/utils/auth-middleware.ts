@@ -3,7 +3,7 @@ import { createError, getCookie } from 'h3'
 import { useDb } from '~~/server/utils/db'
 import { findSession, extendSession, revokeSession } from '~~/server/services/sessions'
 import { findUserById } from '~~/server/services/users'
-import { findSuperadminById } from '~~/server/services/superadmins'
+import { findActiveSuperadminById } from '~~/server/services/superadmins'
 
 const COOKIE_NAME = 'gdr_session'
 
@@ -35,7 +35,9 @@ export async function readAuthIdentity(event: H3Event): Promise<AuthIdentity> {
   }
 
   if (session.superadminId) {
-    const sa = findSuperadminById(db, session.superadminId)
+    // v2c: filtriamo i revocati come "non più esistenti" e revochiamo
+    // la sessione in cascata.
+    const sa = findActiveSuperadminById(db, session.superadminId)
     if (!sa) {
       revokeSession(db, token)
       return null

@@ -2,7 +2,7 @@ import { createError, getRequestIP, getHeader } from 'h3'
 import { LoginBody } from '~~/shared/protocol/http'
 import { useDb } from '~~/server/utils/db'
 import { verifyPassword, generateSessionToken } from '~~/server/services/auth'
-import { findSuperadminByUsername } from '~~/server/services/superadmins'
+import { findActiveSuperadminByUsername } from '~~/server/services/superadmins'
 import { createSession } from '~~/server/services/sessions'
 import { logAuthEvent } from '~~/server/services/auth-events'
 import { loginRateLimiter } from '~~/server/services/rate-limits'
@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const db = useDb()
-    const sa = findSuperadminByUsername(db, body.username)
+    const sa = findActiveSuperadminByUsername(db, body.username)
     if (!sa) {
       logAuthEvent(db, {
         actorKind: 'anonymous',
