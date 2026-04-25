@@ -29,7 +29,14 @@ const TOAST_MAP: Record<string, ToastSpec> = {
   weak_password: { level: 'warn', title: 'Password troppo debole (minimo 8 caratteri)' },
   invalid_username: { level: 'warn', title: 'Username non valido' },
   must_reset_first: { level: 'warn', title: 'Devi cambiare password prima di continuare' },
-  not_member: { level: 'warn', title: 'Non sei membro di questa party' }
+  not_member: { level: 'warn', title: 'Non sei membro di questa party' },
+  // v2b: multi-party
+  private_party: { level: 'warn', title: 'Party privata, serve un invito' },
+  request_required: { level: 'info', title: 'Devi richiedere l\'accesso' },
+  last_master: { level: 'warn', title: 'Sei l\'ultimo master, promuovi qualcuno o archivia' },
+  member_limit: { level: 'warn', title: 'Party piena (30/30)' },
+  party_limit: { level: 'warn', title: 'Sei già in 5 party, esci da una prima' },
+  invite_invalid: { level: 'warn', title: 'Invito non valido o scaduto' }
 }
 
 interface BlockingSpec {
@@ -62,6 +69,12 @@ const BLOCKING_MAP: Record<string, BlockingSpec> = {
   banned: {
     title: 'Sei stato bannato',
     body: 'Il master ha bandito questo nickname dalla party. Non puoi rientrare con lo stesso nickname.',
+    cta: 'Torna alla home'
+  },
+  // v2b: party archiviata (auto-archive 30g o azione master).
+  archived: {
+    title: 'Party archiviata',
+    body: 'Questa party non è più attiva. Solo un superadmin può ripristinarla.',
     cta: 'Torna alla home'
   }
 }

@@ -68,4 +68,30 @@ describe('useErrorFeedback', () => {
     vi.advanceTimersByTime(3500)
     expect(fb.toasts).toHaveLength(0)
   })
+
+  it('private_party (v2b) → toast warn dedicato', () => {
+    const fb = useFeedbackStore()
+    const { reportError } = useErrorFeedback()
+    reportError('private_party')
+    expect(fb.toasts).toHaveLength(1)
+    expect(fb.toasts[0]!.level).toBe('warn')
+    expect(fb.toasts[0]!.title).toMatch(/Party privata/)
+  })
+
+  it('archived (v2b) → blocking modal', () => {
+    const fb = useFeedbackStore()
+    const { reportError } = useErrorFeedback()
+    reportError('archived')
+    expect(fb.toasts).toHaveLength(0)
+    expect(fb.blocking).not.toBeNull()
+    expect(fb.blocking!.code).toBe('archived')
+    expect(fb.blocking!.title).toMatch(/archiviata/i)
+  })
+
+  it('party_limit (v2b) → toast warn', () => {
+    const fb = useFeedbackStore()
+    const { reportError } = useErrorFeedback()
+    reportError('party_limit')
+    expect(fb.toasts[0]!.title).toMatch(/5 party/)
+  })
 })
