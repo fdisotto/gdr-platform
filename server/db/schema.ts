@@ -165,7 +165,11 @@ export const superadmins = sqliteTable('superadmins', {
   usernameLower: text('username_lower').notNull(),
   passwordHash: text('password_hash').notNull(),
   mustReset: integer('must_reset', { mode: 'boolean' }).notNull().default(false),
-  createdAt: integer('created_at').notNull()
+  createdAt: integer('created_at').notNull(),
+  // v2c: revoke soft-delete. revokedAt != null → l'account non può più
+  // autenticare; lookup `findActiveSuperadmin*` filtra `revokedAt IS NULL`.
+  revokedAt: integer('revoked_at'),
+  revokedBy: text('revoked_by')
 }, t => [
   uniqueIndex('superadmins_username_lower_unique').on(t.usernameLower)
 ])
@@ -242,4 +246,45 @@ export const partyJoinRequests = sqliteTable('party_join_requests', {
   // per SQLite; il vincolo è (party, user, status) — duplicate pending → errore.
   uniqueIndex('party_join_requests_party_user_status').on(t.partySeed, t.userId, t.status),
   index('party_join_requests_status_idx').on(t.partySeed, t.status)
+])
+
+// v2c: settings configurabili runtime dal dashboard admin. Cache in-memory
+// invalidata su set. Default seedati al boot via migration.
+export const systemSettings = sqliteTable('system_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+  updatedBy: text('updated_by')
+})
+
+// v2c: snapshot giornaliero per time-series. Una riga per giorno UTC,
+// aggregati pre-calcolati. Plugin nitro daily-metrics-cron upserta.
+export const dailyMetrics = sqliteTable('daily_metrics', {
+  date: text('date').primaryKey(),
+  usersTotal: integer('users_total').notNull(),
+  usersApproved: integer('users_approved').notNull(),
+  usersPending: integer('users_pending').notNull(),
+  usersBanned: integer('users_banned').notNull(),
+  partiesTotal: integer('parties_total').notNull(),
+  partiesActive: integer('parties_active').notNull(),
+  partiesArchived: integer('parties_archived').notNull(),
+  messagesNew: integer('messages_new').notNull(),
+  authLoginSuccess: integer('auth_login_success').notNull(),
+  authLoginFailed: integer('auth_login_failed').notNull(),
+  computedAt: integer('computed_at').notNull()
+})
+
+// v2c: audit log dedicato alle azioni admin (separato da auth_events
+// per chiarezza scope: gestione party/utenti/settings/admin).
+export const adminActions = sqliteTable('admin_actions', {
+  id: text('id').primaryKey(),
+  superadminId: text('superadmin_id').notNull().references(() => superadmins.id, { onDelete: 'cascade' }),
+  action: text('action').notNull(),
+  targetKind: text('target_kind'),
+  targetId: text('target_id'),
+  payload: text('payload'),
+  createdAt: integer('created_at').notNull()
+}, t => [
+  index('admin_actions_time_idx').on(t.createdAt),
+  index('admin_actions_actor_idx').on(t.superadminId, t.createdAt)
 ])
