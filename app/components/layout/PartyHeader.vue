@@ -3,15 +3,17 @@ import { computed } from 'vue'
 import { usePartyStore } from '~/stores/party'
 import { useServerTime } from '~/composables/useServerTime'
 import { useViewStore } from '~/stores/view'
+import { usePartySeed } from '~/composables/usePartySeed'
 import WeatherBadge from '~/components/layout/WeatherBadge.vue'
 import AudioToggle from '~/components/layout/AudioToggle.vue'
 import VoiceToggle from '~/components/layout/VoiceToggle.vue'
 import NotificationsToggle from '~/components/layout/NotificationsToggle.vue'
 import NickMenu from '~/components/layout/NickMenu.vue'
 
-const party = usePartyStore()
+const seed = usePartySeed()
+const party = usePartyStore(seed)
 const time = useServerTime()
-const view = useViewStore()
+const view = useViewStore(seed)
 
 const seedShort = computed(() => party.party?.seed.slice(0, 8) ?? '…')
 const clock = computed(() => time.format())

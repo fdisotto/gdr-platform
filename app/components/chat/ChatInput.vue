@@ -6,6 +6,7 @@ import { usePartyStore } from '~/stores/party'
 import { useZombiesStore } from '~/stores/zombies'
 import { useChatStore, type ChatMessage } from '~/stores/chat'
 import { usePartyConnection } from '~/composables/usePartyConnection'
+import { usePartySeed } from '~/composables/usePartySeed'
 
 interface CommandSuggestion {
   slash: string
@@ -60,9 +61,10 @@ const DRAFT_KEY = 'gdr.chatDraft'
 const MAX_LINES = 5
 const LINE_HEIGHT_PX = 22
 
-const party = usePartyStore()
-const zombiesStore = useZombiesStore()
-const chatStore = useChatStore()
+const seed = usePartySeed()
+const party = usePartyStore(seed)
+const zombiesStore = useZombiesStore(seed)
+const chatStore = useChatStore(seed)
 const connection = usePartyConnection()
 
 const WEATHER_CODES = [

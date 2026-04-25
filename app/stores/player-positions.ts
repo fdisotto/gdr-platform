@@ -1,8 +1,8 @@
-import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { makeKeyed } from '~/stores/factory'
 import type { PlayerPosition } from '~~/shared/protocol/ws'
 
-export const usePlayerPositionsStore = defineStore('playerPositions', () => {
+function playerPositionsStoreFactory() {
   // key = `${playerId}::${areaId}` → {x, y}
   const positions = ref<Record<string, { x: number, y: number }>>({})
 
@@ -45,4 +45,6 @@ export const usePlayerPositionsStore = defineStore('playerPositions', () => {
   }
 
   return { positions, hydrate, set, get, resetForPlayer, reset }
-})
+}
+
+export const usePlayerPositionsStore = makeKeyed('playerPositions', playerPositionsStoreFactory)

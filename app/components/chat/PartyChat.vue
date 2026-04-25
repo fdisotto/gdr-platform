@@ -5,13 +5,15 @@ import { usePartyStore } from '~/stores/party'
 import { useSettingsStore } from '~/stores/settings'
 import { useViewStore } from '~/stores/view'
 import { usePartyConnection } from '~/composables/usePartyConnection'
+import { usePartySeed } from '~/composables/usePartySeed'
 import ChatMessage from '~/components/chat/ChatMessage.vue'
 import ChatInput from '~/components/chat/ChatInput.vue'
 
-const chatStore = useChatStore()
-const partyStore = usePartyStore()
+const seed = usePartySeed()
+const chatStore = useChatStore(seed)
+const partyStore = usePartyStore(seed)
 const settings = useSettingsStore()
-const viewStore = useViewStore()
+const viewStore = useViewStore(seed)
 const connection = usePartyConnection()
 
 const scrollTarget = ref<HTMLElement | null>(null)

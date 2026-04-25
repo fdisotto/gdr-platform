@@ -45,16 +45,16 @@ function makeConnection(seed: string): PartyConnection {
   let closedFlag = false
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
-  // Stores singleton (refactor T2 li renderà keyed-by-seed): per ora il
-  // dispatch va su store globali — funzionale finché c'è una sola party
-  // attiva in foreground; multi-party reale arriva dopo T2.
-  const partyStore = usePartyStore()
-  const chatStore = useChatStore()
+  // Store keyed-by-seed: ogni connection scrive sulla propria slice di
+  // stato isolata. `serverTime`, `errorFeedback`, `feedbackStore` restano
+  // singleton perché modellano stato globale dell'app.
+  const partyStore = usePartyStore(seed)
+  const chatStore = useChatStore(seed)
   const serverTime = useServerTime()
-  const zombiesStore = useZombiesStore()
-  const playerPositionsStore = usePlayerPositionsStore()
-  const weatherOverridesStore = useWeatherOverridesStore()
-  const viewStore = useViewStore()
+  const zombiesStore = useZombiesStore(seed)
+  const playerPositionsStore = usePlayerPositionsStore(seed)
+  const weatherOverridesStore = useWeatherOverridesStore(seed)
+  const viewStore = useViewStore(seed)
   const errorFeedback = useErrorFeedback()
   const feedbackStore = useFeedbackStore()
 
@@ -333,14 +333,14 @@ function makeConnection(seed: string): PartyConnection {
       case 'master:actions-snapshot': {
         const p = data as { actions: Array<unknown> }
         import('~/stores/master-tools').then(({ useMasterToolsStore }) => {
-          useMasterToolsStore().setActions(p.actions as never)
+          useMasterToolsStore(seed).setActions(p.actions as never)
         }).catch(() => { /* ignore */ })
         break
       }
       case 'master:bans-snapshot': {
         const p = data as { bans: Array<unknown> }
         import('~/stores/master-tools').then(({ useMasterToolsStore }) => {
-          useMasterToolsStore().setBans(p.bans as never)
+          useMasterToolsStore(seed).setBans(p.bans as never)
         }).catch(() => { /* ignore */ })
         break
       }

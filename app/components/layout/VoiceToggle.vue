@@ -3,9 +3,11 @@ import { computed, ref, onBeforeUnmount } from 'vue'
 import { useSettingsStore } from '~/stores/settings'
 import { useVoiceChat } from '~/composables/useVoiceChat'
 import { usePartyStore } from '~/stores/party'
+import { usePartySeed } from '~/composables/usePartySeed'
 
 const settings = useSettingsStore()
-const party = usePartyStore()
+const seed = usePartySeed()
+const party = usePartyStore(seed)
 const voice = useVoiceChat()
 const open = ref(false)
 const wrapper = ref<HTMLElement | null>(null)

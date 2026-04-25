@@ -1,5 +1,6 @@
 import { ref, watch, type Ref } from 'vue'
 import { usePartyConnection } from '~/composables/usePartyConnection'
+import { usePartySeed } from '~/composables/usePartySeed'
 import { usePartyStore } from '~/stores/party'
 import { useSettingsStore } from '~/stores/settings'
 
@@ -252,7 +253,8 @@ function applyMutes(settings: ReturnType<typeof useSettingsStore>) {
 
 export function useVoiceChat() {
   const connection = usePartyConnection()
-  const party = usePartyStore()
+  const seed = usePartySeed()
+  const party = usePartyStore(seed)
   const settings = useSettingsStore()
 
   function targetPeerIds(): string[] {

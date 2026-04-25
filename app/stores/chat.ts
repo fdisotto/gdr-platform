@@ -1,5 +1,5 @@
-import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { makeKeyed } from '~/stores/factory'
 
 export interface ChatMessage {
   id: string
@@ -30,7 +30,7 @@ const PENDING_MATCH_WINDOW_MS = 60_000
 // (parole del master travestite) e roll (è un evento, non discorso).
 const PUBLIC_SPEECH_KINDS = new Set(['say', 'emote', 'shout', 'ooc'])
 
-export const useChatStore = defineStore('chat', () => {
+function chatStoreFactory() {
   const messagesByArea = ref<Record<string, ChatMessage[]>>({})
   const dmsByThread = ref<Record<string, ChatMessage[]>>({})
   const inputDraft = ref('')
@@ -245,4 +245,6 @@ export const useChatStore = defineStore('chat', () => {
     areaHasMoreFor, threadHasMoreFor,
     reset
   }
-})
+}
+
+export const useChatStore = makeKeyed('chat', chatStoreFactory)

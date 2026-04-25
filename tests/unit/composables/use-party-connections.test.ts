@@ -17,6 +17,7 @@ class MockWebSocket extends EventTarget {
   close = vi.fn(() => {
     this.readyState = MockWebSocket.CLOSED
   })
+
   constructor(url: string) {
     super()
     this.url = url

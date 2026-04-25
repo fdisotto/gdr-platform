@@ -1,9 +1,9 @@
-import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { makeKeyed } from '~/stores/factory'
 
 export interface WeatherOverride { code: string, intensity: number }
 
-export const useWeatherOverridesStore = defineStore('weatherOverrides', () => {
+function weatherOverridesStoreFactory() {
   // key: areaId | '*'
   const overrides = ref<Record<string, WeatherOverride>>({})
 
@@ -36,4 +36,6 @@ export const useWeatherOverridesStore = defineStore('weatherOverrides', () => {
   }
 
   return { overrides, hydrate, set, get, reset }
-})
+}
+
+export const useWeatherOverridesStore = makeKeyed('weatherOverrides', weatherOverridesStoreFactory)

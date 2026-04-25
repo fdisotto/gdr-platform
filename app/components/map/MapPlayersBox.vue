@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { usePartyStore } from '~/stores/party'
+import { usePartySeed } from '~/composables/usePartySeed'
 import { AREAS } from '~~/shared/map/areas'
 
-const party = usePartyStore()
+const seed = usePartySeed()
+const party = usePartyStore(seed)
 const open = ref(false)
 
 const areaNameById = new Map(AREAS.map(a => [a.id as string, a.name]))

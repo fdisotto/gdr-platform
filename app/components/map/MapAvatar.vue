@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import type { Area } from '~~/shared/map/areas'
 import { seedFromString } from '~~/shared/seed/prng'
 import { useChatStore } from '~/stores/chat'
+import { usePartySeed } from '~/composables/usePartySeed'
 
 interface Props {
   player: { id: string, nickname: string, role: 'user' | 'master', currentAreaId: string }
@@ -13,7 +14,8 @@ interface Props {
 const props = defineProps<Props>()
 const emit = defineEmits<{ (e: 'click', ev: MouseEvent): void }>()
 
-const chatStore = useChatStore()
+const seed = usePartySeed()
+const chatStore = useChatStore(seed)
 
 const AVATAR_COLORS = [
   '#7cbe79', '#9aa13a', '#d4965b', '#a8572a',

@@ -28,7 +28,7 @@ describe('chat store — pending reconciliation', () => {
   })
 
   it('appendPending aggiunge con flag pending', () => {
-    const s = useChatStore()
+    const s = useChatStore('test-seed')
     const m = mkMsg({ id: 'pending-1', pending: true })
     s.appendPending(m)
     expect(s.forArea('piazza')).toHaveLength(1)
@@ -36,7 +36,7 @@ describe('chat store — pending reconciliation', () => {
   })
 
   it('append con match echo rimuove il pending corrispondente', () => {
-    const s = useChatStore()
+    const s = useChatStore('test-seed')
     const pending = mkMsg({ id: 'pending-1', pending: true, body: 'ciao', createdAt: 1000 })
     const echo = mkMsg({ id: 'server-1', body: 'ciao', createdAt: 1050 })
     s.appendPending(pending)
@@ -48,28 +48,28 @@ describe('chat store — pending reconciliation', () => {
   })
 
   it('append con body diverso NON riconcilia', () => {
-    const s = useChatStore()
+    const s = useChatStore('test-seed')
     s.appendPending(mkMsg({ id: 'p1', pending: true, body: 'ciao' }))
     s.append(mkMsg({ id: 's1', body: 'altro' }))
     expect(s.forArea('piazza')).toHaveLength(2)
   })
 
   it('append con autore diverso NON riconcilia', () => {
-    const s = useChatStore()
+    const s = useChatStore('test-seed')
     s.appendPending(mkMsg({ id: 'p1', pending: true, authorPlayerId: 'p1' }))
     s.append(mkMsg({ id: 's1', authorPlayerId: 'p2' }))
     expect(s.forArea('piazza')).toHaveLength(2)
   })
 
   it('append fuori finestra temporale NON riconcilia', () => {
-    const s = useChatStore()
+    const s = useChatStore('test-seed')
     s.appendPending(mkMsg({ id: 'p1', pending: true, createdAt: 1000 }))
     s.append(mkMsg({ id: 's1', createdAt: 200_000 }))
     expect(s.forArea('piazza')).toHaveLength(2)
   })
 
   it('appendPendingDm e appendDm riconciliano il thread', () => {
-    const s = useChatStore()
+    const s = useChatStore('test-seed')
     const selfId = 'me'
     const pending = mkMsg({
       id: 'pending-dm-1',

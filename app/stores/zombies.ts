@@ -1,8 +1,8 @@
-import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import { makeKeyed } from '~/stores/factory'
 import type { Zombie } from '~~/shared/protocol/ws'
 
-export const useZombiesStore = defineStore('zombies', () => {
+function zombiesStoreFactory() {
   // Indexed per areaId per lookup veloce
   const byArea = ref<Record<string, Zombie[]>>({})
   // Set di id selezionati (cross-area, ma in pratica solo zombie dell'area corrente)
@@ -118,4 +118,6 @@ export const useZombiesStore = defineStore('zombies', () => {
     select, unselect, toggle, selectMany, setSelection, clearSelection, isSelected,
     reset
   }
-})
+}
+
+export const useZombiesStore = makeKeyed('zombies', zombiesStoreFactory)

@@ -1,5 +1,5 @@
-import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
+import { makeKeyed } from '~/stores/factory'
 import type { AreaId } from '~~/shared/map/areas'
 
 export type MainView = 'map' | 'dm' | 'area' | 'master'
@@ -11,7 +11,7 @@ function readChatCollapsed(): boolean {
   return localStorage.getItem(CHAT_COLLAPSED_KEY) === '1'
 }
 
-export const useViewStore = defineStore('view', () => {
+function viewStoreFactory() {
   const mainView = ref<MainView>('map')
   const selectedThreadKey = ref<string | null>(null)
   const viewedAreaId = ref<AreaId | null>(null)
@@ -67,4 +67,6 @@ export const useViewStore = defineStore('view', () => {
     show, openThread, openArea, openMaster, backToMap, reset,
     toggleChatCollapsed, bumpUnreadIfCollapsed
   }
-})
+}
+
+export const useViewStore = makeKeyed('view', viewStoreFactory)

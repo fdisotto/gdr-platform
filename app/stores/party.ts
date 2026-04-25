@@ -1,5 +1,5 @@
-import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { makeKeyed } from '~/stores/factory'
 
 export interface MeSnapshot {
   id: string
@@ -30,7 +30,7 @@ export interface AreaStateSnapshot {
   notes: string | null
 }
 
-export const usePartyStore = defineStore('party', () => {
+function partyStoreFactory() {
   const me = ref<MeSnapshot | null>(null)
   const party = ref<PartySnapshot | null>(null)
   const players = ref<PlayerSnapshot[]>([])
@@ -56,4 +56,6 @@ export const usePartyStore = defineStore('party', () => {
   }
 
   return { me, party, players, areasState, hydrate, reset }
-})
+}
+
+export const usePartyStore = makeKeyed('party', partyStoreFactory)

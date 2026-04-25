@@ -3,13 +3,15 @@ import { computed, ref, watch } from 'vue'
 import { useChatStore } from '~/stores/chat'
 import { usePartyStore } from '~/stores/party'
 import { useViewStore } from '~/stores/view'
+import { usePartySeed } from '~/composables/usePartySeed'
 import { useSettingsStore } from '~/stores/settings'
 import { seedFromString } from '~~/shared/seed/prng'
 import { usePartyConnection } from '~/composables/usePartyConnection'
 
-const chatStore = useChatStore()
-const partyStore = usePartyStore()
-const viewStore = useViewStore()
+const seed = usePartySeed()
+const chatStore = useChatStore(seed)
+const partyStore = usePartyStore(seed)
+const viewStore = useViewStore(seed)
 const settings = useSettingsStore()
 const connection = usePartyConnection()
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { usePartyStore } from '~/stores/party'
+import { usePartySeed } from '~/composables/usePartySeed'
 import { mulberry32, seedFromString } from '~~/shared/seed/prng'
 import { AREAS, areaCenter } from '~~/shared/map/areas'
 
@@ -13,7 +14,8 @@ interface Building {
   shade: string
 }
 
-const party = usePartyStore()
+const partySeed = usePartySeed()
+const party = usePartyStore(partySeed)
 
 const buildings = computed<Building[]>(() => {
   const seed = party.party?.seed ?? 'fallback'

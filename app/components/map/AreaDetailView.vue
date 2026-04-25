@@ -7,15 +7,17 @@ import { useViewStore } from '~/stores/view'
 import { usePlayerPositionsStore } from '~/stores/player-positions'
 import { useChatStore } from '~/stores/chat'
 import { usePartyConnection } from '~/composables/usePartyConnection'
+import { usePartySeed } from '~/composables/usePartySeed'
 import { useAreaWeather } from '~/composables/useAreaWeather'
 import MapWeatherOverlay from '~/components/map/MapWeatherOverlay.vue'
 import type { Zombie } from '~~/shared/protocol/ws'
 
-const party = usePartyStore()
-const zombies = useZombiesStore()
-const viewStore = useViewStore()
-const playerPositionsStore = usePlayerPositionsStore()
-const chatStore = useChatStore()
+const seed = usePartySeed()
+const party = usePartyStore(seed)
+const zombies = useZombiesStore(seed)
+const viewStore = useViewStore(seed)
+const playerPositionsStore = usePlayerPositionsStore(seed)
+const chatStore = useChatStore(seed)
 const connection = usePartyConnection()
 
 // ViewBox dinamico: width fisso, height calcolata dal rapporto del

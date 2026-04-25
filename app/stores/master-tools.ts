@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { usePartyConnection } from '~/composables/usePartyConnection'
+import { usePartyConnections } from '~/composables/usePartyConnections'
 
 interface MasterAction {
   id: string
@@ -19,7 +19,7 @@ interface BanRow {
   bannedAt: number
 }
 
-export const useMasterToolsStore = defineStore('masterTools', () => {
+function masterToolsStoreFactory(seed: string) {
   const actions = ref<MasterAction[]>([])
   const bans = ref<BanRow[]>([])
 
@@ -30,7 +30,12 @@ export const useMasterToolsStore = defineStore('masterTools', () => {
     bans.value = list
   }
   function refresh() {
-    const c = usePartyConnection()
+    // refresh chiama il factory direttamente con la seed dello store
+    // (lo store è keyed, quindi conosce la propria party): evita la
+    // dipendenza dal wrapper legacy `usePartyConnection` che leggeva
+    // la seed dalla route corrente.
+    const c = usePartyConnections().get(seed)
+    if (!c) return
     c.send({ type: 'master:fetch-actions', limit: 100 })
     c.send({ type: 'master:fetch-bans' })
   }
@@ -39,4 +44,19 @@ export const useMasterToolsStore = defineStore('masterTools', () => {
     bans.value = []
   }
   return { actions, bans, setActions, setBans, refresh, reset }
-})
+}
+
+// Versione keyed con `seed` propagato in closure al setup-store: il
+// `refresh()` ha bisogno del seed per recuperare la connection giusta,
+// quindi non possiamo usare `makeKeyed` generico (che riceve un factory
+// senza argomenti).
+const _defs = new Map<string, ReturnType<typeof defineStore>>()
+export function useMasterToolsStore(seed: string) {
+  const id = `masterTools-${seed}`
+  let useStore = _defs.get(id)
+  if (!useStore) {
+    useStore = defineStore(id, () => masterToolsStoreFactory(seed)) as unknown as ReturnType<typeof defineStore>
+    _defs.set(id, useStore)
+  }
+  return (useStore as unknown as () => ReturnType<typeof masterToolsStoreFactory>)()
+}

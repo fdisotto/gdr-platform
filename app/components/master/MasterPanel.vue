@@ -3,10 +3,12 @@ import { computed, onMounted, ref } from 'vue'
 import { useMasterToolsStore } from '~/stores/master-tools'
 import { usePartyConnection } from '~/composables/usePartyConnection'
 import { usePartyStore } from '~/stores/party'
+import { usePartySeed } from '~/composables/usePartySeed'
 
-const tools = useMasterToolsStore()
+const seed = usePartySeed()
+const tools = useMasterToolsStore(seed)
 const connection = usePartyConnection()
-const party = usePartyStore()
+const party = usePartyStore(seed)
 
 type Tab = 'tools' | 'log' | 'bans'
 const activeTab = ref<Tab>('tools')

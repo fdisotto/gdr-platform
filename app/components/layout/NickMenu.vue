@@ -4,8 +4,10 @@ import { useRouter } from 'vue-router'
 import { usePartyStore } from '~/stores/party'
 import { useAuth } from '~/composables/useAuth'
 import { usePartyConnection } from '~/composables/usePartyConnection'
+import { usePartySeed } from '~/composables/usePartySeed'
 
-const party = usePartyStore()
+const seed = usePartySeed()
+const party = usePartyStore(seed)
 const auth = useAuth()
 const connection = usePartyConnection()
 const router = useRouter()

@@ -4,6 +4,7 @@ import { AREAS, ADJACENCY, type AreaId } from '~~/shared/map/areas'
 import { usePartyStore } from '~/stores/party'
 import { useViewStore } from '~/stores/view'
 import { usePartyConnection } from '~/composables/usePartyConnection'
+import { usePartySeed } from '~/composables/usePartySeed'
 import MapArea from '~/components/map/MapArea.vue'
 import MapAvatar from '~/components/map/MapAvatar.vue'
 import MapWeatherOverlay from '~/components/map/MapWeatherOverlay.vue'
@@ -13,9 +14,10 @@ import MapPlayersBox from '~/components/map/MapPlayersBox.vue'
 import MapRoads from '~/components/map/MapRoads.vue'
 import MapDecor from '~/components/map/MapDecor.vue'
 
-const party = usePartyStore()
+const seed = usePartySeed()
+const party = usePartyStore(seed)
 const partyStore = party
-const viewStore = useViewStore()
+const viewStore = useViewStore(seed)
 const connection = usePartyConnection()
 
 // Master player actions menu
