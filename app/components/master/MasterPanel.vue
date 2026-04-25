@@ -4,14 +4,29 @@ import { useMasterToolsStore } from '~/stores/master-tools'
 import { usePartyConnection } from '~/composables/usePartyConnection'
 import { usePartyStore } from '~/stores/party'
 import { usePartySeed } from '~/composables/usePartySeed'
+import PartySettingsTab from '~/components/master/PartySettingsTab.vue'
+import MasterListTab from '~/components/master/MasterListTab.vue'
+import InvitesTab from '~/components/master/InvitesTab.vue'
+import JoinRequestsTab from '~/components/master/JoinRequestsTab.vue'
 
 const seed = usePartySeed()
 const tools = useMasterToolsStore(seed)
 const connection = usePartyConnection()
 const party = usePartyStore(seed)
 
-type Tab = 'tools' | 'log' | 'bans'
+type Tab = 'tools' | 'log' | 'bans' | 'settings' | 'masters' | 'invites' | 'requests'
 const activeTab = ref<Tab>('tools')
+
+const TAB_LABELS: Record<Tab, string> = {
+  tools: 'Strumenti',
+  log: 'Log',
+  bans: 'Banditi',
+  settings: 'Impostazioni',
+  masters: 'Master',
+  invites: 'Inviti',
+  requests: 'Richieste'
+}
+const ALL_TABS: Tab[] = ['tools', 'log', 'bans', 'settings', 'masters', 'invites', 'requests']
 
 onMounted(() => {
   tools.refresh()
@@ -105,7 +120,7 @@ const decodedActions = computed(() => {
         Master
       </h3>
       <button
-        v-for="t in (['tools', 'log', 'bans'] as const)"
+        v-for="t in ALL_TABS"
         :key="t"
         type="button"
         class="flex-1 md:flex-none text-left px-3 md:px-4 py-2 text-xs md:text-sm capitalize"
@@ -114,7 +129,7 @@ const decodedActions = computed(() => {
           : 'background: transparent; color: var(--z-text-md)'"
         @click="activeTab = t"
       >
-        {{ ({ tools: 'Strumenti', log: 'Log', bans: 'Banditi' })[t] }}
+        {{ TAB_LABELS[t] }}
       </button>
       <div class="hidden md:block flex-1" />
       <UButton
@@ -397,6 +412,18 @@ const decodedActions = computed(() => {
           </tbody>
         </table>
       </div>
+
+      <!-- SETTINGS -->
+      <PartySettingsTab v-else-if="activeTab === 'settings'" />
+
+      <!-- MASTERS -->
+      <MasterListTab v-else-if="activeTab === 'masters'" />
+
+      <!-- INVITES -->
+      <InvitesTab v-else-if="activeTab === 'invites'" />
+
+      <!-- REQUESTS -->
+      <JoinRequestsTab v-else-if="activeTab === 'requests'" />
 
       <!-- BANS -->
       <div v-else-if="activeTab === 'bans'">
