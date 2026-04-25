@@ -19,6 +19,10 @@ export default defineEventHandler(async (event) => {
       registrationEnabled: getSettingBoolean(db, 'features.registrationEnabled', true),
       partyCreationEnabled: getSettingBoolean(db, 'features.partyCreationEnabled', true),
       voiceChatEnabled: getSettingBoolean(db, 'features.voiceChatEnabled', true),
+      // v2d (T19): engine di rendering mappa, 'svg' | 'pixi'. Default 'pixi'
+      // per usare il porting Plan 10 quando T21 sarà pronto. T26 esporrà la
+      // toggle nell'admin.
+      renderEngine: getSettingString(db, 'features.renderEngine', 'pixi'),
       serverTime: Date.now()
     }
   } catch (e) {
