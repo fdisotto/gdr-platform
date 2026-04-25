@@ -65,7 +65,8 @@ export default defineEventHandler(async (event) => {
           id: player.id,
           nickname: player.nickname,
           role: player.role,
-          currentAreaId: player.currentAreaId
+          currentAreaId: player.currentAreaId,
+          currentMapId: player.currentMapId
         },
         players,
         areasState,
