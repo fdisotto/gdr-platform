@@ -90,7 +90,7 @@ onBeforeRouteLeave(() => {
 </script>
 
 <template>
-  <div class="flex flex-col h-screen overflow-hidden">
+  <div class="flex flex-col h-full overflow-hidden">
     <!-- Form "unisciti a questa party" (only se il server ha risposto not_member) -->
     <main
       v-if="connection.notMember.value"
