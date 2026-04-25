@@ -21,7 +21,15 @@ export const ERROR_CODES = [
   'invalid_username',
   'must_reset_first',
   'session_expired',
-  'not_member'
+  'not_member',
+  // v2b multi-party
+  'private_party',
+  'request_required',
+  'last_master',
+  'member_limit',
+  'party_limit',
+  'archived',
+  'invite_invalid'
 ] as const
 
 export type ErrorCode = typeof ERROR_CODES[number]
