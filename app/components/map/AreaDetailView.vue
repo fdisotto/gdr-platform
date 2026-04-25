@@ -11,6 +11,16 @@ import { usePartySeed } from '~/composables/usePartySeed'
 import { useAreaWeather } from '~/composables/useAreaWeather'
 import MapWeatherOverlay from '~/components/map/MapWeatherOverlay.vue'
 import type { Zombie } from '~~/shared/protocol/ws'
+import type { GeneratedArea } from '~~/shared/map/generators/types'
+
+// v2d T22: detail view legacy SVG resta canonical. Quando una `generatedArea`
+// viene passata (chiamato dal router multi-mappa), preferisce nome/decor da
+// quella struttura; il layout interno (1600xH) e gli zombi/avatar continuano
+// a funzionare invariati. Un dual-engine pixi/svg per il detail è out of
+// scope MVP v2d — mantenuto come hook futuro via questa prop.
+const props = defineProps<{
+  generatedArea?: GeneratedArea | null
+}>()
 
 const seed = usePartySeed()
 const party = usePartyStore(seed)
@@ -57,6 +67,21 @@ onBeforeUnmount(() => {
 const area = computed(() => {
   const id = viewStore.viewedAreaId
   if (!id) return null
+  // v2d T22: se ci passano una GeneratedArea già risolta, usa il nome da lì
+  // (le aree generate hanno id stringa qualunque). Fallback su AREAS legacy.
+  if (props.generatedArea && props.generatedArea.id === id) {
+    return {
+      id,
+      name: props.generatedArea.name,
+      svg: {
+        x: props.generatedArea.shape.x,
+        y: props.generatedArea.shape.y,
+        w: props.generatedArea.shape.w,
+        h: props.generatedArea.shape.h,
+        shape: props.generatedArea.shape.kind
+      }
+    }
+  }
   return AREAS.find(a => a.id === id) ?? null
 })
 
