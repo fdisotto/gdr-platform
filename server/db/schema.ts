@@ -5,7 +5,14 @@ export const parties = sqliteTable('parties', {
   masterTokenHash: text('master_token_hash').notNull(),
   cityName: text('city_name').notNull(),
   createdAt: integer('created_at').notNull(),
-  lastActivityAt: integer('last_activity_at').notNull()
+  lastActivityAt: integer('last_activity_at').notNull(),
+  // v2b: visibility decide se la party appare nel browser pubblico
+  // (public) o solo via link/invito (private). joinPolicy decide se
+  // l'utente può unirsi direttamente (auto) o deve essere approvato
+  // dal master (request). archivedAt != null marca party in sola lettura.
+  visibility: text('visibility', { enum: ['public', 'private'] }).notNull().default('private'),
+  joinPolicy: text('join_policy', { enum: ['auto', 'request'] }).notNull().default('request'),
+  archivedAt: integer('archived_at')
 })
 
 export const players = sqliteTable('players', {
@@ -22,7 +29,12 @@ export const players = sqliteTable('players', {
   isKicked: integer('is_kicked', { mode: 'boolean' }).notNull().default(false),
   joinedAt: integer('joined_at').notNull(),
   lastSeenAt: integer('last_seen_at').notNull(),
-  sessionToken: text('session_token').notNull()
+  sessionToken: text('session_token').notNull(),
+  // v2b: leftAt != null = soft-delete (l'utente ha lasciato volontariamente).
+  // Le query active escludono leftAt IS NOT NULL. Permette al display name
+  // di essere riusato e alla riga storica di restare per i messaggi che la
+  // referenziano via authorPlayerId.
+  leftAt: integer('left_at')
 }, t => [
   uniqueIndex('players_party_nickname_unique').on(t.partySeed, t.nickname),
   uniqueIndex('players_party_user_unique').on(t.partySeed, t.userId),
@@ -190,4 +202,44 @@ export const authEvents = sqliteTable('auth_events', {
 }, t => [
   index('auth_events_time_idx').on(t.createdAt),
   index('auth_events_actor_idx').on(t.actorKind, t.actorId, t.createdAt)
+])
+
+// v2b: invite token monouso 7d per accedere a party private (o public)
+// senza passare dal flow request-required. Generato dal master.
+export const partyInvites = sqliteTable('party_invites', {
+  id: text('id').primaryKey(),
+  partySeed: text('party_seed').notNull().references(() => parties.seed, { onDelete: 'cascade' }),
+  token: text('token').notNull().unique(),
+  createdBy: text('created_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: integer('created_at').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+  usedAt: integer('used_at'),
+  usedBy: text('used_by').references(() => users.id),
+  revokedAt: integer('revoked_at')
+}, t => [
+  index('party_invites_party_idx').on(t.partySeed),
+  index('party_invites_token_idx').on(t.token)
+])
+
+// v2b: richieste di adesione per party in modalità join-policy=request.
+// Stato finito ('pending' | 'approved' | 'rejected' | 'cancelled').
+export const partyJoinRequests = sqliteTable('party_join_requests', {
+  id: text('id').primaryKey(),
+  partySeed: text('party_seed').notNull().references(() => parties.seed, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  displayName: text('display_name').notNull(),
+  message: text('message'),
+  createdAt: integer('created_at').notNull(),
+  status: text('status', {
+    enum: ['pending', 'approved', 'rejected', 'cancelled']
+  }).notNull(),
+  resolvedAt: integer('resolved_at'),
+  resolvedBy: text('resolved_by').references(() => users.id),
+  rejectReason: text('reject_reason')
+}, t => [
+  // Una sola richiesta pending per (party, user, status='pending'); riapertura
+  // richiede prima un cancel/reject. Drizzle non permette WHERE su uniqueIndex
+  // per SQLite; il vincolo è (party, user, status) — duplicate pending → errore.
+  uniqueIndex('party_join_requests_party_user_status').on(t.partySeed, t.userId, t.status),
+  index('party_join_requests_status_idx').on(t.partySeed, t.status)
 ])
