@@ -9,6 +9,7 @@ import { useViewStore } from '~/stores/view'
 import { playNotificationSound } from '~/composables/useNotificationSound'
 import { useErrorFeedback } from '~/composables/useErrorFeedback'
 import { useFeedbackStore } from '~/stores/feedback'
+import { useCrossPartyNotifications } from '~/composables/useCrossPartyNotifications'
 import type { Zombie, PlayerPosition } from '~~/shared/protocol/ws'
 
 export type PartyConnectionStatus = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed'
@@ -57,6 +58,7 @@ function makeConnection(seed: string): PartyConnection {
   const viewStore = useViewStore(seed)
   const errorFeedback = useErrorFeedback()
   const feedbackStore = useFeedbackStore()
+  const crossNotif = useCrossPartyNotifications()
 
   function scheduleReconnect() {
     if (closedFlag) return
@@ -128,6 +130,20 @@ function makeConnection(seed: string): PartyConnection {
         notMember.value = true
         closedFlag = true
         status.value = 'closed'
+        return
+      }
+      // 4004 = archived (party archiviata dal master o auto-archive plugin):
+      // niente reconnect, mostriamo blocking + redirect /. Lo facciamo solo
+      // se questa party era in primo piano, altrimenti chiudiamo silente.
+      if (ev.code === 4004) {
+        closedFlag = true
+        status.value = 'closed'
+        const fg = (typeof window !== 'undefined')
+          ? window.location.pathname.match(/^\/party\/([^/]+)/)?.[1] ?? null
+          : null
+        if (fg === seed) {
+          errorFeedback.reportError('archived')
+        }
         return
       }
       if (!closedFlag) scheduleReconnect()
@@ -203,9 +219,25 @@ function makeConnection(seed: string): PartyConnection {
         if (fromOther && m.kind !== 'system') {
           const isDirectToMe = m.kind === 'dm'
             || (m.kind === 'whisper' && m.targetPlayerId === partyStore.me!.id)
-          playNotificationSound(isDirectToMe ? 'dm' : 'msg')
-          if (viewStore.chatCollapsed && m.kind !== 'dm') {
-            viewStore.bumpUnreadIfCollapsed()
+          // Foreground vs background: se la party del messaggio NON è in
+          // primo piano, deleghiamo a useCrossPartyNotifications per
+          // gestire toast + suoni + counter. Se è in primo piano, gestiamo
+          // qui suono + bump del badge "chat collapsed".
+          const fg = (typeof window !== 'undefined')
+            ? window.location.pathname.match(/^\/party\/([^/]+)/)?.[1] ?? null
+            : null
+          if (fg !== seed) {
+            const cityName = partyStore.party?.cityName
+            if (isDirectToMe) {
+              crossNotif.bumpDirect(seed, cityName, m.authorDisplay)
+            } else {
+              crossNotif.bumpUnread(seed, cityName)
+            }
+          } else {
+            playNotificationSound(isDirectToMe ? 'dm' : 'msg')
+            if (viewStore.chatCollapsed && m.kind !== 'dm') {
+              viewStore.bumpUnreadIfCollapsed()
+            }
           }
         }
         break

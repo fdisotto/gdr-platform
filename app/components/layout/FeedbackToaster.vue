@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import { useFeedbackStore } from '~/stores/feedback'
+import { useFeedbackStore, type Toast } from '~/stores/feedback'
 import { useAuth } from '~/composables/useAuth'
 import { useRouter } from 'vue-router'
 
 const feedback = useFeedbackStore()
 const auth = useAuth()
 const router = useRouter()
+
+function onToastClick(t: Toast) {
+  if (!t.onClick) return
+  try {
+    t.onClick()
+  } finally {
+    feedback.dismissToast(t.id)
+  }
+}
 
 const TOAST_STYLES: Record<string, string> = {
   info: 'background: var(--z-bg-700); color: var(--z-text-hi); border: 1px solid var(--z-border)',
@@ -41,7 +50,9 @@ async function returnHome() {
       v-for="t in feedback.toasts"
       :key="t.id"
       class="rounded-md px-3 py-2 text-sm shadow-lg"
+      :class="t.onClick ? 'cursor-pointer hover:brightness-110' : ''"
       :style="toastStyle(t.level)"
+      @click="onToastClick(t)"
     >
       <div class="flex items-start gap-2">
         <div class="flex-1 min-w-0">
@@ -61,7 +72,7 @@ async function returnHome() {
           class="text-xs"
           title="Chiudi"
           style="color: var(--z-text-md)"
-          @click="feedback.dismissToast(t.id)"
+          @click.stop="feedback.dismissToast(t.id)"
         >
           ✕
         </button>

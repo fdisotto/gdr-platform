@@ -9,6 +9,10 @@ export interface Toast {
   title: string
   detail: string | null
   expiresAt: number
+  // Click handler opzionale: se presente, il toast diventa cliccabile e
+  // l'handler viene invocato. Usato p.es. dalle notifiche cross-party per
+  // navigare alla party che ha ricevuto la missiva.
+  onClick?: () => void
 }
 
 export interface BlockingError {
@@ -26,7 +30,7 @@ export const useFeedbackStore = defineStore('feedback', () => {
   const toasts = ref<Toast[]>([])
   const blocking = ref<BlockingError | null>(null)
 
-  function pushToast(params: { level: ToastLevel, title: string, detail?: string | null, ttlMs?: number }) {
+  function pushToast(params: { level: ToastLevel, title: string, detail?: string | null, ttlMs?: number, onClick?: () => void }) {
     const id = nextId++
     const ttl = params.ttlMs ?? DEFAULT_TTL_MS
     const toast: Toast = {
@@ -34,7 +38,8 @@ export const useFeedbackStore = defineStore('feedback', () => {
       level: params.level,
       title: params.title,
       detail: params.detail ?? null,
-      expiresAt: Date.now() + ttl
+      expiresAt: Date.now() + ttl,
+      onClick: params.onClick
     }
     toasts.value = [...toasts.value, toast]
     if (typeof window !== 'undefined') {
