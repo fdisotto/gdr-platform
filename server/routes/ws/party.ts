@@ -1,4 +1,4 @@
-import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent, MasterDeleteMessageEvent, MasterEditMessageEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, MasterFetchActionsEvent, MasterFetchBansEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type PlayerMutedEvent, type KickedEvent, type WeatherUpdatedEvent, type MasterActionsSnapshotEvent, type MasterBansSnapshotEvent } from '~~/shared/protocol/ws'
+import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent, MasterDeleteMessageEvent, MasterEditMessageEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, MasterFetchActionsEvent, MasterFetchBansEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type PlayerMutedEvent, type KickedEvent, type WeatherUpdatedEvent, type MasterActionsSnapshotEvent, type MasterBansSnapshotEvent, type TransitionPublic, type PartyMapPublic } from '~~/shared/protocol/ws'
 import { useDb } from '~~/server/utils/db'
 import { findPlayerByUserInParty, listOnlinePlayers, touchPlayer, updatePlayerArea, setMute, kickPlayer, findPlayerById, type PlayerRow } from '~~/server/services/players'
 import { findSession, extendSession, revokeSession } from '~~/server/services/sessions'
@@ -15,6 +15,10 @@ import { upsertPosition, deletePositionsForPlayer } from '~~/server/services/pla
 import { pickFanoutRecipients } from '~~/server/ws/fanout'
 import { isAreaId, areAdjacent } from '~~/shared/map/areas'
 import { isAreaClosed } from '~~/server/services/area-access'
+import { listPartyMaps, findPartyMap } from '~~/server/services/party-maps'
+import { listTransitionsForParty, findTransition } from '~~/server/services/map-transitions'
+import { findMapType, parseDefaultParams } from '~~/server/services/map-types'
+import { generate, type GeneratedMap } from '~~/shared/map/generators'
 import { parseRoll } from '~~/shared/dice/parse'
 import { rollDice } from '~~/shared/dice/roll'
 import { mulberry32, seedFromString } from '~~/shared/seed/prng'
@@ -344,6 +348,17 @@ async function handleChatSend(peer: Peer, raw: unknown) {
   }
 }
 
+// v2d/T15: helper locale che genera (deterministica) la GeneratedMap di una
+// partyMap data, per leggere adjacency lato server. Usata solo in handleMove.
+// Nessuna cache aggiuntiva: il generators registry ha già una memoization.
+function generateMapForPartyMap(db: ReturnType<typeof useDb>, mapId: string): GeneratedMap | null {
+  const map = findPartyMap(db, mapId)
+  if (!map) return null
+  const mapType = findMapType(db, map.mapTypeId)
+  if (!mapType) return null
+  return generate(mapType.id, map.mapSeed, parseDefaultParams(mapType))
+}
+
 async function handleMoveRequest(peer: Peer, raw: unknown) {
   const res = MoveRequestEvent.safeParse(raw)
   if (!res.success) {
@@ -356,10 +371,8 @@ async function handleMoveRequest(peer: Peer, raw: unknown) {
     return
   }
   const toAreaId = res.data.toAreaId
-  if (!isAreaId(toAreaId)) {
-    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'unknown_area' })
-    return
-  }
+  // toMapId è opzionale; quando undefined indica intra-mappa.
+  const reqToMapId = res.data.toMapId
 
   const db = useDb()
   const partyPlayers = listOnlinePlayers(db, conn.partySeed)
@@ -370,32 +383,151 @@ async function handleMoveRequest(peer: Peer, raw: unknown) {
   }
 
   const fromAreaId = conn.areaId
-  if (fromAreaId === toAreaId) return // no-op
+  const currentMapId = me.currentMapId ?? null
+  const targetMapId = reqToMapId ?? currentMapId
 
   const isMaster = me.role === 'master'
+  const sameMap = targetMapId === currentMapId
 
-  // Non-master: valida che l'area di destinazione non sia closed da seed
-  if (!isMaster) {
-    const areas = listAreasState(db, conn.partySeed)
-    const targetState = areas.find(a => a.areaId === toAreaId)
-    if (targetState && targetState.status === 'closed') {
-      sendJson(peer, { type: 'error', code: 'area_closed', detail: 'area_status_closed' })
-      return
+  // Caso A: stessa mappa. Se currentMapId è valorizzato e la party ha una
+  // GeneratedMap, valida adiacenza/closed sul grafo della mappa. Altrimenti
+  // ricade sul vecchio path hardcoded (party legacy pre-T17).
+  if (sameMap) {
+    if (fromAreaId === toAreaId) return // no-op
+
+    if (currentMapId !== null) {
+      // Path multi-mappa: usa GeneratedMap.adjacency.
+      const gm = generateMapForPartyMap(db, currentMapId)
+      if (!gm) {
+        sendJson(peer, { type: 'error', code: 'map_not_found' })
+        return
+      }
+      if (!gm.areas.some(a => a.id === toAreaId)) {
+        sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'unknown_area' })
+        return
+      }
+
+      if (!isMaster) {
+        const adj = gm.adjacency[fromAreaId] ?? []
+        if (!adj.includes(toAreaId)) {
+          sendJson(peer, { type: 'error', code: 'not_adjacent' })
+          return
+        }
+        // areasState filtrato per mapId: la riga è univoca per (party, area)
+        // finché T16 non estende la PK; controlliamo entrambe le condizioni
+        // (mapId NULL legacy o == currentMapId) per essere robusti.
+        const areas = listAreasState(db, conn.partySeed)
+        const targetState = areas.find((a) => {
+          const aMapId = (a as { mapId?: string | null }).mapId ?? null
+          return a.areaId === toAreaId && (aMapId === null || aMapId === currentMapId)
+        })
+        if (targetState && targetState.status === 'closed') {
+          sendJson(peer, { type: 'error', code: 'area_closed', detail: 'area_status_closed' })
+          return
+        }
+        if (isAreaClosed(db, conn.partySeed, toAreaId)) {
+          sendJson(peer, { type: 'error', code: 'area_closed' })
+          return
+        }
+      }
+    } else {
+      // Path legacy: AREAS hardcoded (parties senza mappe).
+      if (!isAreaId(toAreaId)) {
+        sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'unknown_area' })
+        return
+      }
+      if (!isMaster) {
+        const areas = listAreasState(db, conn.partySeed)
+        const targetState = areas.find(a => a.areaId === toAreaId)
+        if (targetState && targetState.status === 'closed') {
+          sendJson(peer, { type: 'error', code: 'area_closed', detail: 'area_status_closed' })
+          return
+        }
+        if (!areAdjacent(fromAreaId as never, toAreaId as never)) {
+          sendJson(peer, { type: 'error', code: 'not_adjacent' })
+          return
+        }
+        if (isAreaClosed(db, conn.partySeed, toAreaId)) {
+          sendJson(peer, { type: 'error', code: 'area_closed' })
+          return
+        }
+      }
     }
-  }
 
-  // Non-master: valida adiacenza (isAreaId protegge il cast sotto)
-  if (!isMaster && !areAdjacent(fromAreaId as never, toAreaId as never)) {
-    sendJson(peer, { type: 'error', code: 'not_adjacent' })
+    // Update intra-mappa: NON tocca currentMapId.
+    updatePlayerArea(db, conn.playerId, toAreaId)
+    registry.updateArea(conn.partySeed, conn.playerId, toAreaId)
+
+    const moved: PlayerMovedEvent = {
+      type: 'player:moved',
+      playerId: conn.playerId,
+      fromAreaId,
+      toAreaId,
+      fromMapId: currentMapId,
+      toMapId: currentMapId,
+      teleported: false
+    }
+    const payload = JSON.stringify(moved)
+    for (const c of registry.listParty(conn.partySeed)) {
+      try {
+        c.ws.send(payload)
+      } catch { /* skip */ }
+    }
+
+    resetPlayerPosition(conn.partySeed, conn.playerId)
+    deletePositionsForPlayer(db, conn.partySeed, conn.playerId)
+    const resetEvent: PlayerPlacedEvent = {
+      type: 'player:placed',
+      playerId: conn.playerId,
+      areaId: toAreaId,
+      x: null,
+      y: null
+    }
+    const resetPayload = JSON.stringify(resetEvent)
+    for (const c of registry.listParty(conn.partySeed)) {
+      try {
+        c.ws.send(resetPayload)
+      } catch { /* skip */ }
+    }
+
+    const messages = listAreaMessages(db, conn.partySeed, toAreaId, 100)
+    sendJson(peer, { type: 'area:entered', areaId: toAreaId, messages })
     return
   }
-  // Non-master: valida area non chiusa
-  if (!isMaster && isAreaClosed(db, conn.partySeed, toAreaId)) {
-    sendJson(peer, { type: 'error', code: 'area_closed' })
+
+  // Caso B: cross-map. Richiede currentMapId valorizzato (altrimenti il
+  // client non può sensatamente specificare toMapId ≠ null).
+  if (currentMapId === null || targetMapId === null) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'cross_map_requires_current_map' })
     return
   }
 
-  updatePlayerArea(db, conn.playerId, toAreaId)
+  // Verifica che la mappa di destinazione esista e appartenga alla party.
+  const targetMap = findPartyMap(db, targetMapId)
+  if (!targetMap || targetMap.partySeed !== conn.partySeed) {
+    sendJson(peer, { type: 'error', code: 'map_not_found' })
+    return
+  }
+  // Verifica che toAreaId esista nella GeneratedMap di destinazione.
+  const targetGm = generateMapForPartyMap(db, targetMapId)
+  if (!targetGm) {
+    sendJson(peer, { type: 'error', code: 'map_not_found' })
+    return
+  }
+  if (!targetGm.areas.some(a => a.id === toAreaId)) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'unknown_area' })
+    return
+  }
+
+  // Cerca la transition esatta (currentMap, fromArea) → (target, toArea).
+  const transition = findTransition(db, currentMapId, fromAreaId, targetMapId, toAreaId)
+  if (!transition && !isMaster) {
+    sendJson(peer, { type: 'error', code: 'not_a_transition' })
+    return
+  }
+
+  // Update cross-map: aggiorna sia currentMapId sia currentAreaId.
+  updatePlayerArea(db, conn.playerId, toAreaId, targetMapId)
   registry.updateArea(conn.partySeed, conn.playerId, toAreaId)
 
   const moved: PlayerMovedEvent = {
@@ -403,6 +535,8 @@ async function handleMoveRequest(peer: Peer, raw: unknown) {
     playerId: conn.playerId,
     fromAreaId,
     toAreaId,
+    fromMapId: currentMapId,
+    toMapId: targetMapId,
     teleported: false
   }
   const payload = JSON.stringify(moved)
@@ -412,7 +546,6 @@ async function handleMoveRequest(peer: Peer, raw: unknown) {
     } catch { /* skip */ }
   }
 
-  // Reset posizione dettaglio del player (era legata a una specifica area)
   resetPlayerPosition(conn.partySeed, conn.playerId)
   deletePositionsForPlayer(db, conn.partySeed, conn.playerId)
   const resetEvent: PlayerPlacedEvent = {
@@ -429,7 +562,6 @@ async function handleMoveRequest(peer: Peer, raw: unknown) {
     } catch { /* skip */ }
   }
 
-  // Invia solo al mittente la history della nuova area per popolare la chat.
   const messages = listAreaMessages(db, conn.partySeed, toAreaId, 100)
   sendJson(peer, { type: 'area:entered', areaId: toAreaId, messages })
 }
@@ -1272,19 +1404,59 @@ async function handleHello(peer: Peer, seed: string) {
     ensurePartyHydrated(db, seed)
 
     const players = listOnlinePlayers(db, seed).map(p => ({
-      id: p.id, nickname: p.nickname, role: p.role, currentAreaId: p.currentAreaId
+      id: p.id, nickname: p.nickname, role: p.role,
+      currentAreaId: p.currentAreaId,
+      currentMapId: p.currentMapId ?? null
     }))
-    const areasState = listAreasState(db, seed)
+    const areasState = listAreasState(db, seed).map(a => ({
+      ...a,
+      // v2d: T14 ha reso mapId nullable.optional sullo schema. Lo scrive
+      // esplicitamente per chiarezza; T16 valorizzerà sempre la coppia.
+      mapId: (a as { mapId?: string | null }).mapId ?? null
+    }))
     const messagesByArea: Record<string, MessageRow[]> = {}
     messagesByArea[player.currentAreaId] = listAreaMessages(db, seed, player.currentAreaId, 100)
     const dms = listRecentDmsForPlayer(db, seed, player.id, 50)
-    const zombies = listPartyZombies(seed)
-    const playerPositions = listPlayerPositions(seed)
-    const weatherOverridesList = listOverrides(db, seed)
+    const zombies = listPartyZombies(seed).map(z => ({
+      ...z,
+      mapId: z.mapId ?? null
+    }))
+    const playerPositions = listPlayerPositions(seed).map(p => ({
+      ...p,
+      mapId: p.mapId ?? null
+    }))
+    const weatherOverridesList = listOverrides(db, seed).map(w => ({
+      ...w,
+      mapId: (w as { mapId?: string | null }).mapId ?? null
+    }))
+
+    // v2d/T15: maps + transitions della party. Per party legacy senza mappe
+    // (T17 non ancora applicato) i due array sono vuoti — il client deve
+    // restare retrocompatibile.
+    const allMaps = listPartyMaps(db, seed)
+    const mapsPublic: PartyMapPublic[] = allMaps.map(m => ({
+      id: m.id,
+      mapTypeId: m.mapTypeId,
+      name: m.name,
+      isSpawn: m.isSpawn,
+      createdAt: m.createdAt
+    }))
+    const transitionsPublic: TransitionPublic[] = listTransitionsForParty(db, seed).map(t => ({
+      id: t.id,
+      fromMapId: t.fromMapId,
+      fromAreaId: t.fromAreaId,
+      toMapId: t.toMapId,
+      toAreaId: t.toAreaId,
+      label: t.label
+    }))
 
     const init: StateInitEvent = {
       type: 'state:init',
-      me: { id: player.id, nickname: player.nickname, role: player.role, currentAreaId: player.currentAreaId },
+      me: {
+        id: player.id, nickname: player.nickname, role: player.role,
+        currentAreaId: player.currentAreaId,
+        currentMapId: player.currentMapId ?? null
+      },
       party: { seed: party.seed, cityName: party.cityName, createdAt: party.createdAt, lastActivityAt: party.lastActivityAt },
       players,
       areasState,
@@ -1293,6 +1465,8 @@ async function handleHello(peer: Peer, seed: string) {
       zombies,
       playerPositions,
       weatherOverrides: weatherOverridesList,
+      maps: mapsPublic,
+      transitions: transitionsPublic,
       serverTime: Date.now()
     }
     sendJson(peer, init)
@@ -1301,7 +1475,11 @@ async function handleHello(peer: Peer, seed: string) {
     // Notifica agli altri player della party del nuovo arrivo.
     const joinEvent: PlayerJoinedEvent = {
       type: 'player:joined',
-      player: { id: player.id, nickname: player.nickname, role: player.role, currentAreaId: player.currentAreaId }
+      player: {
+        id: player.id, nickname: player.nickname, role: player.role,
+        currentAreaId: player.currentAreaId,
+        currentMapId: player.currentMapId ?? null
+      }
     }
     const joinPayload = JSON.stringify(joinEvent)
     for (const c of registry.listParty(seed)) {

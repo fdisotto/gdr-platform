@@ -55,6 +55,16 @@ export function listTransitionsForMap(db: Db, mapId: string): TransitionRow[] {
   return rows.map(mapRow)
 }
 
+// v2d/T15: lista tutte le transitions outgoing della party (tutte le mappe).
+// Usato dallo state:init per popolare la slice transitions in un colpo
+// solo invece di iterare sulle mappe lato handler.
+export function listTransitionsForParty(db: Db, partySeed: string): TransitionRow[] {
+  const rows = db.select().from(mapTransitions)
+    .where(eq(mapTransitions.partySeed, partySeed))
+    .all() as RawRow[]
+  return rows.map(mapRow)
+}
+
 export function listTransitionsToMap(db: Db, mapId: string): TransitionRow[] {
   const rows = db.select().from(mapTransitions)
     .where(eq(mapTransitions.toMapId, mapId))

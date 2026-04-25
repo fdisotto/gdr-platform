@@ -18,6 +18,9 @@ export interface PlayerRow {
   partySeed: string
   nickname: string
   role: 'user' | 'master'
+  // v2d: currentMapId è la mappa attiva del player. Nullable finché T17 non
+  // estende joinParty per impostarla allo spawn map della party.
+  currentMapId: string | null
   currentAreaId: string
   isMuted: boolean
   mutedUntil: number | null
@@ -94,6 +97,7 @@ export function joinParty(db: Db, seed: string, displayName: string, opts: JoinP
       partySeed: seed,
       nickname: nick,
       role: existingForUser.role,
+      currentMapId: existingForUser.currentMapId ?? null,
       currentAreaId: 'piazza',
       isMuted: false,
       mutedUntil: null,
@@ -122,6 +126,7 @@ export function joinParty(db: Db, seed: string, displayName: string, opts: JoinP
 
   return {
     id, partySeed: seed, nickname: nick, role: 'user',
+    currentMapId: null,
     currentAreaId: 'piazza', isMuted: false, mutedUntil: null,
     isKicked: false, joinedAt: now, lastSeenAt: now, sessionToken
   }
@@ -211,7 +216,17 @@ export function findMaster(db: Db, seed: string): PlayerRow | null {
   return (rows[0] as PlayerRow | undefined) ?? null
 }
 
-export function updatePlayerArea(db: Db, playerId: string, areaId: string) {
+// v2d: updatePlayerArea può aggiornare anche la mappa corrente in caso di
+// cross-map move. Quando mapId è undefined non tocca currentMapId; quando è
+// stringa lo aggiorna insieme ad areaId. T16 farà il refactor strutturale.
+export function updatePlayerArea(db: Db, playerId: string, areaId: string, mapId?: string) {
+  if (mapId !== undefined) {
+    db.update(players)
+      .set({ currentAreaId: areaId, currentMapId: mapId })
+      .where(eq(players.id, playerId))
+      .run()
+    return
+  }
   db.update(players).set({ currentAreaId: areaId }).where(eq(players.id, playerId)).run()
 }
 
