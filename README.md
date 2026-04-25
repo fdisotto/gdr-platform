@@ -65,6 +65,34 @@ Il display name per-party si sceglie al join (o alla creazione, nel caso del
 master). Lo stesso account può apparire con display name diversi in party
 diverse.
 
+## Multi-party (v2b)
+
+- **Più party in parallelo**: l'account può essere membro fino a **5 party
+  attive** contemporaneamente, ognuna con la propria connessione WebSocket.
+  La top tab bar elenca le party "tue" con badge messaggi non letti per
+  switch rapido tra esse.
+- **Visibilità**: il master sceglie alla creazione tra `public` (compare nel
+  browser pubblico `/parties`) o `private` (accessibile solo via link/invito).
+- **Politica di accesso**: `auto` (drop-in immediato) o `request` (utente
+  invia richiesta, master approva dalla coda).
+- **Browser party** `/parties`: filtri (solo auto-join, solo con posti
+  liberi, solo le mie), ricerca testo su città e master, sort per ultima
+  attività / membri / più recenti, paginazione 20.
+- **Inviti**: il master genera token monouso (7 giorni) per saltare la
+  policy. Token revocabili. Una party privata si entra solo via invito.
+- **Multi-master**: una party può avere più master pari grado. Qualsiasi
+  master promuove o demove altri (l'ultimo master non può demovere se stesso
+  o lasciare senza prima archiviare).
+- **Leave / archive**: l'utente esce dalla party col bottone nel nick menu;
+  il master può archiviare la party rendendola read-only e invisibile dal
+  browser. **Auto-archive** delle party inattive da 30 giorni.
+- **Notifiche cross-party**: messaggi di chat area incrementano un badge
+  unread sulla tab non in primo piano; missive (DM) e whisper diretti
+  emettono toast cliccabile + suono (rispetta i settings notifiche).
+
+Limiti default (modificabili dal superadmin in v2c): 5 party/utente, 30
+member/party, 100 party totali nel sistema.
+
 ## Come si gioca
 
 1. Fai **login** (o registrati e aspetta l'approvazione di un superadmin).
