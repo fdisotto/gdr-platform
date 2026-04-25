@@ -8,13 +8,14 @@ import PartySettingsTab from '~/components/master/PartySettingsTab.vue'
 import MasterListTab from '~/components/master/MasterListTab.vue'
 import InvitesTab from '~/components/master/InvitesTab.vue'
 import JoinRequestsTab from '~/components/master/JoinRequestsTab.vue'
+import MapManagementTab from '~/components/master/MapManagementTab.vue'
 
 const seed = usePartySeed()
 const tools = useMasterToolsStore(seed)
 const connection = usePartyConnections().open(seed)
 const party = usePartyStore(seed)
 
-type Tab = 'tools' | 'log' | 'bans' | 'settings' | 'masters' | 'invites' | 'requests'
+type Tab = 'tools' | 'log' | 'bans' | 'settings' | 'masters' | 'invites' | 'requests' | 'world'
 const activeTab = ref<Tab>('tools')
 
 const TAB_LABELS: Record<Tab, string> = {
@@ -24,9 +25,10 @@ const TAB_LABELS: Record<Tab, string> = {
   settings: 'Impostazioni',
   masters: 'Master',
   invites: 'Inviti',
-  requests: 'Richieste'
+  requests: 'Richieste',
+  world: 'Mondo'
 }
-const ALL_TABS: Tab[] = ['tools', 'log', 'bans', 'settings', 'masters', 'invites', 'requests']
+const ALL_TABS: Tab[] = ['tools', 'log', 'bans', 'settings', 'masters', 'invites', 'requests', 'world']
 
 onMounted(() => {
   tools.refresh()
@@ -424,6 +426,9 @@ const decodedActions = computed(() => {
 
       <!-- REQUESTS -->
       <JoinRequestsTab v-else-if="activeTab === 'requests'" />
+
+      <!-- WORLD -->
+      <MapManagementTab v-else-if="activeTab === 'world'" />
 
       <!-- BANS -->
       <div v-else-if="activeTab === 'bans'">
