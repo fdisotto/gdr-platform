@@ -132,6 +132,59 @@ export function restoreParty(db: Db, seed: string): void {
     .run()
 }
 
+// v2c: hard delete della party. FK CASCADE su tutte le tabelle dipendenti
+// (players, messages, areas_state, area_access_bans, weather_overrides,
+// master_actions, bans, zombies, player_positions, party_invites,
+// party_join_requests). Operazione irreversibile, esposta solo dall'admin
+// API con conferma esplicita.
+export function hardDeleteParty(db: Db, seed: string): void {
+  db.delete(parties).where(eq(parties.seed, seed)).run()
+}
+
+// v2c: trasferisce il ruolo di master da un player attivo a un altro membro
+// attivo della stessa party. Throw se le pre-condizioni non sono rispettate.
+// Non logghiamo `master_actions` perché l'azione è admin-driven (audit
+// dedicato in `admin_actions`).
+export function transferMaster(
+  db: Db, seed: string, fromUserId: string, toUserId: string
+): void {
+  partyMustExist(db, seed)
+  if (fromUserId === toUserId) {
+    throw new DomainError('invalid_payload', 'fromUserId === toUserId')
+  }
+  const fromRows = db.select().from(players)
+    .where(and(
+      eq(players.partySeed, seed),
+      eq(players.userId, fromUserId),
+      eq(players.role, 'master'),
+      isNull(players.leftAt),
+      eq(players.isKicked, false)
+    ))
+    .all()
+  if (fromRows.length === 0) {
+    throw new DomainError('not_found', 'fromUserId not active master')
+  }
+  const toRows = db.select().from(players)
+    .where(and(
+      eq(players.partySeed, seed),
+      eq(players.userId, toUserId),
+      isNull(players.leftAt),
+      eq(players.isKicked, false)
+    ))
+    .all()
+  if (toRows.length === 0) {
+    throw new DomainError('not_found', 'toUserId not active member')
+  }
+  db.update(players)
+    .set({ role: 'user' })
+    .where(eq(players.id, (fromRows[0] as { id: string }).id))
+    .run()
+  db.update(players)
+    .set({ role: 'master' })
+    .where(eq(players.id, (toRows[0] as { id: string }).id))
+    .run()
+}
+
 // v2b: una membership "attiva" = riga players con leftAt IS NULL e
 // isKicked=false. Il count opera su righe distinte (party,user). I master
 // contano come membri.

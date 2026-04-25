@@ -4,11 +4,13 @@ import { createTestDb, type Db } from '~~/server/db/client'
 import {
   createParty, findParty, verifyMaster,
   archiveParty, restoreParty, listPartiesForBrowser,
-  countActivePartiesForUser, isMaster, listMasters, touchParty
+  countActivePartiesForUser, isMaster, listMasters, touchParty,
+  hardDeleteParty, transferMaster
 } from '~~/server/services/parties'
 import { joinParty } from '~~/server/services/players'
 import { createRequest } from '~~/server/services/party-join-requests'
-import { parties } from '~~/server/db/schema'
+import { insertMessage } from '~~/server/services/messages'
+import { parties, players, messages } from '~~/server/db/schema'
 import { createApprovedUser } from '~~/tests/integration/helpers/test-user'
 
 let db: Db
@@ -194,5 +196,47 @@ describe('parties service', () => {
     // sane: solo 1 membro, sopra MAX_MEMBERS_PER_PARTY=30 quindi non piena
     const page = listPartiesForBrowser(db, { userId: userB, filters: { withSlots: true } })
     expect(page.items.map(i => i.seed)).toContain(r.seed)
+  })
+
+  it('hardDeleteParty rimuove la party e cascade pulisce le tabelle dipendenti', async () => {
+    const r = await createParty(db, { userId, displayName: 'M', visibility: 'public', joinPolicy: 'auto' })
+    const userB = await createApprovedUser(db, 'b')
+    joinParty(db, r.seed, 'B', { userId: userB })
+    insertMessage(db, {
+      partySeed: r.seed, kind: 'say', authorDisplay: 'M', areaId: 'piazza', body: 'ciao'
+    })
+    expect(db.select().from(players).where(eq(players.partySeed, r.seed)).all()).toHaveLength(2)
+    expect(db.select().from(messages).where(eq(messages.partySeed, r.seed)).all()).toHaveLength(1)
+    hardDeleteParty(db, r.seed)
+    expect(findParty(db, r.seed)).toBeNull()
+    expect(db.select().from(players).where(eq(players.partySeed, r.seed)).all()).toHaveLength(0)
+    expect(db.select().from(messages).where(eq(messages.partySeed, r.seed)).all()).toHaveLength(0)
+  })
+
+  it('transferMaster scambia ruoli quando entrambi sono attivi', async () => {
+    const r = await createParty(db, { userId, displayName: 'M', visibility: 'public', joinPolicy: 'auto' })
+    const userB = await createApprovedUser(db, 'b')
+    joinParty(db, r.seed, 'B', { userId: userB })
+    transferMaster(db, r.seed, userId, userB)
+    expect(isMaster(db, r.seed, userId)).toBe(false)
+    expect(isMaster(db, r.seed, userB)).toBe(true)
+  })
+
+  it('transferMaster fallisce se from non è master attivo', async () => {
+    const r = await createParty(db, { userId, displayName: 'M', visibility: 'public', joinPolicy: 'auto' })
+    const userB = await createApprovedUser(db, 'b')
+    joinParty(db, r.seed, 'B', { userId: userB })
+    expect(() => transferMaster(db, r.seed, userB, userId)).toThrow(/fromUserId not active master/)
+  })
+
+  it('transferMaster fallisce se to non è membro attivo', async () => {
+    const r = await createParty(db, { userId, displayName: 'M', visibility: 'public', joinPolicy: 'auto' })
+    const userB = await createApprovedUser(db, 'b')
+    expect(() => transferMaster(db, r.seed, userId, userB)).toThrow(/toUserId not active member/)
+  })
+
+  it('transferMaster fallisce se from === to', async () => {
+    const r = await createParty(db, { userId, displayName: 'M', visibility: 'public', joinPolicy: 'auto' })
+    expect(() => transferMaster(db, r.seed, userId, userId)).toThrow(/===/)
   })
 })
