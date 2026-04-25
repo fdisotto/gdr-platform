@@ -1,6 +1,6 @@
 import { and, asc, eq, isNull } from 'drizzle-orm'
 import type { Db } from '~~/server/db/client'
-import { parties, players, areasState, partyJoinRequests } from '~~/server/db/schema'
+import { parties, players, partyMaps, partyJoinRequests } from '~~/server/db/schema'
 import { MAX_MEMBERS_PER_PARTY } from '~~/shared/limits'
 import { getSettingNumber } from '~~/server/services/system-settings'
 import { deriveCityState, type CityState } from '~~/shared/seed/derive-city'
@@ -8,6 +8,8 @@ import {
   generateToken, generateUuid, hashMasterToken, verifyMasterToken
 } from '~~/server/utils/crypto'
 import { DomainError } from '~~/shared/errors'
+import { findMapType, parseDefaultParams } from '~~/server/services/map-types'
+import { generate } from '~~/shared/map/generators'
 
 export type PartyVisibility = 'public' | 'private'
 export type PartyJoinPolicy = 'auto' | 'request'
@@ -31,9 +33,12 @@ export interface CreatePartyResult {
     id: string
     nickname: string
     role: 'master'
+    currentMapId: string
     currentAreaId: string
   }
   cityState: CityState
+  spawnMapId: string
+  spawnAreaId: string
 }
 
 export async function createParty(db: Db, input: CreatePartyInput): Promise<CreatePartyResult> {
@@ -55,14 +60,28 @@ export async function createParty(db: Db, input: CreatePartyInput): Promise<Crea
     joinPolicy: input.joinPolicy ?? 'request'
   }).run()
 
-  const areaRows = Object.entries(cityState.areas).map(([areaId, s]) => ({
+  // v2d (T16): la party nasce con una `party_map` di tipo 'city' marcata
+  // come spawn. Il generator deterministico produce un grafo di aree e
+  // sceglie lo spawn area; il master e i futuri join finiscono qui di
+  // default. Niente pre-populate di `areas_state` — lo status default
+  // 'intact' è implicito; areas_state contiene solo override del master.
+  const cityType = findMapType(db, 'city')
+  if (!cityType) {
+    throw new DomainError('map_type_not_found', 'city')
+  }
+  const spawnMapId = generateUuid()
+  const spawnMapSeed = generateUuid()
+  const generated = generate('city', spawnMapSeed, parseDefaultParams(cityType))
+  const spawnAreaId = generated.spawnAreaId
+  db.insert(partyMaps).values({
+    id: spawnMapId,
     partySeed: seed,
-    areaId,
-    status: s.status,
-    customName: s.customName,
-    notes: null
-  }))
-  db.insert(areasState).values(areaRows).run()
+    mapTypeId: 'city',
+    mapSeed: spawnMapSeed,
+    name: cityState.cityName,
+    isSpawn: true,
+    createdAt: now
+  }).run()
 
   const masterId = generateUuid()
   const sessionToken = generateToken(32)
@@ -72,7 +91,8 @@ export async function createParty(db: Db, input: CreatePartyInput): Promise<Crea
     userId: input.userId,
     nickname: displayName,
     role: 'master',
-    currentAreaId: 'piazza',
+    currentMapId: spawnMapId,
+    currentAreaId: spawnAreaId,
     isMuted: false,
     mutedUntil: null,
     isKicked: false,
@@ -89,9 +109,12 @@ export async function createParty(db: Db, input: CreatePartyInput): Promise<Crea
       id: masterId,
       nickname: displayName,
       role: 'master',
-      currentAreaId: 'piazza'
+      currentMapId: spawnMapId,
+      currentAreaId: spawnAreaId
     },
-    cityState
+    cityState,
+    spawnMapId,
+    spawnAreaId
   }
 }
 

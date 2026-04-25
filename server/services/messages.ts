@@ -9,6 +9,7 @@ export interface MessageRow {
   kind: string
   authorPlayerId: string | null
   authorDisplay: string
+  mapId: string | null
   areaId: string | null
   targetPlayerId: string | null
   body: string
@@ -24,6 +25,10 @@ export interface InsertMessageInput {
   kind: string
   authorPlayerId?: string | null
   authorDisplay: string
+  // v2d: mapId è valorizzato solo per messaggi area-bound (say/shout/zone),
+  // null per dm/announce. Optional in input perché molti caller legacy non
+  // lo passano ancora; la colonna è nullable nel DB.
+  mapId?: string | null
   areaId?: string | null
   targetPlayerId?: string | null
   body: string
@@ -39,6 +44,7 @@ export function insertMessage(db: Db, input: InsertMessageInput): MessageRow {
     kind: input.kind,
     authorPlayerId: input.authorPlayerId ?? null,
     authorDisplay: input.authorDisplay,
+    mapId: input.mapId ?? null,
     areaId: input.areaId ?? null,
     targetPlayerId: input.targetPlayerId ?? null,
     body: input.body,

@@ -26,8 +26,13 @@ beforeEach(async () => {
 })
 
 describe('party-maps service', () => {
-  it('listPartyMaps su party senza mappe ritorna array vuoto', () => {
-    expect(listPartyMaps(db, seed)).toEqual([])
+  // v2d (T16): createParty crea automaticamente la spawn map. Quindi
+  // dopo il beforeEach c'è già una mappa city marcata isSpawn=true.
+  it('listPartyMaps dopo createParty ha 1 mappa di spawn city', () => {
+    const list = listPartyMaps(db, seed)
+    expect(list).toHaveLength(1)
+    expect(list[0]!.isSpawn).toBe(true)
+    expect(list[0]!.mapTypeId).toBe('city')
   })
 
   it('createPartyMap con campi minimi inserisce riga e ritorna PartyMapRow', () => {
@@ -45,8 +50,9 @@ describe('party-maps service', () => {
     expect(row.createdAt).toBeGreaterThan(0)
 
     const list = listPartyMaps(db, seed)
-    expect(list).toHaveLength(1)
-    expect(list[0]!.id).toBe(row.id)
+    // 1 (spawn auto-creata) + 1 (questa) = 2
+    expect(list).toHaveLength(2)
+    expect(list.map(m => m.id)).toContain(row.id)
   })
 
   it('createPartyMap con isSpawn=true setta spawn e toglie isSpawn dalle altre', () => {
@@ -70,14 +76,18 @@ describe('party-maps service', () => {
 
   it('listPartyMaps è ordinato per createdAt asc', () => {
     const a = createPartyMap(db, { partySeed: seed, mapTypeId: 'city', name: 'A' })
-    // Forziamo createdAt manualmente per controllo deterministico
+    // Forziamo createdAt manualmente per controllo deterministico.
+    // La spawn auto-creata da createParty ha createdAt grande (Date.now);
+    // qui i due nuovi sono 50 e 100 → tutti vengono prima della spawn.
     db.update(partyMaps).set({ createdAt: 100 })
       .where(eq(partyMaps.id, a.id)).run()
     const b = createPartyMap(db, { partySeed: seed, mapTypeId: 'country', name: 'B' })
     db.update(partyMaps).set({ createdAt: 50 })
       .where(eq(partyMaps.id, b.id)).run()
     const list = listPartyMaps(db, seed)
-    expect(list.map(m => m.id)).toEqual([b.id, a.id])
+    // Filtriamo le righe interessate per il test, mantenendo l'ordine asc.
+    const filtered = list.filter(m => m.id === a.id || m.id === b.id)
+    expect(filtered.map(m => m.id)).toEqual([b.id, a.id])
   })
 
   it('setSpawnMap toggle: prima A spawn, poi B spawn → A non più spawn', () => {
@@ -176,11 +186,18 @@ describe('party-maps service', () => {
   })
 
   it('findSpawnMap senza spawn ritorna null', () => {
+    // v2d (T16): createParty ha già creato 1 spawn city; per testare il
+    // null branch tolgo lo spawn flag dalla riga esistente.
+    db.update(partyMaps).set({ isSpawn: false })
+      .where(eq(partyMaps.partySeed, seed)).run()
     createPartyMap(db, { partySeed: seed, mapTypeId: 'city', name: 'A' })
     expect(findSpawnMap(db, seed)).toBeNull()
   })
 
   it('findSpawnMap con spawn settato ritorna la riga', () => {
+    // Tolgo lo spawn dalla riga auto-creata, poi creo un nuovo spawn.
+    db.update(partyMaps).set({ isSpawn: false })
+      .where(eq(partyMaps.partySeed, seed)).run()
     const a = createPartyMap(db, {
       partySeed: seed, mapTypeId: 'city', name: 'A', isSpawn: true
     })
@@ -188,32 +205,35 @@ describe('party-maps service', () => {
   })
 
   it('countMapsForParty conta solo le mappe della party', async () => {
-    expect(countMapsForParty(db, seed)).toBe(0)
+    // Parte da 1 (spawn auto-creata).
+    expect(countMapsForParty(db, seed)).toBe(1)
     createPartyMap(db, { partySeed: seed, mapTypeId: 'city', name: 'A' })
     createPartyMap(db, { partySeed: seed, mapTypeId: 'country', name: 'B' })
-    expect(countMapsForParty(db, seed)).toBe(2)
+    expect(countMapsForParty(db, seed)).toBe(3)
     // Mappe di altra party non contano
     const otherUser = await createApprovedUser(db, 'other')
     const otherParty = await createParty(db, { userId: otherUser, displayName: 'Other' })
     createPartyMap(db, { partySeed: otherParty.seed, mapTypeId: 'city', name: 'X' })
-    expect(countMapsForParty(db, seed)).toBe(2)
+    expect(countMapsForParty(db, seed)).toBe(3)
   })
 
   it('createPartyMap quando count >= MAX (default 10) → map_limit', () => {
-    for (let i = 0; i < 10; i++) {
+    // Parte da 1 (spawn auto-creata): possiamo aggiungerne altre 9 prima
+    // di superare il default 10.
+    for (let i = 0; i < 9; i++) {
       createPartyMap(db, { partySeed: seed, mapTypeId: 'city', name: `M${i}` })
     }
     expect(() =>
-      createPartyMap(db, { partySeed: seed, mapTypeId: 'city', name: 'M10' })
+      createPartyMap(db, { partySeed: seed, mapTypeId: 'city', name: 'M9' })
     ).toThrowError(/map_limit/)
   })
 
   it('createPartyMap rispetta override settings.limits.maxMapsPerParty', () => {
+    // Override a 2: la spawn auto-creata occupa già 1 slot.
     setSetting(db, 'limits.maxMapsPerParty', 2, null)
     createPartyMap(db, { partySeed: seed, mapTypeId: 'city', name: 'A' })
-    createPartyMap(db, { partySeed: seed, mapTypeId: 'city', name: 'B' })
     expect(() =>
-      createPartyMap(db, { partySeed: seed, mapTypeId: 'city', name: 'C' })
+      createPartyMap(db, { partySeed: seed, mapTypeId: 'city', name: 'B' })
     ).toThrowError(/map_limit/)
   })
 

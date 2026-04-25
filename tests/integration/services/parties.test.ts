@@ -27,7 +27,12 @@ describe('parties service', () => {
     expect(r.masterToken.length).toBeGreaterThan(20)
     expect(r.masterPlayer.role).toBe('master')
     expect(r.masterPlayer.nickname).toBe('Nick')
-    expect(r.masterPlayer.currentAreaId).toBe('piazza')
+    // v2d: il master nasce sulla spawn map (city) all'area di spawn del
+    // generator. spawnMapId è valorizzato e currentAreaId è coerente.
+    expect(r.spawnMapId).toBeTruthy()
+    expect(r.spawnAreaId).toBeTruthy()
+    expect(r.masterPlayer.currentMapId).toBe(r.spawnMapId)
+    expect(r.masterPlayer.currentAreaId).toBe(r.spawnAreaId)
     expect(r.cityState.areas.piazza.status).toBe('intact')
   })
 

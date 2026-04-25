@@ -5,6 +5,7 @@ import type { PlayerPosition } from '~~/shared/protocol/ws'
 
 type PositionRow = {
   partySeed: string
+  mapId: string | null
   playerId: string
   areaId: string
   x: number
@@ -19,13 +20,18 @@ export function listPartyPositions(db: Db, partySeed: string): PlayerPosition[] 
   return rows.map(r => ({ playerId: r.playerId, areaId: r.areaId, x: r.x, y: r.y }))
 }
 
-export function upsertPosition(db: Db, partySeed: string, playerId: string, areaId: string, x: number, y: number): void {
+// v2d: mapId opzionale; finché la PK è (partySeed, playerId, areaId) la
+// colonna serve solo per annotation. La migration 0006 estenderà la PK.
+export function upsertPosition(
+  db: Db, partySeed: string, playerId: string, areaId: string,
+  x: number, y: number, mapId?: string
+): void {
   // ON CONFLICT sulle tre PK: (partySeed, playerId, areaId)
   db.insert(playerPositions).values({
-    partySeed, playerId, areaId, x, y, setAt: Date.now()
+    partySeed, mapId: mapId ?? null, playerId, areaId, x, y, setAt: Date.now()
   }).onConflictDoUpdate({
     target: [playerPositions.partySeed, playerPositions.playerId, playerPositions.areaId],
-    set: { x, y, setAt: Date.now() }
+    set: { x, y, setAt: Date.now(), mapId: mapId ?? null }
   }).run()
 }
 

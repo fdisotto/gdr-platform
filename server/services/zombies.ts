@@ -6,6 +6,7 @@ import type { Zombie } from '~~/shared/protocol/ws'
 type ZombieRow = {
   id: string
   partySeed: string
+  mapId: string | null
   areaId: string
   x: number
   y: number
@@ -34,10 +35,13 @@ export function listZombiesForParty(db: Db, partySeed: string): Zombie[] {
   return rows.map(toDomain)
 }
 
-export function insertZombie(db: Db, z: Zombie): void {
+// v2d: mapId opzionale, propagato sulla colonna nullable. Le insert legacy
+// senza mapId restano valide.
+export function insertZombie(db: Db, z: Zombie, mapId?: string): void {
   db.insert(zombies).values({
     id: z.id,
     partySeed: z.partySeed,
+    mapId: mapId ?? null,
     areaId: z.areaId,
     x: z.x,
     y: z.y,
@@ -47,11 +51,12 @@ export function insertZombie(db: Db, z: Zombie): void {
   }).run()
 }
 
-export function insertZombies(db: Db, zs: Zombie[]): void {
+export function insertZombies(db: Db, zs: Zombie[], mapId?: string): void {
   if (zs.length === 0) return
   db.insert(zombies).values(zs.map(z => ({
     id: z.id,
     partySeed: z.partySeed,
+    mapId: mapId ?? null,
     areaId: z.areaId,
     x: z.x,
     y: z.y,

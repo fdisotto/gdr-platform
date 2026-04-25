@@ -6,6 +6,7 @@ const GLOBAL_KEY = '*'
 
 export interface WeatherOverrideRow {
   partySeed: string
+  mapId: string | null
   areaId: string // '*' = globale
   code: string
   intensity: number
@@ -17,18 +18,24 @@ function key(areaId: string | null): string {
   return areaId ?? GLOBAL_KEY
 }
 
-export function setOverride(db: Db, seed: string, areaId: string | null, code: string, intensity: number) {
+// v2d: mapId opzionale, propagato sulla colonna nullable (PK estesa solo
+// in 0006). L'override globale (areaId=null) resta con mapId facoltativo.
+export function setOverride(
+  db: Db, seed: string, areaId: string | null,
+  code: string, intensity: number, mapId?: string
+) {
   const k = key(areaId)
   const existing = db.select().from(weatherOverrides)
     .where(and(eq(weatherOverrides.partySeed, seed), eq(weatherOverrides.areaId, k))).all()
   if (existing.length > 0) {
     db.update(weatherOverrides)
-      .set({ code, intensity, setAt: Date.now(), expiresAt: null })
+      .set({ code, intensity, setAt: Date.now(), expiresAt: null, mapId: mapId ?? null })
       .where(and(eq(weatherOverrides.partySeed, seed), eq(weatherOverrides.areaId, k)))
       .run()
   } else {
     db.insert(weatherOverrides).values({
       partySeed: seed,
+      mapId: mapId ?? null,
       areaId: k,
       code,
       intensity,

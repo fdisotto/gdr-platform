@@ -1,6 +1,6 @@
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import type { Db } from '~~/server/db/client'
-import { players, bans } from '~~/server/db/schema'
+import { players, bans, partyMaps } from '~~/server/db/schema'
 import { generateToken, generateUuid } from '~~/server/utils/crypto'
 import { DomainError } from '~~/shared/errors'
 import {
@@ -12,6 +12,9 @@ import {
   MAX_PARTIES_PER_USER, MAX_MEMBERS_PER_PARTY
 } from '~~/shared/limits'
 import { getSettingNumber } from '~~/server/services/system-settings'
+import { findSpawnMap } from '~~/server/services/party-maps'
+import { findMapType, parseDefaultParams } from '~~/server/services/map-types'
+import { generate } from '~~/shared/map/generators'
 
 export interface PlayerRow {
   id: string
@@ -32,6 +35,12 @@ export interface PlayerRow {
 
 export interface JoinPartyOptions {
   userId: string
+  // v2d (T16): mapId/areaId opzionali. Se omessi e la party ha una spawn
+  // map, fallback su (spawnMap.id, spawnMap.spawnAreaId). Se la party non
+  // ha spawn map (party legacy pre-T16), areaId default 'piazza' e
+  // currentMapId resta null.
+  mapId?: string
+  areaId?: string
 }
 
 export function joinParty(db: Db, seed: string, displayName: string, opts: JoinPartyOptions): PlayerRow {
@@ -73,6 +82,17 @@ export function joinParty(db: Db, seed: string, displayName: string, opts: JoinP
   const sessionToken = generateToken(32)
   const now = Date.now()
 
+  // v2d (T16): risoluzione spawn map.
+  //   - opts.mapId esplicito → uso quello, areaId esplicito o spawnArea
+  //     della mappa indicata.
+  //   - opts.mapId omesso → cerco la spawn map della party. Se trovata,
+  //     uso (spawnMap.id, generated.spawnAreaId).
+  //   - nessuna spawn map (party legacy) → currentMapId=null,
+  //     currentAreaId='piazza' come prima.
+  const resolved = resolveSpawn(db, seed, opts)
+  const targetMapId = resolved.mapId
+  const targetAreaId = resolved.areaId
+
   // Rejoin: se esiste già una riga per (party,user) (anche se ha leftAt),
   // riusiamo l'id storico per non rompere i riferimenti dei messaggi
   // (authorPlayerId). Aggiorniamo nickname/leftAt/isKicked/joinedAt/...
@@ -81,7 +101,8 @@ export function joinParty(db: Db, seed: string, displayName: string, opts: JoinP
       .set({
         nickname: nick,
         role: existingForUser.role, // role storico preservato
-        currentAreaId: 'piazza',
+        currentMapId: targetMapId,
+        currentAreaId: targetAreaId,
         isMuted: false,
         mutedUntil: null,
         isKicked: false,
@@ -97,8 +118,8 @@ export function joinParty(db: Db, seed: string, displayName: string, opts: JoinP
       partySeed: seed,
       nickname: nick,
       role: existingForUser.role,
-      currentMapId: existingForUser.currentMapId ?? null,
-      currentAreaId: 'piazza',
+      currentMapId: targetMapId,
+      currentAreaId: targetAreaId,
       isMuted: false,
       mutedUntil: null,
       isKicked: false,
@@ -115,7 +136,8 @@ export function joinParty(db: Db, seed: string, displayName: string, opts: JoinP
     userId: opts.userId,
     nickname: nick,
     role: 'user',
-    currentAreaId: 'piazza',
+    currentMapId: targetMapId,
+    currentAreaId: targetAreaId,
     isMuted: false,
     mutedUntil: null,
     isKicked: false,
@@ -126,10 +148,46 @@ export function joinParty(db: Db, seed: string, displayName: string, opts: JoinP
 
   return {
     id, partySeed: seed, nickname: nick, role: 'user',
-    currentMapId: null,
-    currentAreaId: 'piazza', isMuted: false, mutedUntil: null,
+    currentMapId: targetMapId,
+    currentAreaId: targetAreaId,
+    isMuted: false, mutedUntil: null,
     isKicked: false, joinedAt: now, lastSeenAt: now, sessionToken
   }
+}
+
+// v2d (T16): risolve (mapId, areaId) per joinParty in funzione degli
+// override del chiamante e dello spawn map della party. Estratto perché
+// usato sia nel branch rejoin sia in quello insert.
+function resolveSpawn(
+  db: Db, seed: string, opts: JoinPartyOptions
+): { mapId: string | null, areaId: string } {
+  if (opts.mapId !== undefined) {
+    // Caller esplicito: rispetta mapId. Se areaId mancante, prova a
+    // calcolarlo dalla GeneratedMap del map type associato.
+    const areaId = opts.areaId ?? deriveSpawnAreaForMap(db, opts.mapId) ?? 'piazza'
+    return { mapId: opts.mapId, areaId }
+  }
+  const spawn = findSpawnMap(db, seed)
+  if (!spawn) {
+    return { mapId: null, areaId: opts.areaId ?? 'piazza' }
+  }
+  if (opts.areaId !== undefined) {
+    return { mapId: spawn.id, areaId: opts.areaId }
+  }
+  const areaId = deriveSpawnAreaForMap(db, spawn.id) ?? 'piazza'
+  return { mapId: spawn.id, areaId }
+}
+
+function deriveSpawnAreaForMap(db: Db, mapId: string): string | null {
+  // Lookup partyMap row + map type → genera la mappa per leggere lo
+  // spawnAreaId. Le chiamate sono cacheate in shared/map/generators.
+  const map = db.select().from(partyMaps).where(eq(partyMaps.id, mapId)).get() as
+    { id: string, mapTypeId: string, mapSeed: string } | undefined
+  if (!map) return null
+  const type = findMapType(db, map.mapTypeId)
+  if (!type) return null
+  const generated = generate(map.mapTypeId, map.mapSeed, parseDefaultParams(type))
+  return generated.spawnAreaId
 }
 
 // Trova una riga players per (party,user) ignorando leftAt/isKicked. Serve

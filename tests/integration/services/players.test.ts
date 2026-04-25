@@ -24,10 +24,13 @@ beforeEach(async () => {
 })
 
 describe('players service', () => {
-  it('joinParty crea player nell area piazza', () => {
+  it('joinParty crea player sullo spawn della mappa di spawn', () => {
     const p = joinParty(db, seed, 'Anna', { userId: annaUserId })
     expect(p.role).toBe('user')
-    expect(p.currentAreaId).toBe('piazza')
+    // v2d (T16): joinParty risolve la spawn map della party e usa il
+    // suo spawnAreaId come default. currentMapId è valorizzato.
+    expect(p.currentMapId).not.toBeNull()
+    expect(p.currentAreaId.length).toBeGreaterThan(0)
     expect(p.sessionToken.length).toBeGreaterThan(10)
   })
 
