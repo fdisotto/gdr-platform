@@ -38,7 +38,8 @@ export const ERROR_CODES = [
   'map_type_not_found',
   'map_limit',
   'map_not_empty',
-  'cannot_delete_spawn'
+  'cannot_delete_spawn',
+  'transition_invalid'
 ] as const
 
 export type ErrorCode = typeof ERROR_CODES[number]

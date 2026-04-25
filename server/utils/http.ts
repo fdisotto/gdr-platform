@@ -32,7 +32,8 @@ export function toH3Error(e: unknown): never {
       // v2d multi-map
       map_limit: 429,
       map_not_empty: 409,
-      cannot_delete_spawn: 409
+      cannot_delete_spawn: 409,
+      transition_invalid: 400
     }
     throw createError({
       statusCode: statusByCode[e.code] ?? 400,
