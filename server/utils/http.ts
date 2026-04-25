@@ -28,7 +28,11 @@ export function toH3Error(e: unknown): never {
       // v2c admin
       maintenance: 503,
       last_admin: 409,
-      setting_invalid: 400
+      setting_invalid: 400,
+      // v2d multi-map
+      map_limit: 429,
+      map_not_empty: 409,
+      cannot_delete_spawn: 409
     }
     throw createError({
       statusCode: statusByCode[e.code] ?? 400,

@@ -35,7 +35,10 @@ export const ERROR_CODES = [
   'last_admin',
   'setting_invalid',
   // v2d multi-map
-  'map_type_not_found'
+  'map_type_not_found',
+  'map_limit',
+  'map_not_empty',
+  'cannot_delete_spawn'
 ] as const
 
 export type ErrorCode = typeof ERROR_CODES[number]
