@@ -24,7 +24,11 @@ export function toH3Error(e: unknown): never {
       member_limit: 429,
       party_limit: 429,
       archived: 410,
-      invite_invalid: 403
+      invite_invalid: 403,
+      // v2c admin
+      maintenance: 503,
+      last_admin: 409,
+      setting_invalid: 400
     }
     throw createError({
       statusCode: statusByCode[e.code] ?? 400,

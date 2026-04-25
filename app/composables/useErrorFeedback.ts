@@ -36,7 +36,10 @@ const TOAST_MAP: Record<string, ToastSpec> = {
   last_master: { level: 'warn', title: 'Sei l\'ultimo master, promuovi qualcuno o archivia' },
   member_limit: { level: 'warn', title: 'Party piena (30/30)' },
   party_limit: { level: 'warn', title: 'Sei già in 5 party, esci da una prima' },
-  invite_invalid: { level: 'warn', title: 'Invito non valido o scaduto' }
+  invite_invalid: { level: 'warn', title: 'Invito non valido o scaduto' },
+  // v2c admin
+  last_admin: { level: 'warn', title: 'Sei l\'unico superadmin attivo' },
+  setting_invalid: { level: 'warn', title: 'Valore impostazione non valido' }
 }
 
 interface BlockingSpec {
@@ -76,6 +79,12 @@ const BLOCKING_MAP: Record<string, BlockingSpec> = {
     title: 'Party archiviata',
     body: 'Questa party non è più attiva. Solo un superadmin può ripristinarla.',
     cta: 'Torna alla home'
+  },
+  // v2c: manutenzione attiva, navigazione bloccata
+  maintenance: {
+    title: 'Manutenzione',
+    body: 'Il server è in manutenzione. Riprova tra qualche minuto.',
+    cta: 'Riprova'
   }
 }
 

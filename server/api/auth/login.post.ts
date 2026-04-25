@@ -5,7 +5,7 @@ import { verifyPassword, generateSessionToken } from '~~/server/services/auth'
 import { findUserByUsername } from '~~/server/services/users'
 import { createSession } from '~~/server/services/sessions'
 import { logAuthEvent } from '~~/server/services/auth-events'
-import { loginRateLimiter } from '~~/server/services/rate-limits'
+import { getLoginRateLimiter } from '~~/server/services/rate-limits'
 import { setSessionCookie } from '~~/server/utils/session-cookie'
 import { toH3Error } from '~~/server/utils/http'
 
@@ -21,12 +21,12 @@ export default defineEventHandler(async (event) => {
     const userAgent = getHeader(event, 'user-agent') ?? undefined
 
     // Rate limit PRIMA del lookup per non rivelare esistenza username.
+    const db = useDb()
+    const loginRateLimiter = getLoginRateLimiter(db)
     const rateKey = `${body.username.toLowerCase()}:${ip}`
     if (!loginRateLimiter.tryHit(rateKey)) {
       throw createError({ statusCode: 429, statusMessage: 'rate_limited' })
     }
-
-    const db = useDb()
     const user = findUserByUsername(db, body.username)
     if (!user) {
       logAuthEvent(db, {

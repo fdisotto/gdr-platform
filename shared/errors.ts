@@ -29,7 +29,11 @@ export const ERROR_CODES = [
   'member_limit',
   'party_limit',
   'archived',
-  'invite_invalid'
+  'invite_invalid',
+  // v2c admin
+  'maintenance',
+  'last_admin',
+  'setting_invalid'
 ] as const
 
 export type ErrorCode = typeof ERROR_CODES[number]

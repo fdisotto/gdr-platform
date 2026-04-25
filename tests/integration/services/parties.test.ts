@@ -239,4 +239,22 @@ describe('parties service', () => {
     const r = await createParty(db, { userId, displayName: 'M', visibility: 'public', joinPolicy: 'auto' })
     expect(() => transferMaster(db, r.seed, userId, userId)).toThrow(/===/)
   })
+
+  // v2c: limits.maxPartiesPerUser runtime override
+  it('joinParty rispetta limits.maxPartiesPerUser via system_settings', async () => {
+    const { setSetting, invalidateCache } = await import('~~/server/services/system-settings')
+    invalidateCache()
+    setSetting(db, 'limits.maxPartiesPerUser', 1, null)
+    // userId ha già 0 party. Crea 1 → ok. Tentativo di joinare a un'altra come userB
+    const userB = await createApprovedUser(db, 'b')
+    const r1 = await createParty(db, { userId: userB, displayName: 'A', visibility: 'public', joinPolicy: 'auto' })
+    const r2 = await createParty(db, { userId: userB, displayName: 'B', visibility: 'public', joinPolicy: 'auto' })
+    void r1
+    void r2
+    // userId prova a joinare la prima
+    joinParty(db, r1.seed, 'X', { userId })
+    // ora userId ha 1 party attiva → join in r2 deve fallire con party_limit
+    expect(() => joinParty(db, r2.seed, 'Y', { userId })).toThrow(/party_limit|max 1/)
+    invalidateCache()
+  })
 })

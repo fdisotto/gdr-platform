@@ -10,6 +10,7 @@ import { toH3Error } from '~~/server/utils/http'
 import { requireUser } from '~~/server/utils/auth-middleware'
 import { DomainError } from '~~/shared/errors'
 import { MAX_PARTIES_PER_USER, MAX_TOTAL_PARTIES } from '~~/shared/limits'
+import { getSettingNumber } from '~~/server/services/system-settings'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -22,16 +23,17 @@ export default defineEventHandler(async (event) => {
     const body = parsed.data
     const db = useDb()
 
-    // Limite per utente: max 5 party attive (master+user, escluse archived/left).
+    // v2c: limiti runtime da system_settings con fallback su limits.ts.
+    const maxPartiesPerUser = getSettingNumber(db, 'limits.maxPartiesPerUser', MAX_PARTIES_PER_USER)
+    const maxTotalParties = getSettingNumber(db, 'limits.maxTotalParties', MAX_TOTAL_PARTIES)
     const myActive = countActivePartiesForUser(db, me.id)
-    if (myActive >= MAX_PARTIES_PER_USER) {
-      throw new DomainError('party_limit', `max ${MAX_PARTIES_PER_USER} per user`)
+    if (myActive >= maxPartiesPerUser) {
+      throw new DomainError('party_limit', `max ${maxPartiesPerUser} per user`)
     }
-    // Limite di sistema: max 100 party totali (anche archiviate, per ora).
     const totalRow = db.select({ c: count() }).from(parties).all() as { c: number }[]
     const total = totalRow[0]?.c ?? 0
-    if (total >= MAX_TOTAL_PARTIES) {
-      throw new DomainError('party_limit', `max ${MAX_TOTAL_PARTIES} total`)
+    if (total >= maxTotalParties) {
+      throw new DomainError('party_limit', `max ${maxTotalParties} total`)
     }
 
     const result = await createParty(db, {

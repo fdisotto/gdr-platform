@@ -4,6 +4,7 @@ import type { Db } from '~~/server/db/client'
 import { partyInvites } from '~~/server/db/schema'
 import { generateUuid } from '~~/server/utils/crypto'
 import { INVITE_TTL_DAYS } from '~~/shared/limits'
+import { getSettingNumber } from '~~/server/services/system-settings'
 
 export interface InviteRow {
   id: string
@@ -27,7 +28,8 @@ export function createInvite(db: Db, input: CreateInviteInput): InviteRow {
   // base64url 32 byte → ~43 char URL-safe, niente padding.
   const token = randomBytes(32).toString('base64url')
   const now = Date.now()
-  const expiresAt = now + INVITE_TTL_DAYS * 86400_000
+  const ttlDays = getSettingNumber(db, 'limits.inviteTtlDays', INVITE_TTL_DAYS)
+  const expiresAt = now + ttlDays * 86400_000
   const row: InviteRow = {
     id,
     partySeed: input.partySeed,

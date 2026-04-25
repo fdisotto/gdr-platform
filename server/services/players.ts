@@ -11,6 +11,7 @@ import { logMasterAction } from '~~/server/services/master-actions'
 import {
   MAX_PARTIES_PER_USER, MAX_MEMBERS_PER_PARTY
 } from '~~/shared/limits'
+import { getSettingNumber } from '~~/server/services/system-settings'
 
 export interface PlayerRow {
   id: string
@@ -38,24 +39,27 @@ export function joinParty(db: Db, seed: string, displayName: string, opts: JoinP
     throw new DomainError('banned', nick)
   }
 
-  // v2b: limiti membership.
-  // 1) party_limit: l'utente non deve avere già MAX_PARTIES_PER_USER party
-  //    attive. Se ha lasciato e sta rientrando in una stessa party non
-  //    contiamo doppio (rejoin sotto). Quindi consideriamo il limite solo
-  //    quando NON esiste già una riga (active o inactive) per (party,user).
+  // v2b/v2c: limiti membership letti runtime da system_settings con
+  // fallback sui default hard-coded in shared/limits.ts.
+  // 1) party_limit: l'utente non deve avere già N party attive. Se ha
+  //    lasciato e sta rientrando in una stessa party non contiamo doppio
+  //    (rejoin sotto). Quindi consideriamo il limite solo quando NON
+  //    esiste già una riga (active o inactive) per (party,user).
+  const maxPartiesPerUser = getSettingNumber(db, 'limits.maxPartiesPerUser', MAX_PARTIES_PER_USER)
+  const maxMembersPerParty = getSettingNumber(db, 'limits.maxMembersPerParty', MAX_MEMBERS_PER_PARTY)
   const existingForUser = findAnyPlayerRow(db, seed, opts.userId)
   if (!existingForUser) {
     const active = countActivePartiesForUser(db, opts.userId)
-    if (active >= MAX_PARTIES_PER_USER) {
-      throw new DomainError('party_limit', `max ${MAX_PARTIES_PER_USER}`)
+    if (active >= maxPartiesPerUser) {
+      throw new DomainError('party_limit', `max ${maxPartiesPerUser}`)
     }
   }
 
-  // 2) member_limit: la party non deve aver già MAX_MEMBERS_PER_PARTY membri
-  //    attivi (master inclusi).
+  // 2) member_limit: la party non deve aver già N membri attivi (master
+  //    inclusi).
   const memberCount = countActiveMembers(db, seed)
-  if (memberCount >= MAX_MEMBERS_PER_PARTY) {
-    throw new DomainError('member_limit', `max ${MAX_MEMBERS_PER_PARTY}`)
+  if (memberCount >= maxMembersPerParty) {
+    throw new DomainError('member_limit', `max ${maxMembersPerParty}`)
   }
 
   const conflict = findPlayerByNickname(db, seed, nick)

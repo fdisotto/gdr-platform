@@ -4,7 +4,7 @@ import { useDb } from '~~/server/utils/db'
 import { hashPassword } from '~~/server/services/auth'
 import { insertUser, findUserByUsername } from '~~/server/services/users'
 import { logAuthEvent } from '~~/server/services/auth-events'
-import { registerRateLimiter } from '~~/server/services/rate-limits'
+import { getRegisterRateLimiter } from '~~/server/services/rate-limits'
 import { generateUuid } from '~~/server/utils/crypto'
 import { toH3Error } from '~~/server/utils/http'
 
@@ -17,12 +17,11 @@ export default defineEventHandler(async (event) => {
     }
     const body = parsed.data
     const ip = getRequestIP(event, { xForwardedFor: true }) ?? 'unknown'
+    const db = useDb()
 
-    if (!registerRateLimiter.tryHit(ip)) {
+    if (!getRegisterRateLimiter(db).tryHit(ip)) {
       throw createError({ statusCode: 429, statusMessage: 'rate_limited' })
     }
-
-    const db = useDb()
     const existing = findUserByUsername(db, body.username)
     if (existing) {
       logAuthEvent(db, {

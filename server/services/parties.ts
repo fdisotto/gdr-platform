@@ -2,6 +2,7 @@ import { and, asc, eq, isNull } from 'drizzle-orm'
 import type { Db } from '~~/server/db/client'
 import { parties, players, areasState, partyJoinRequests } from '~~/server/db/schema'
 import { MAX_MEMBERS_PER_PARTY } from '~~/shared/limits'
+import { getSettingNumber } from '~~/server/services/system-settings'
 import { deriveCityState, type CityState } from '~~/shared/seed/derive-city'
 import {
   generateToken, generateUuid, hashMasterToken, verifyMasterToken
@@ -331,9 +332,10 @@ export function listPartiesForBrowser(db: Db, opts: BrowserOpts): BrowserPage {
     }
   })
 
-  // withSlots dopo aver calcolato memberCount.
+  // withSlots dopo aver calcolato memberCount: limite runtime da settings.
+  const maxMembers = getSettingNumber(db, 'limits.maxMembersPerParty', MAX_MEMBERS_PER_PARTY)
   const slotted = filters.withSlots
-    ? items.filter(i => i.memberCount < MAX_MEMBERS_PER_PARTY)
+    ? items.filter(i => i.memberCount < maxMembers)
     : items
 
   // Sort
