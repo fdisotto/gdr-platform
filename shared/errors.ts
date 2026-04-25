@@ -33,7 +33,9 @@ export const ERROR_CODES = [
   // v2c admin
   'maintenance',
   'last_admin',
-  'setting_invalid'
+  'setting_invalid',
+  // v2d multi-map
+  'map_type_not_found'
 ] as const
 
 export type ErrorCode = typeof ERROR_CODES[number]
