@@ -271,12 +271,32 @@ function makeConnection(seed: string): PartyConnection {
         break
       }
       case 'player:moved': {
-        const payload = data as { playerId: string, toAreaId: string, fromAreaId: string, teleported: boolean }
+        const payload = data as {
+          playerId: string
+          toAreaId: string
+          fromAreaId: string
+          // v2d: per cross-map move il server include toMapId/fromMapId.
+          // Per intra-map il server può comunque mandarli (entrambi pari al
+          // currentMapId del player) oppure null in legacy. null/undefined
+          // → invariante: la mappa corrente non cambia.
+          toMapId?: string | null
+          fromMapId?: string | null
+          teleported: boolean
+        }
         partyStore.players = partyStore.players.map(p =>
           p.id === payload.playerId ? { ...p, currentAreaId: payload.toAreaId } : p
         )
         if (partyStore.me && partyStore.me.id === payload.playerId) {
-          partyStore.me = { ...partyStore.me, currentAreaId: payload.toAreaId }
+          partyStore.me = {
+            ...partyStore.me,
+            currentAreaId: payload.toAreaId,
+            currentMapId: payload.toMapId ?? partyStore.me.currentMapId ?? null
+          }
+          // Tieni allineato anche il top-level currentMapId del party store
+          // (usato da usePartyMaps.activeMap che pilota MapView).
+          if (payload.toMapId) {
+            partyStore.currentMapId = payload.toMapId
+          }
         }
         playerPositionsStore.resetForPlayer(payload.playerId)
         break
