@@ -27,21 +27,24 @@ await setup({
   env: { DATABASE_URL: dbPath }
 })
 
-async function createPartyWith(displayName: string): Promise<{ seed: string }> {
+async function createPartyWith(
+  displayName: string,
+  opts: { visibility?: 'public' | 'private', joinPolicy?: 'auto' | 'request' } = {}
+): Promise<{ seed: string, masterCookie: string }> {
   const { cookie } = await registerApproveLogin(dbPath, uniqueUsername('m'))
   const res = await fetch('/api/parties', {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ displayName })
+    body: JSON.stringify({ displayName, ...opts })
   })
   if (res.status !== 200) throw new Error(`createParty failed ${res.status}`)
   const body = await res.json() as { seed: string }
-  return { seed: body.seed }
+  return { seed: body.seed, masterCookie: cookie }
 }
 
 describe('POST /api/parties/:seed/join', () => {
-  it('unisce un nuovo player con cookie auth', async () => {
-    const { seed } = await createPartyWith('Master')
+  it('unisce un nuovo player in party public+auto', async () => {
+    const { seed } = await createPartyWith('Master', { visibility: 'public', joinPolicy: 'auto' })
     const { cookie: annaCookie } = await registerApproveLogin(dbPath, uniqueUsername('a'))
     const res = await fetch(`/api/parties/${seed}/join`, {
       method: 'POST',
@@ -57,7 +60,7 @@ describe('POST /api/parties/:seed/join', () => {
   })
 
   it('rifiuta senza cookie auth con 401', async () => {
-    const { seed } = await createPartyWith('Master')
+    const { seed } = await createPartyWith('Master', { visibility: 'public', joinPolicy: 'auto' })
     const res = await fetch(`/api/parties/${seed}/join`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -76,8 +79,8 @@ describe('POST /api/parties/:seed/join', () => {
     expect(res.status).toBe(404)
   })
 
-  it('rifiuta displayName conflittuale con 409', async () => {
-    const { seed } = await createPartyWith('Master')
+  it('rifiuta displayName conflittuale con 409 (public+auto)', async () => {
+    const { seed } = await createPartyWith('Master', { visibility: 'public', joinPolicy: 'auto' })
     const { cookie: annaCookie } = await registerApproveLogin(dbPath, uniqueUsername('a'))
     await fetch(`/api/parties/${seed}/join`, {
       method: 'POST',
@@ -91,6 +94,39 @@ describe('POST /api/parties/:seed/join', () => {
       body: JSON.stringify({ displayName: 'Anna' })
     })
     expect(res.status).toBe(409)
+  })
+
+  it('private senza inviteToken → 403 private_party', async () => {
+    const { seed } = await createPartyWith('Master', { visibility: 'private', joinPolicy: 'request' })
+    const { cookie } = await registerApproveLogin(dbPath, uniqueUsername('a'))
+    const res = await fetch(`/api/parties/${seed}/join`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ displayName: 'Anna' })
+    })
+    expect(res.status).toBe(403)
+  })
+
+  it('public+request senza inviteToken → 403 request_required', async () => {
+    const { seed } = await createPartyWith('Master', { visibility: 'public', joinPolicy: 'request' })
+    const { cookie } = await registerApproveLogin(dbPath, uniqueUsername('a'))
+    const res = await fetch(`/api/parties/${seed}/join`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ displayName: 'Anna' })
+    })
+    expect(res.status).toBe(403)
+  })
+
+  it('inviteToken invalido → 403 invite_invalid', async () => {
+    const { seed } = await createPartyWith('Master', { visibility: 'private', joinPolicy: 'request' })
+    const { cookie } = await registerApproveLogin(dbPath, uniqueUsername('a'))
+    const res = await fetch(`/api/parties/${seed}/join`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ displayName: 'Anna', inviteToken: 'bogus-token-xx' })
+    })
+    expect(res.status).toBe(403)
   })
 })
 
