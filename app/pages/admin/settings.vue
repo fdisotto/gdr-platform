@@ -17,10 +17,11 @@ interface SettingDef {
   key: string
   label: string
   description: string
-  kind: 'int' | 'bool' | 'text'
+  kind: 'int' | 'bool' | 'text' | 'enum'
   defaultValue: number | boolean | string
   min?: number
   max?: number
+  options?: string[] // solo per kind='enum'
 }
 
 interface Section {
@@ -39,7 +40,8 @@ const SECTIONS: Section[] = [
       { key: 'limits.inviteTtlDays', label: 'TTL invito (giorni)', description: 'Validità di un link invito generato dal master.', kind: 'int', defaultValue: 7, min: 1, max: 60 },
       { key: 'limits.loginRateMaxFailures', label: 'Login fallimenti max', description: 'Massimo tentativi falliti consecutivi prima del lockout.', kind: 'int', defaultValue: 5, min: 1, max: 100 },
       { key: 'limits.loginRateWindowMinutes', label: 'Login finestra (minuti)', description: 'Finestra temporale del rate limiter login.', kind: 'int', defaultValue: 15, min: 1, max: 1440 },
-      { key: 'limits.registerRateMaxPerHour', label: 'Registrazioni max/ora', description: 'Massimo numero di nuove registrazioni per indirizzo IP all\'ora.', kind: 'int', defaultValue: 3, min: 1, max: 100 }
+      { key: 'limits.registerRateMaxPerHour', label: 'Registrazioni max/ora', description: 'Massimo numero di nuove registrazioni per indirizzo IP all\'ora.', kind: 'int', defaultValue: 3, min: 1, max: 100 },
+      { key: 'limits.maxMapsPerParty', label: 'Max mappe per party', description: 'Tetto rigido sulle mappe (party_maps) di una singola party.', kind: 'int', defaultValue: 10, min: 1, max: 50 }
     ]
   },
   {
@@ -47,7 +49,9 @@ const SECTIONS: Section[] = [
     defs: [
       { key: 'features.registrationEnabled', label: 'Registrazioni aperte', description: 'Se disattivato, l\'endpoint /api/auth/register restituisce 403.', kind: 'bool', defaultValue: true },
       { key: 'features.partyCreationEnabled', label: 'Creazione party abilitata', description: 'Se disattivato, gli utenti non possono creare nuove party.', kind: 'bool', defaultValue: true },
-      { key: 'features.voiceChatEnabled', label: 'Chat vocale abilitata', description: 'Toggle globale per la voice chat.', kind: 'bool', defaultValue: true }
+      { key: 'features.voiceChatEnabled', label: 'Chat vocale abilitata', description: 'Toggle globale per la voice chat.', kind: 'bool', defaultValue: true },
+      { key: 'features.renderEngine', label: 'Render engine mappa', description: 'Engine principale per il rendering della mappa: pixi (canvas WebGL) o svg (fallback). Globale.', kind: 'enum', defaultValue: 'pixi', options: ['pixi', 'svg'] },
+      { key: 'features.mapTransitionsEnabled', label: 'Transizioni multi-mappa abilitate', description: 'Se disattivato, le porte tra mappe sono ignorate (kill-switch v2d).', kind: 'bool', defaultValue: true }
     ]
   },
   {
@@ -232,6 +236,20 @@ const sectionsView = computed(() => SECTIONS)
               >
               <span>{{ drafts[def.key] ? 'attivo' : 'disattivo' }}</span>
             </label>
+            <select
+              v-else-if="def.kind === 'enum'"
+              v-model="drafts[def.key]"
+              class="px-3 py-1.5 rounded font-mono-z text-sm w-40"
+              style="background: var(--z-bg-700); border: 1px solid var(--z-border); color: var(--z-text-hi); outline: none"
+            >
+              <option
+                v-for="opt in def.options"
+                :key="opt"
+                :value="opt"
+              >
+                {{ opt }}
+              </option>
+            </select>
             <textarea
               v-else
               v-model="drafts[def.key]"
