@@ -95,6 +95,11 @@ const AreaStateSnapshot = z.object({
 export const PartyMapPublicSchema = z.object({
   id: z.string(),
   mapTypeId: z.string(),
+  // v2d/T20: il client deve poter rigenerare la GeneratedMap localmente
+  // (stesso generator deterministico del server). Servono mapSeed + params
+  // effettivamente usati dal server per evitare divergenze di rendering.
+  mapSeed: z.string(),
+  params: z.record(z.string(), z.unknown()),
   name: z.string(),
   isSpawn: z.boolean(),
   createdAt: z.number()

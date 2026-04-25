@@ -1434,13 +1434,22 @@ async function handleHello(peer: Peer, seed: string) {
     // (T17 non ancora applicato) i due array sono vuoti — il client deve
     // restare retrocompatibile.
     const allMaps = listPartyMaps(db, seed)
-    const mapsPublic: PartyMapPublic[] = allMaps.map(m => ({
-      id: m.id,
-      mapTypeId: m.mapTypeId,
-      name: m.name,
-      isSpawn: m.isSpawn,
-      createdAt: m.createdAt
-    }))
+    const mapsPublic: PartyMapPublic[] = allMaps.map((m) => {
+      // T20: il client rigenera la mappa via stesso generator deterministico.
+      // Servono mapSeed e i params effettivi (defaultParams del map_type).
+      // Se il map_type non esiste più (edge case post-cleanup), fallback {}.
+      const mt = findMapType(db, m.mapTypeId)
+      const params = mt ? parseDefaultParams(mt) : {}
+      return {
+        id: m.id,
+        mapTypeId: m.mapTypeId,
+        mapSeed: m.mapSeed,
+        params,
+        name: m.name,
+        isSpawn: m.isSpawn,
+        createdAt: m.createdAt
+      }
+    })
     const transitionsPublic: TransitionPublic[] = listTransitionsForParty(db, seed).map(t => ({
       id: t.id,
       fromMapId: t.fromMapId,

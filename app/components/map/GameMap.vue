@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
-import { AREAS, ADJACENCY, type AreaId } from '~~/shared/map/areas'
+import { AREAS as LEGACY_AREAS, ADJACENCY as LEGACY_ADJACENCY, type Area, type AreaId } from '~~/shared/map/areas'
+import type { GeneratedMap } from '~~/shared/map/generators/types'
 import { usePartyStore } from '~/stores/party'
 import { useViewStore } from '~/stores/view'
 import { usePartyConnections } from '~/composables/usePartyConnections'
@@ -13,6 +14,56 @@ import MapLegend from '~/components/map/MapLegend.vue'
 import MapPlayersBox from '~/components/map/MapPlayersBox.vue'
 import MapRoads from '~/components/map/MapRoads.vue'
 import MapDecor from '~/components/map/MapDecor.vue'
+
+// T20: GameMap consuma un GeneratedMap deterministico quando passato
+// (path multi-mappa post-T20). In assenza, usa la mappa hardcoded legacy
+// in `shared/map/areas.ts` per non rompere call-site pre-T20 (es. test
+// e party legacy senza partyMaps).
+const props = defineProps<{
+  generatedMap?: GeneratedMap | null
+}>()
+
+const areas = computed<readonly Area[]>(() => {
+  if (props.generatedMap) {
+    return props.generatedMap.areas.map<Area>(a => ({
+      id: a.id as AreaId,
+      name: a.name,
+      svg: {
+        x: a.shape.x,
+        y: a.shape.y,
+        w: a.shape.w,
+        h: a.shape.h,
+        shape: a.shape.kind,
+        points: a.shape.points
+      }
+    }))
+  }
+  return LEGACY_AREAS
+})
+
+const adjacency = computed<Record<string, string[]>>(() => {
+  if (props.generatedMap) return props.generatedMap.adjacency
+  return LEGACY_ADJACENCY as Record<string, string[]>
+})
+
+const adjacencyPairs = computed<Array<[string, string]>>(() => {
+  const pairs: Array<[string, string]> = []
+  const seen = new Set<string>()
+  for (const a of Object.keys(adjacency.value)) {
+    for (const b of adjacency.value[a] ?? []) {
+      const key = a < b ? `${a}::${b}` : `${b}::${a}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      pairs.push([a, b])
+    }
+  }
+  return pairs
+})
+
+const validAreaIds = computed(() => new Set(areas.value.map(a => a.id)))
+function isValidAreaId(id: string): boolean {
+  return validAreaIds.value.has(id as AreaId)
+}
 
 const seed = usePartySeed()
 const party = usePartyStore(seed)
@@ -131,7 +182,7 @@ function resetView() {
 function centerOnMe() {
   const myAreaId = party.me?.currentAreaId
   if (!myAreaId) return
-  const area = AREAS.find(a => a.id === myAreaId)
+  const area = areas.value.find(a => a.id === myAreaId)
   if (!area) return
   // Centro dell'area in coord logiche 1000x700
   const logicalCx = area.svg.x + area.svg.w / 2
@@ -258,11 +309,14 @@ onMounted(() => {
   resizeObs.observe(containerEl.value)
 })
 
+// Per generated map gli id sono stringhe arbitrarie; manteniamo AreaId come
+// alias di string per compatibilità con i call-site legacy (useAreaWeather,
+// onAreaClick) che ancora tipizzano AreaId.
 const currentAreaId = computed<AreaId | null>(() => (party.me?.currentAreaId as AreaId) ?? null)
 
 const adjacentSet = computed(() => {
   if (!currentAreaId.value) return new Set<string>()
-  return new Set<string>(ADJACENCY[currentAreaId.value] ?? [])
+  return new Set<string>(adjacency.value[currentAreaId.value] ?? [])
 })
 
 const isMaster = computed(() => party.me?.role === 'master')
@@ -304,7 +358,7 @@ function avatarCapacity(areaW: number, areaH: number): { cols: number, rows: num
   return { cols, rows, max: cols * rows }
 }
 
-function visiblePlayersFor(area: typeof AREAS[number]): { visible: typeof party.players, hidden: number, overflowPos: { x: number, y: number } | null } {
+function visiblePlayersFor(area: Area): { visible: typeof party.players, hidden: number, overflowPos: { x: number, y: number } | null } {
   const all = playersByArea.value.get(area.id) ?? []
   const { cols, max } = avatarCapacity(area.svg.w, area.svg.h)
   if (all.length <= max) {
@@ -331,6 +385,7 @@ const { weather } = useAreaWeather(() => currentAreaId.value as AreaId | null)
 function onAreaClick(areaId: AreaId) {
   if (!partyStore.me) return
   const myArea = partyStore.me.currentAreaId as AreaId
+  if (!isValidAreaId(myArea) || !isValidAreaId(areaId)) return
   // Già qui: il click apre il dettaglio dell'area
   if (myArea === areaId) {
     viewStore.openArea(areaId)
@@ -339,7 +394,7 @@ function onAreaClick(areaId: AreaId) {
   const isMasterRole = partyStore.me.role === 'master'
   // Master può muoversi ovunque; user solo in area adiacente e non chiusa
   if (!isMasterRole) {
-    const adj = new Set<string>(ADJACENCY[myArea] ?? [])
+    const adj = new Set<string>(adjacency.value[myArea] ?? [])
     if (!adj.has(areaId)) return // non raggiungibile, no-op
     const targetState = stateById.value.get(areaId)
     if (targetState?.status === 'closed') return
@@ -456,11 +511,14 @@ function onAreaClick(areaId: AreaId) {
       <g :transform="userTransform">
         <!-- Contenuto logico 1000x700 scalato uniformemente e centrato -->
         <g :transform="contentTransform">
-          <MapDecor />
-          <MapRoads />
+          <MapDecor :areas="areas" />
+          <MapRoads
+            :areas="areas"
+            :pairs="adjacencyPairs"
+          />
 
           <MapArea
-            v-for="a in AREAS"
+            v-for="a in areas"
             :key="a.id"
             :area="a"
             :state="stateById.get(a.id) ?? null"
@@ -468,11 +526,11 @@ function onAreaClick(areaId: AreaId) {
             :is-adjacent="adjacentSet.has(a.id)"
             :is-master="isMaster"
             :player-count="(playersByArea.get(a.id)?.length ?? 0)"
-            @click="onAreaClick(a.id)"
+            @click="onAreaClick(a.id as AreaId)"
           />
 
           <template
-            v-for="a in AREAS"
+            v-for="a in areas"
             :key="`av-${a.id}`"
           >
             <MapAvatar

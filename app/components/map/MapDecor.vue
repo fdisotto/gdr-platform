@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { usePartyStore } from '~/stores/party'
 import { usePartySeed } from '~/composables/usePartySeed'
 import { mulberry32, seedFromString } from '~~/shared/seed/prng'
-import { AREAS, areaCenter } from '~~/shared/map/areas'
+import { AREAS as LEGACY_AREAS, areaCenter, type Area } from '~~/shared/map/areas'
 
 interface Building {
   id: string
@@ -14,6 +14,13 @@ interface Building {
   shade: string
 }
 
+// T20: GameMap passa le aree effettive (legacy o derivate da GeneratedMap).
+const props = defineProps<{
+  areas?: readonly Area[]
+}>()
+
+const effectiveAreas = computed<readonly Area[]>(() => props.areas ?? LEGACY_AREAS)
+
 const partySeed = usePartySeed()
 const party = usePartyStore(partySeed)
 
@@ -22,7 +29,8 @@ const buildings = computed<Building[]>(() => {
   const rng = mulberry32(seedFromString(seed + '|decor'))
   const BUILDINGS_PER_AREA = 14
   const items: Building[] = []
-  for (const area of AREAS) {
+  const allAreas = effectiveAreas.value
+  for (const area of allAreas) {
     const center = areaCenter(area)
     for (let i = 0; i < BUILDINGS_PER_AREA; i++) {
       // Posiziona attorno all'area (in un anello di distanza), skippiamo il centro
@@ -32,7 +40,7 @@ const buildings = computed<Building[]>(() => {
       const y = center.y + Math.sin(angle) * distance
       if (x < 10 || x > 980 || y < 10 || y > 680) continue
       // Skip se dentro un altra area (evita sovrapposizione)
-      const insideArea = AREAS.some(a =>
+      const insideArea = allAreas.some(a =>
         x >= a.svg.x - 6 && x <= a.svg.x + a.svg.w + 6
         && y >= a.svg.y - 6 && y <= a.svg.y + a.svg.h + 6
       )

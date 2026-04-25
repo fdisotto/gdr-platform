@@ -22,8 +22,8 @@ describe('usePartyMaps', () => {
       players: [],
       areasState: [],
       maps: [
-        { id: 'm1', mapTypeId: 'city', name: 'A', isSpawn: true, createdAt: 0 },
-        { id: 'm2', mapTypeId: 'country', name: 'B', isSpawn: false, createdAt: 0 }
+        { id: 'm1', mapTypeId: 'city', mapSeed: 'sa', params: {}, name: 'A', isSpawn: true, createdAt: 0 },
+        { id: 'm2', mapTypeId: 'country', mapSeed: 'sb', params: {}, name: 'B', isSpawn: false, createdAt: 0 }
       ],
       transitions: [
         { id: 't1', fromMapId: 'm1', fromAreaId: 'x', toMapId: 'm2', toAreaId: 'y', label: null },
@@ -53,8 +53,8 @@ describe('usePartyMaps', () => {
       players: [],
       areasState: [],
       maps: [
-        { id: 'm1', mapTypeId: 'city', name: 'A', isSpawn: true, createdAt: 0 },
-        { id: 'm2', mapTypeId: 'country', name: 'B', isSpawn: false, createdAt: 0 }
+        { id: 'm1', mapTypeId: 'city', mapSeed: 'sa', params: {}, name: 'A', isSpawn: true, createdAt: 0 },
+        { id: 'm2', mapTypeId: 'country', mapSeed: 'sb', params: {}, name: 'B', isSpawn: false, createdAt: 0 }
       ],
       transitions: []
     })
@@ -96,7 +96,7 @@ describe('usePartyMaps', () => {
       players: [],
       areasState: [],
       maps: [
-        { id: 'm1', mapTypeId: 'city', name: 'A', isSpawn: true, createdAt: 0 }
+        { id: 'm1', mapTypeId: 'city', mapSeed: 'sa', params: {}, name: 'A', isSpawn: true, createdAt: 0 }
       ],
       transitions: [
         { id: 't1', fromMapId: 'm1', fromAreaId: 'x', toMapId: 'm1', toAreaId: 'y', label: null }

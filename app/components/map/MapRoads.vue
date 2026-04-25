@@ -1,16 +1,29 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { AREAS, uniqueAdjacencyPairs, areaCenter, exitPoint, type AreaId } from '~~/shared/map/areas'
+import { AREAS as LEGACY_AREAS, uniqueAdjacencyPairs, areaCenter, exitPoint, type Area, type AreaId } from '~~/shared/map/areas'
+
+// T20: il GameMap passa areas + pairs derivati dalla GeneratedMap quando
+// presente. In assenza fallback alle costanti legacy.
+const props = defineProps<{
+  areas?: readonly Area[]
+  pairs?: ReadonlyArray<readonly [string, string]>
+}>()
+
+const effectiveAreas = computed<readonly Area[]>(() => props.areas ?? LEGACY_AREAS)
 
 const areaById = computed(() => {
-  const m = new Map<AreaId, typeof AREAS[number]>()
-  for (const a of AREAS) m.set(a.id, a)
+  const m = new Map<string, Area>()
+  for (const a of effectiveAreas.value) m.set(a.id, a)
   return m
 })
 
+const effectivePairs = computed<ReadonlyArray<readonly [string, string]>>(() => {
+  if (props.pairs) return props.pairs
+  return uniqueAdjacencyPairs() as ReadonlyArray<readonly [AreaId, AreaId]>
+})
+
 const roads = computed(() => {
-  const pairs = uniqueAdjacencyPairs()
-  return pairs.map(([a, b]) => {
+  return effectivePairs.value.map(([a, b]) => {
     const areaA = areaById.value.get(a)
     const areaB = areaById.value.get(b)
     if (!areaA || !areaB) return null
