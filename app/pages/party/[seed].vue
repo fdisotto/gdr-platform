@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, shallowRef, watch } from 'vue'
 import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import { usePartyStore } from '~/stores/party'
 import { useChatStore } from '~/stores/chat'
@@ -10,7 +10,7 @@ import { useWeatherOverridesStore } from '~/stores/weather-overrides'
 import { useMasterToolsStore } from '~/stores/master-tools'
 import { useFeedbackStore } from '~/stores/feedback'
 import { useAuthStore } from '~/stores/auth'
-import { usePartyConnection } from '~/composables/usePartyConnection'
+import { usePartyConnections } from '~/composables/usePartyConnections'
 import { useErrorFeedback } from '~/composables/useErrorFeedback'
 import PartyHeader from '~/components/layout/PartyHeader.vue'
 import ConnectionBanner from '~/components/layout/ConnectionBanner.vue'
@@ -31,7 +31,11 @@ const weatherOverridesStore = useWeatherOverridesStore(seed)
 const masterToolsStore = useMasterToolsStore(seed)
 const feedbackStore = useFeedbackStore()
 const authStore = useAuthStore()
-const connection = usePartyConnection()
+const conns = usePartyConnections()
+// shallowRef così possiamo riassegnare la connection dopo un re-open
+// (post 4003 not_member) e mantenere reattività sui template che leggono
+// `connection.value.notMember.value`.
+const connection = shallowRef(conns.open(seed))
 const feedback = useErrorFeedback()
 
 useSeoMeta({ title: () => partyStore.party?.cityName ?? 'GDR Zombi' })
@@ -43,17 +47,13 @@ const joining = ref(false)
 // Quando notMember diventa true dopo il close 4003, precompila il displayName
 // con l'username così l'utente di solito conferma e basta.
 watch(
-  () => connection.notMember.value,
+  () => connection.value.notMember.value,
   (nm) => {
     if (nm && !joinDisplayName.value && authStore.identity?.username) {
       joinDisplayName.value = authStore.identity.username
     }
   }
 )
-
-async function tryConnect() {
-  connection.connect({ seed })
-}
 
 async function doJoin() {
   if (joining.value) return
@@ -64,8 +64,10 @@ async function doJoin() {
       body: { displayName: joinDisplayName.value }
     })
     feedbackStore.pushToast({ level: 'info', title: 'Ti sei unito alla party' })
-    connection.notMember.value = false
-    tryConnect()
+    // Dopo close 4003 la connection è in stato 'closed' con closedFlag=true;
+    // bisogna prima rimuoverla dalla mappa per poter riaprirne una pulita.
+    conns.close(seed)
+    connection.value = conns.open(seed)
   } catch (err) {
     feedback.reportFromError(err)
   } finally {
@@ -73,11 +75,8 @@ async function doJoin() {
   }
 }
 
-// Al mount: prova a connettere. Se non siamo membri → flag notMember, form.
-tryConnect()
-
 onBeforeRouteLeave(() => {
-  connection.disconnect()
+  conns.close(seed)
   partyStore.reset()
   chatStore.reset()
   viewStore.reset()
