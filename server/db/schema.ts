@@ -23,6 +23,11 @@ export const players = sqliteTable('players', {
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   nickname: text('nickname').notNull(),
   role: text('role', { enum: ['user', 'master'] }).notNull(),
+  // v2d: currentMapId punta alla mappa attiva del player. Le aree sono
+  // identificate dalla coppia (mapId, areaId) — areaId resta univoco
+  // dentro una singola mappa, mai globalmente. NULLABLE in T1: i service
+  // pre-multimap inseriscono ancora senza mapId; T16 stringe a NOT NULL.
+  currentMapId: text('current_map_id').references(() => partyMaps.id, { onDelete: 'cascade' }),
   currentAreaId: text('current_area_id').notNull(),
   isMuted: integer('is_muted', { mode: 'boolean' }).notNull().default(false),
   mutedUntil: integer('muted_until'),
@@ -43,6 +48,10 @@ export const players = sqliteTable('players', {
 
 export const areasState = sqliteTable('areas_state', {
   partySeed: text('party_seed').notNull().references(() => parties.seed, { onDelete: 'cascade' }),
+  // v2d: mapId è NULLABLE in T1 perché i service pre-multimap inseriscono
+  // ancora senza mapId; T16 adegua i service e una migration 0006 stringe
+  // a NOT NULL estendendo la PK a (partySeed, mapId, areaId).
+  mapId: text('map_id'),
   areaId: text('area_id').notNull(),
   status: text('status', { enum: ['intact', 'infested', 'ruined', 'closed'] }).notNull(),
   customName: text('custom_name'),
@@ -57,6 +66,9 @@ export const messages = sqliteTable('messages', {
   kind: text('kind').notNull(),
   authorPlayerId: text('author_player_id'),
   authorDisplay: text('author_display').notNull(),
+  // v2d: mapId è nullable perché DM e announce non sono area-scoped.
+  // Per i messaggi area/zone è valorizzato insieme ad areaId.
+  mapId: text('map_id'),
   areaId: text('area_id'),
   targetPlayerId: text('target_player_id'),
   body: text('body').notNull(),
@@ -72,6 +84,9 @@ export const messages = sqliteTable('messages', {
 
 export const areaAccessBans = sqliteTable('area_access_bans', {
   partySeed: text('party_seed').notNull().references(() => parties.seed, { onDelete: 'cascade' }),
+  // v2d: mapId NULLABLE in T1; T16 + migration 0006 stringe a NOT NULL ed
+  // estende la PK a (partySeed, mapId, areaId).
+  mapId: text('map_id'),
   areaId: text('area_id').notNull(),
   reason: text('reason')
 }, t => [
@@ -80,6 +95,9 @@ export const areaAccessBans = sqliteTable('area_access_bans', {
 
 export const weatherOverrides = sqliteTable('weather_overrides', {
   partySeed: text('party_seed').notNull().references(() => parties.seed, { onDelete: 'cascade' }),
+  // v2d: mapId NULLABLE in T1; T16 + migration 0006 stringe a NOT NULL ed
+  // estende la PK a (partySeed, mapId, areaId).
+  mapId: text('map_id'),
   areaId: text('area_id'),
   code: text('code').notNull(),
   intensity: real('intensity').notNull(),
@@ -115,6 +133,9 @@ export const bans = sqliteTable('bans', {
 export const zombies = sqliteTable('zombies', {
   id: text('id').primaryKey(),
   partySeed: text('party_seed').notNull().references(() => parties.seed, { onDelete: 'cascade' }),
+  // v2d: mapId NULLABLE in T1 per i service pre-multimap; T16 + 0006
+  // stringe a NOT NULL.
+  mapId: text('map_id'),
   areaId: text('area_id').notNull(),
   x: real('x').notNull(),
   y: real('y').notNull(),
@@ -126,9 +147,12 @@ export const zombies = sqliteTable('zombies', {
 ])
 
 // Posizione in-area del player dentro il dettaglio zona.
-// Una riga per (party, player, area) — cambia zona → riga sostituita.
+// Una riga per (party, mapId, player, area) — cambia zona → riga sostituita.
 export const playerPositions = sqliteTable('player_positions', {
   partySeed: text('party_seed').notNull().references(() => parties.seed, { onDelete: 'cascade' }),
+  // v2d: mapId NULLABLE in T1; T16 + 0006 stringe a NOT NULL ed estende
+  // la PK a (partySeed, mapId, playerId, areaId).
+  mapId: text('map_id'),
   playerId: text('player_id').notNull(),
   areaId: text('area_id').notNull(),
   x: real('x').notNull(),
@@ -287,4 +311,57 @@ export const adminActions = sqliteTable('admin_actions', {
 }, t => [
   index('admin_actions_time_idx').on(t.createdAt),
   index('admin_actions_actor_idx').on(t.superadminId, t.createdAt)
+])
+
+// v2d: catalogo dei tipi di mappa generabili (city, country, wasteland…).
+// defaultParams è JSON serializzato che il generator parsa per ottenere
+// i parametri specifici (densità, ratio terreno, ecc.). enabled false
+// nasconde il tipo dalla UI di creazione ma mantiene l'integrità FK.
+export const mapTypes = sqliteTable('map_types', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description').notNull(),
+  defaultParams: text('default_params').notNull(),
+  areaCountMin: integer('area_count_min').notNull(),
+  areaCountMax: integer('area_count_max').notNull(),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull()
+})
+
+// v2d: istanza di mappa appartenente alla party. Il generator deterministico
+// usa mapSeed per produrre lo stesso layout in modo riproducibile. isSpawn
+// indica la mappa iniziale per i nuovi player.
+export const partyMaps = sqliteTable('party_maps', {
+  id: text('id').primaryKey(),
+  partySeed: text('party_seed').notNull().references(() => parties.seed, { onDelete: 'cascade' }),
+  mapTypeId: text('map_type_id').notNull().references(() => mapTypes.id, { onDelete: 'restrict' }),
+  mapSeed: text('map_seed').notNull(),
+  name: text('name').notNull(),
+  isSpawn: integer('is_spawn', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at').notNull()
+}, t => [
+  index('party_maps_party_idx').on(t.partySeed)
+])
+
+// v2d: arco di transizione fra due aree appartenenti potenzialmente a mappe
+// diverse della stessa party. Cliccare su (fromMapId, fromAreaId) sposta
+// il player a (toMapId, toAreaId). Le transizioni intra-mappa sono
+// implicite via grafo della mappa, qui restano solo i link cross-map.
+export const mapTransitions = sqliteTable('map_transitions', {
+  id: text('id').primaryKey(),
+  partySeed: text('party_seed').notNull().references(() => parties.seed, { onDelete: 'cascade' }),
+  fromMapId: text('from_map_id').notNull().references(() => partyMaps.id, { onDelete: 'cascade' }),
+  // v2d: fromAreaId/toAreaId NON hanno FK verso areas_state perché finché
+  // 0006 non estende la PK con mapId la chiave composta non è dichiarabile.
+  // La validazione che le aree esistano nei GeneratedMap è demandata al
+  // service map-transitions (T9).
+  fromAreaId: text('from_area_id').notNull(),
+  toMapId: text('to_map_id').notNull().references(() => partyMaps.id, { onDelete: 'cascade' }),
+  toAreaId: text('to_area_id').notNull(),
+  label: text('label'),
+  createdAt: integer('created_at').notNull()
+}, t => [
+  index('map_transitions_from_idx').on(t.fromMapId, t.fromAreaId),
+  index('map_transitions_party_idx').on(t.partySeed)
 ])
