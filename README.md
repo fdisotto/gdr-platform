@@ -93,6 +93,57 @@ diverse.
 Limiti default (modificabili dal superadmin in v2c): 5 party/utente, 30
 member/party, 100 party totali nel sistema.
 
+## Admin dashboard (v2c)
+
+Console di gestione su `/admin` con sidebar nav e sub-route dedicate:
+
+- **`/admin/dashboard`** — counters live (utenti per status, party
+  attive/archiviate, ws connessi, messaggi 24h) + grafici time-series
+  ultimi 30 giorni (messaggi/giorno, login success vs failed) calcolati
+  dal cron `daily-metrics` (snapshot orario UTC con recovery dei giorni
+  mancanti al boot).
+- **`/admin/users`** — lista utenti per status (approved/banned), search
+  per nickname, ban/reset-password, **promuovi a superadmin**.
+- **`/admin/parties`** — full control sulle party: lista filtrata
+  (active/archived/all), dettaglio con membri, edit visibility/joinPolicy/
+  cityName, **transfer master** tra account, archivia/ripristina,
+  **hard delete** con conferma "DELETE" (cascade FK).
+- **`/admin/registrations`** — coda pending: approve/reject.
+- **`/admin/admins`** — gestione multi-superadmin: lista attivi/revocati,
+  promuovi user esistente (copia username + passwordHash), revoca con
+  guard "ultimo attivo" (409 `last_admin`).
+- **`/admin/metrics`** — time-series con filtro date range, **export CSV**
+  per `users | parties | audit | messages` (stream con `Content-
+  Disposition: attachment`, max 50000 righe per request, cursor per chunk).
+- **`/admin/settings`** — 13 settings runtime suddivise in tre sezioni:
+  - **Limiti** (8 chiavi): `maxPartiesPerUser`, `maxMembersPerParty`,
+    `maxTotalParties`, `partyInactivityArchiveDays`, `inviteTtlDays`,
+    `loginRateMaxFailures`, `loginRateWindowMinutes`,
+    `registerRateMaxPerHour`.
+  - **Features** (3 toggles): `registrationEnabled`,
+    `partyCreationEnabled`, `voiceChatEnabled`.
+  - **Sistema**: `maintenanceMode` + `maintenanceMessage`.
+  Cache in-memory, modifiche applicate al prossimo lookup. I rate
+  limiter sono ricostruiti automaticamente quando le chiavi cambiano.
+- **`/admin/audit`** — log unificato `admin_actions` (azioni superadmin)
+  + `auth_events` (auth flow), filtrabile per actor/kind/range, export
+  CSV.
+
+**Modalità manutenzione**: toggle setta `system.maintenanceMode=true`.
+Il middleware Nitro risponde 503 `{ code: 'maintenance' }` su
+`/api/*` salvo `/api/admin/*`, `/api/auth/me`, `/api/auth/login`,
+`/api/system/status`. Il middleware client redirige gli utenti non
+superadmin a `/maintenance` (pagina pubblica statica).
+
+**Endpoint pubblico** `/api/system/status` espone
+`{ maintenanceMode, maintenanceMessage, registrationEnabled,
+partyCreationEnabled, voiceChatEnabled, serverTime }` per pre-flight
+client senza auth.
+
+I limiti hardcoded in `shared/limits.ts` restano come **default
+fallback** se la tabella `system_settings` è ancora vuota (primo boot
+prima del seed migration).
+
 ## Come si gioca
 
 1. Fai **login** (o registrati e aspetta l'approvazione di un superadmin).
