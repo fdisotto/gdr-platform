@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import FeedbackToaster from '~/components/layout/FeedbackToaster.vue'
-import PartyTabBar from '~/components/layout/PartyTabBar.vue'
 
 useHead({
   htmlAttrs: {
@@ -23,12 +22,9 @@ useSeoMeta({
 
 <template>
   <UApp>
-    <div class="flex flex-col h-screen overflow-hidden">
-      <PartyTabBar />
-      <div class="flex-1 min-h-0 flex flex-col overflow-y-auto">
-        <NuxtPage />
-      </div>
-    </div>
+    <NuxtLayout>
+      <NuxtPage />
+    </NuxtLayout>
     <FeedbackToaster />
   </UApp>
 </template>

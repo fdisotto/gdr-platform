@@ -6,6 +6,7 @@ import { useAuthStore } from '~/stores/auth'
 import { useErrorFeedback } from '~/composables/useErrorFeedback'
 import { useFeedbackStore } from '~/stores/feedback'
 
+definePageMeta({ layout: false })
 useSeoMeta({ title: 'GDR Zombi — Admin cambio password' })
 
 const router = useRouter()

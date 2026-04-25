@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuth } from '~/composables/useAuth'
 import { useErrorFeedback } from '~/composables/useErrorFeedback'
 
+definePageMeta({ layout: false })
 useSeoMeta({ title: 'GDR Zombi — Admin Login' })
 
 const router = useRouter()
