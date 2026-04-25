@@ -31,9 +31,7 @@ function masterToolsStoreFactory(seed: string) {
   }
   function refresh() {
     // refresh chiama il factory direttamente con la seed dello store
-    // (lo store è keyed, quindi conosce la propria party): evita la
-    // dipendenza dal wrapper legacy `usePartyConnection` che leggeva
-    // la seed dalla route corrente.
+    // (lo store è keyed, quindi conosce la propria party).
     const c = usePartyConnections().get(seed)
     if (!c) return
     c.send({ type: 'master:fetch-actions', limit: 100 })

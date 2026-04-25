@@ -3,7 +3,7 @@ import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { AREAS, ADJACENCY, type AreaId } from '~~/shared/map/areas'
 import { usePartyStore } from '~/stores/party'
 import { useViewStore } from '~/stores/view'
-import { usePartyConnection } from '~/composables/usePartyConnection'
+import { usePartyConnections } from '~/composables/usePartyConnections'
 import { usePartySeed } from '~/composables/usePartySeed'
 import MapArea from '~/components/map/MapArea.vue'
 import MapAvatar from '~/components/map/MapAvatar.vue'
@@ -18,7 +18,7 @@ const seed = usePartySeed()
 const party = usePartyStore(seed)
 const partyStore = party
 const viewStore = useViewStore(seed)
-const connection = usePartyConnection()
+const connection = usePartyConnections().open(seed)
 
 // Master player actions menu
 interface PlayerSnapshot {

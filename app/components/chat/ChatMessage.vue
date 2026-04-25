@@ -3,7 +3,8 @@ import { computed, ref, onBeforeUnmount } from 'vue'
 import type { ChatMessage as ChatMessageType } from '~/stores/chat'
 import { useSettingsStore } from '~/stores/settings'
 import { seedFromString } from '~~/shared/seed/prng'
-import { usePartyConnection } from '~/composables/usePartyConnection'
+import { usePartyConnections } from '~/composables/usePartyConnections'
+import { usePartySeed } from '~/composables/usePartySeed'
 
 interface Props {
   message: ChatMessageType
@@ -11,7 +12,8 @@ interface Props {
 }
 const props = defineProps<Props>()
 const settings = useSettingsStore()
-const connection = usePartyConnection()
+const seed = usePartySeed()
+const connection = usePartyConnections().open(seed)
 
 const NICK_COLORS = [
   '#7cbe79', '#9aa13a', '#d4965b', '#a8572a',

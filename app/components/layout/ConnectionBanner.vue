@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { usePartyConnection } from '~/composables/usePartyConnection'
+import { usePartyConnections } from '~/composables/usePartyConnections'
+import { usePartySeed } from '~/composables/usePartySeed'
 
-const connection = usePartyConnection()
+const seed = usePartySeed()
+const connection = usePartyConnections().open(seed)
 
 const visible = computed(() =>
   connection.status.value === 'reconnecting'

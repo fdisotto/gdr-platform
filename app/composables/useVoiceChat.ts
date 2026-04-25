@@ -1,5 +1,5 @@
 import { ref, watch, type Ref } from 'vue'
-import { usePartyConnection } from '~/composables/usePartyConnection'
+import { usePartyConnections, type PartyConnection } from '~/composables/usePartyConnections'
 import { usePartySeed } from '~/composables/usePartySeed'
 import { usePartyStore } from '~/stores/party'
 import { useSettingsStore } from '~/stores/settings'
@@ -128,12 +128,12 @@ function attachVad(peerId: string, stream: MediaStream) {
   requestAnimationFrame(loop)
 }
 
-function sendSignal(connection: ReturnType<typeof usePartyConnection>, ev: Record<string, unknown>) {
+function sendSignal(connection: PartyConnection, ev: Record<string, unknown>) {
   connection.send(ev)
 }
 
 async function createOutgoingPeer(
-  connection: ReturnType<typeof usePartyConnection>,
+  connection: PartyConnection,
   peerId: string,
   polite = false
 ): Promise<PeerState | null> {
@@ -182,7 +182,7 @@ async function createOutgoingPeer(
 }
 
 async function handleSignal(
-  connection: ReturnType<typeof usePartyConnection>,
+  connection: PartyConnection,
   fromPlayerId: string,
   signal: { kind: string, sdp?: string, candidate?: string }
 ) {
@@ -252,8 +252,8 @@ function applyMutes(settings: ReturnType<typeof useSettingsStore>) {
 }
 
 export function useVoiceChat() {
-  const connection = usePartyConnection()
   const seed = usePartySeed()
+  const connection = usePartyConnections().open(seed)
   const party = usePartyStore(seed)
   const settings = useSettingsStore()
 

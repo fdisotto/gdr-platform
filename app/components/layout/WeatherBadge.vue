@@ -4,12 +4,12 @@ import type { AreaId } from '~~/shared/map/areas'
 import { AREA_IDS } from '~~/shared/map/areas'
 import { useAreaWeather } from '~/composables/useAreaWeather'
 import { usePartyStore } from '~/stores/party'
-import { usePartyConnection } from '~/composables/usePartyConnection'
+import { usePartyConnections } from '~/composables/usePartyConnections'
 import { usePartySeed } from '~/composables/usePartySeed'
 
 const seed = usePartySeed()
 const party = usePartyStore(seed)
-const connection = usePartyConnection()
+const connection = usePartyConnections().open(seed)
 
 const areaIdRef = () => (party.me?.currentAreaId as AreaId | undefined) ?? null
 const { weather } = useAreaWeather(areaIdRef)

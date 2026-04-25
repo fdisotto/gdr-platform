@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useMasterToolsStore } from '~/stores/master-tools'
-import { usePartyConnection } from '~/composables/usePartyConnection'
+import { usePartyConnections } from '~/composables/usePartyConnections'
 import { usePartyStore } from '~/stores/party'
 import { usePartySeed } from '~/composables/usePartySeed'
 import PartySettingsTab from '~/components/master/PartySettingsTab.vue'
@@ -11,7 +11,7 @@ import JoinRequestsTab from '~/components/master/JoinRequestsTab.vue'
 
 const seed = usePartySeed()
 const tools = useMasterToolsStore(seed)
-const connection = usePartyConnection()
+const connection = usePartyConnections().open(seed)
 const party = usePartyStore(seed)
 
 type Tab = 'tools' | 'log' | 'bans' | 'settings' | 'masters' | 'invites' | 'requests'

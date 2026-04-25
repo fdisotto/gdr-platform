@@ -6,14 +6,14 @@ import { useViewStore } from '~/stores/view'
 import { usePartySeed } from '~/composables/usePartySeed'
 import { useSettingsStore } from '~/stores/settings'
 import { seedFromString } from '~~/shared/seed/prng'
-import { usePartyConnection } from '~/composables/usePartyConnection'
+import { usePartyConnections } from '~/composables/usePartyConnections'
 
 const seed = usePartySeed()
 const chatStore = useChatStore(seed)
 const partyStore = usePartyStore(seed)
 const viewStore = useViewStore(seed)
 const settings = useSettingsStore()
-const connection = usePartyConnection()
+const connection = usePartyConnections().open(seed)
 
 const NICK_COLORS = [
   '#7cbe79', '#9aa13a', '#d4965b', '#a8572a',

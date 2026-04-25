@@ -6,7 +6,7 @@ import { useZombiesStore } from '~/stores/zombies'
 import { useViewStore } from '~/stores/view'
 import { usePlayerPositionsStore } from '~/stores/player-positions'
 import { useChatStore } from '~/stores/chat'
-import { usePartyConnection } from '~/composables/usePartyConnection'
+import { usePartyConnections } from '~/composables/usePartyConnections'
 import { usePartySeed } from '~/composables/usePartySeed'
 import { useAreaWeather } from '~/composables/useAreaWeather'
 import MapWeatherOverlay from '~/components/map/MapWeatherOverlay.vue'
@@ -18,7 +18,7 @@ const zombies = useZombiesStore(seed)
 const viewStore = useViewStore(seed)
 const playerPositionsStore = usePlayerPositionsStore(seed)
 const chatStore = useChatStore(seed)
-const connection = usePartyConnection()
+const connection = usePartyConnections().open(seed)
 
 // ViewBox dinamico: width fisso, height calcolata dal rapporto del
 // contenitore reale. Così l'svg riempie tutto lo spazio disponibile senza

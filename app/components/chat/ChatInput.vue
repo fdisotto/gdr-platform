@@ -5,7 +5,7 @@ import { AREA_IDS } from '~~/shared/map/areas'
 import { usePartyStore } from '~/stores/party'
 import { useZombiesStore } from '~/stores/zombies'
 import { useChatStore, type ChatMessage } from '~/stores/chat'
-import { usePartyConnection } from '~/composables/usePartyConnection'
+import { usePartyConnections } from '~/composables/usePartyConnections'
 import { usePartySeed } from '~/composables/usePartySeed'
 
 interface CommandSuggestion {
@@ -65,7 +65,7 @@ const seed = usePartySeed()
 const party = usePartyStore(seed)
 const zombiesStore = useZombiesStore(seed)
 const chatStore = useChatStore(seed)
-const connection = usePartyConnection()
+const connection = usePartyConnections().open(seed)
 
 const WEATHER_CODES = [
   { value: 'clear', hint: 'sereno' },

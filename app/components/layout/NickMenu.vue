@@ -3,7 +3,7 @@ import { ref, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePartyStore } from '~/stores/party'
 import { useAuth } from '~/composables/useAuth'
-import { usePartyConnection } from '~/composables/usePartyConnection'
+import { usePartyConnections } from '~/composables/usePartyConnections'
 import { usePartySeed } from '~/composables/usePartySeed'
 import { useFeedbackStore } from '~/stores/feedback'
 import { useErrorFeedback } from '~/composables/useErrorFeedback'
@@ -11,7 +11,7 @@ import { useErrorFeedback } from '~/composables/useErrorFeedback'
 const seed = usePartySeed()
 const party = usePartyStore(seed)
 const auth = useAuth()
-const connection = usePartyConnection()
+const conns = usePartyConnections()
 const router = useRouter()
 const feedbackStore = useFeedbackStore()
 const feedback = useErrorFeedback()
@@ -29,7 +29,7 @@ function close() {
 }
 
 async function logout() {
-  connection.disconnect()
+  conns.closeAll()
   close()
   await auth.logout()
   await router.push('/login')
