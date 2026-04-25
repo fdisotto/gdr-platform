@@ -16,7 +16,15 @@ export function toH3Error(e: unknown): never {
       not_adjacent: 409,
       session_invalid: 401,
       session_superseded: 401,
-      bad_roll_expr: 400
+      bad_roll_expr: 400,
+      // v2b multi-party: codici dedicati con status semanticamente coerenti.
+      private_party: 403,
+      request_required: 403,
+      last_master: 409,
+      member_limit: 429,
+      party_limit: 429,
+      archived: 410,
+      invite_invalid: 403
     }
     throw createError({
       statusCode: statusByCode[e.code] ?? 400,
