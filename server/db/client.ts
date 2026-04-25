@@ -51,11 +51,13 @@ function applyMigrations(sqlite: SqliteInstance) {
       try {
         sqlite.exec(trimmed)
       } catch (e) {
-        // Tollera "already exists" per idempotenza quando un DB preesistente
-        // ha già le tabelle (es. creato da un run precedente con schema
-        // tracking diverso). Qualunque altro errore lo ripropaghiamo.
+        // Tollera condizioni "already done" per idempotenza quando un DB
+        // preesistente ha già le tabelle/colonne (es. creato da un run
+        // precedente o da drizzle-kit migrate prima del refactor del
+        // tracker). Qualunque altro errore lo ripropaghiamo.
         const msg = (e as Error).message ?? ''
-        if (!/already exists/i.test(msg)) throw e
+        const benign = /already exists|duplicate column name|no such column/i.test(msg)
+        if (!benign) throw e
       }
     }
     insert.run(m.hash, Date.now())
