@@ -1,19 +1,18 @@
-import type { FetchOptions } from 'ofetch'
 import { useErrorFeedback } from '~/composables/useErrorFeedback'
 
-// Helper centralizzato per chiamate /api/admin/*. Mantiene il comportamento
-// "errore propagato al chiamante con report toast" già usato altrove. Il
-// chiamante può catturare l'errore per logica custom; di default chiama
-// reportFromError dietro le quinte se passa l'opzione { silent: false }.
+// Helper centralizzato per chiamate /api/admin/*. Comportamento default:
+// l'errore viene propagato al chiamante (così può fare logica custom su
+// codici specifici tipo `last_admin` o `setting_invalid`) ma viene anche
+// segnalato a useErrorFeedback per il toast IT. Con `{ silent: true }` il
+// chiamante prende il controllo completo del feedback.
+//
+// Tutte le pagine `/admin/*` (dashboard, users, parties, registrations,
+// admins, metrics, settings, audit) usano questo composable. Il layout
+// admin chiama invece direttamente `$fetch('/api/system/status')` perché
+// quell'endpoint è pubblico, fuori dal namespace admin.
 
 export interface AdminApiOptions {
-  // Se true, NON riporta automaticamente l'errore al toast (utile quando il
-  // chiamante vuole gestire un caso specifico, es. last_admin → modal custom).
   silent?: boolean
-}
-
-function buildOptions(extra?: FetchOptions): FetchOptions | undefined {
-  return extra
 }
 
 export function useAdminApi() {
@@ -25,7 +24,7 @@ export function useAdminApi() {
     opts: AdminApiOptions = {}
   ): Promise<T> {
     try {
-      return await $fetch<T>(path, buildOptions({ method: 'GET', query }))
+      return await $fetch<T>(path, { method: 'GET', query })
     } catch (err) {
       if (!opts.silent) feedback.reportFromError(err)
       throw err
@@ -38,7 +37,7 @@ export function useAdminApi() {
     opts: AdminApiOptions = {}
   ): Promise<T> {
     try {
-      return await $fetch<T>(path, buildOptions({ method: 'POST', body }))
+      return await $fetch<T>(path, { method: 'POST', body })
     } catch (err) {
       if (!opts.silent) feedback.reportFromError(err)
       throw err
@@ -51,7 +50,7 @@ export function useAdminApi() {
     opts: AdminApiOptions = {}
   ): Promise<T> {
     try {
-      return await $fetch<T>(path, buildOptions({ method: 'DELETE', body }))
+      return await $fetch<T>(path, { method: 'DELETE', body })
     } catch (err) {
       if (!opts.silent) feedback.reportFromError(err)
       throw err
