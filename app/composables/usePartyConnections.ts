@@ -185,7 +185,7 @@ function makeConnection(seed: string): PartyConnection {
     switch (data.type) {
       case 'state:init': {
         const init = data as unknown as {
-          me: MeSnapshot
+          me: MeSnapshot & { currentMapId?: string | null }
           party: PartySnapshot
           players: PlayerSnapshot[]
           areasState: AreaStateSnapshot[]
@@ -194,11 +194,19 @@ function makeConnection(seed: string): PartyConnection {
           zombies: Zombie[]
           playerPositions: PlayerPosition[]
           weatherOverrides: { areaId: string | null, code: string, intensity: number }[]
+          // v2d: state-init multi-mappa.
+          maps?: Array<{ id: string, mapTypeId: string, mapSeed: string, name: string, isSpawn: boolean, createdAt: number, params?: Record<string, unknown> }>
+          transitions?: Array<{ id: string, fromMapId: string, fromAreaId: string, toMapId: string, toAreaId: string, label: string | null }>
           serverTime: number
         }
         partyStore.hydrate({
-          me: init.me, party: init.party,
-          players: init.players, areasState: init.areasState
+          me: init.me,
+          party: init.party,
+          players: init.players,
+          areasState: init.areasState,
+          maps: init.maps ?? [],
+          transitions: init.transitions ?? [],
+          currentMapId: init.me.currentMapId ?? null
         })
         chatStore.hydrate(init.messagesByArea ?? {})
         chatStore.hydrateDms(init.dms ?? [], init.me.id)
