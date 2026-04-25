@@ -5,12 +5,18 @@ import { usePartyStore } from '~/stores/party'
 import { useAuth } from '~/composables/useAuth'
 import { usePartyConnection } from '~/composables/usePartyConnection'
 import { usePartySeed } from '~/composables/usePartySeed'
+import { useFeedbackStore } from '~/stores/feedback'
+import { useErrorFeedback } from '~/composables/useErrorFeedback'
 
 const seed = usePartySeed()
 const party = usePartyStore(seed)
 const auth = useAuth()
 const connection = usePartyConnection()
 const router = useRouter()
+const feedbackStore = useFeedbackStore()
+const feedback = useErrorFeedback()
+
+const leaving = ref(false)
 
 const open = ref(false)
 const wrapper = ref<HTMLElement | null>(null)
@@ -32,6 +38,25 @@ async function logout() {
 async function profile() {
   close()
   await router.push('/me')
+}
+
+async function leaveParty() {
+  if (leaving.value) return
+  if (!confirm('Esci dalla party? Potrai rientrare se è pubblica.')) return
+  leaving.value = true
+  try {
+    await $fetch(`/api/parties/${seed}/leave`, { method: 'POST' })
+    feedbackStore.pushToast({ level: 'info', title: 'Uscito dalla party' })
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gdr:my-parties-changed'))
+    }
+    close()
+    await router.push('/')
+  } catch (err) {
+    feedback.reportFromError(err)
+  } finally {
+    leaving.value = false
+  }
 }
 
 function onDocClick(e: MouseEvent) {
@@ -117,6 +142,20 @@ if (typeof window !== 'undefined') {
           class="size-4"
         />
         Profilo
+      </button>
+      <button
+        v-if="seed"
+        type="button"
+        class="flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm"
+        style="color: var(--z-rust-300)"
+        :disabled="leaving"
+        @click="leaveParty"
+      >
+        <UIcon
+          name="i-lucide-log-out"
+          class="size-4"
+        />
+        Esci da questa party
       </button>
       <button
         type="button"

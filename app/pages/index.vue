@@ -24,6 +24,8 @@ if (authStore.isSuperadmin) {
 }
 
 const displayName = ref('')
+const visibility = ref<'public' | 'private'>('private')
+const joinPolicy = ref<'auto' | 'request'>('request')
 const creating = ref(false)
 
 const canCreate = computed(() =>
@@ -38,8 +40,15 @@ async function onCreate() {
   try {
     const res = await $fetch<{ seed: string }>('/api/parties', {
       method: 'POST',
-      body: { displayName: displayName.value }
+      body: {
+        displayName: displayName.value,
+        visibility: visibility.value,
+        joinPolicy: joinPolicy.value
+      }
     })
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gdr:my-parties-changed'))
+    }
     await router.push(`/party/${res.seed}`)
   } catch (err) {
     feedback.reportFromError(err)
@@ -147,10 +156,10 @@ async function onLogout() {
             Crea una nuova party
           </h2>
           <form
-            class="flex gap-2 items-start"
+            class="space-y-3"
             @submit.prevent="onCreate"
           >
-            <div class="flex-1">
+            <div>
               <input
                 v-model="displayName"
                 type="text"
@@ -168,13 +177,52 @@ async function onLogout() {
                 Verrai inserito come master della nuova party con questo nome.
               </p>
             </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label
+                  class="block text-xs uppercase tracking-wide mb-1"
+                  style="color: var(--z-text-md)"
+                >Visibilità</label>
+                <select
+                  v-model="visibility"
+                  class="w-full px-2 py-2 rounded text-sm"
+                  style="background: var(--z-bg-800); border: 1px solid var(--z-border); color: var(--z-text-hi)"
+                >
+                  <option value="private">
+                    Privata
+                  </option>
+                  <option value="public">
+                    Pubblica
+                  </option>
+                </select>
+              </div>
+              <div>
+                <label
+                  class="block text-xs uppercase tracking-wide mb-1"
+                  style="color: var(--z-text-md)"
+                >Accesso</label>
+                <select
+                  v-model="joinPolicy"
+                  class="w-full px-2 py-2 rounded text-sm"
+                  style="background: var(--z-bg-800); border: 1px solid var(--z-border); color: var(--z-text-hi)"
+                >
+                  <option value="request">
+                    Richiesta
+                  </option>
+                  <option value="auto">
+                    Automatico
+                  </option>
+                </select>
+              </div>
+            </div>
             <UButton
               type="submit"
               color="primary"
               :loading="creating"
               :disabled="!canCreate"
+              block
             >
-              Crea
+              Crea party
             </UButton>
           </form>
         </section>
@@ -187,16 +235,22 @@ async function onLogout() {
             class="text-sm uppercase tracking-wide"
             style="color: var(--z-text-md)"
           >
-            Le tue party
+            Sfoglia party esistenti
           </h2>
           <p
-            class="text-xs italic"
+            class="text-xs"
             style="color: var(--z-text-lo)"
           >
-            Browser party + multi-party arrivano nella v2b.
-            Nel frattempo, se ricevi un link <code>/party/&lt;seed&gt;</code>
-            puoi aprirlo direttamente e unirti con un display name.
+            Cerca party pubbliche, entra direttamente o richiedi l'accesso
+            alle party con join su richiesta.
           </p>
+          <NuxtLink
+            to="/parties"
+            class="inline-block px-4 py-2 rounded text-sm"
+            style="background: var(--z-bg-700); color: var(--z-text-hi)"
+          >
+            Vai al browser party
+          </NuxtLink>
         </section>
       </template>
     </div>
