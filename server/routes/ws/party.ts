@@ -564,6 +564,15 @@ async function handleMoveRequest(peer: Peer, raw: unknown) {
 
   const messages = listAreaMessages(db, conn.partySeed, toAreaId, 100)
   sendJson(peer, { type: 'area:entered', areaId: toAreaId, messages })
+
+  // v2d: dopo cross-map re-emette uno state:init aggiornato al solo peer
+  // che ha cambiato mappa. Lo stato area-scoped (zombi, posizioni, meteo,
+  // areasState) della mappa precedente resterebbe altrimenti in cache lato
+  // client. Idempotente: hydrate sostituisce. Niente broadcast.
+  const playerAfter = findPlayerById(db, conn.partySeed, conn.playerId)
+  if (playerAfter) {
+    sendJson(peer, composeStateInit(db, conn.partySeed, playerAfter))
+  }
 }
 
 async function handleHistoryFetch(peer: Peer, raw: unknown) {
@@ -1359,10 +1368,85 @@ async function handleMasterFetchBans(peer: Peer, raw: unknown) {
   sendJson(peer, event)
 }
 
+// v2d: compone uno snapshot state:init completo. Estratto da handleHello
+// così può essere riusato dopo un cross-map move (re-emit verso il solo
+// peer che ha cambiato mappa, niente broadcast).
+function composeStateInit(
+  db: ReturnType<typeof useDb>,
+  seed: string,
+  player: ReturnType<typeof findPlayerByUserInParty> & object
+): StateInitEvent {
+  const party = partyMustExist(db, seed)
+  const players = listOnlinePlayers(db, seed).map(p => ({
+    id: p.id, nickname: p.nickname, role: p.role,
+    currentAreaId: p.currentAreaId,
+    currentMapId: p.currentMapId ?? null
+  }))
+  const areasState = listAreasState(db, seed).map(a => ({
+    ...a,
+    mapId: (a as { mapId?: string | null }).mapId ?? null
+  }))
+  const messagesByArea: Record<string, MessageRow[]> = {}
+  messagesByArea[player.currentAreaId] = listAreaMessages(db, seed, player.currentAreaId, 100)
+  const dms = listRecentDmsForPlayer(db, seed, player.id, 50)
+  const zombies = listPartyZombies(seed).map(z => ({
+    ...z,
+    mapId: z.mapId ?? null
+  }))
+  const playerPositions = listPlayerPositions(seed).map(p => ({
+    ...p,
+    mapId: p.mapId ?? null
+  }))
+  const weatherOverridesList = listOverrides(db, seed).map(w => ({
+    ...w,
+    mapId: (w as { mapId?: string | null }).mapId ?? null
+  }))
+  const allMaps = listPartyMaps(db, seed)
+  const mapsPublic: PartyMapPublic[] = allMaps.map((m) => {
+    const mt = findMapType(db, m.mapTypeId)
+    const params = mt ? parseDefaultParams(mt) : {}
+    return {
+      id: m.id,
+      mapTypeId: m.mapTypeId,
+      mapSeed: m.mapSeed,
+      params,
+      name: m.name,
+      isSpawn: m.isSpawn,
+      createdAt: m.createdAt
+    }
+  })
+  const transitionsPublic: TransitionPublic[] = listTransitionsForParty(db, seed).map(t => ({
+    id: t.id,
+    fromMapId: t.fromMapId,
+    fromAreaId: t.fromAreaId,
+    toMapId: t.toMapId,
+    toAreaId: t.toAreaId,
+    label: t.label
+  }))
+  return {
+    type: 'state:init',
+    me: {
+      id: player.id, nickname: player.nickname, role: player.role,
+      currentAreaId: player.currentAreaId,
+      currentMapId: player.currentMapId ?? null
+    },
+    party: { seed: party.seed, cityName: party.cityName, createdAt: party.createdAt, lastActivityAt: party.lastActivityAt },
+    players,
+    areasState,
+    messagesByArea: messagesByArea as never,
+    dms,
+    zombies,
+    playerPositions,
+    weatherOverrides: weatherOverridesList,
+    maps: mapsPublic,
+    transitions: transitionsPublic,
+    serverTime: Date.now()
+  }
+}
+
 async function handleHello(peer: Peer, seed: string) {
   try {
     const db = useDb()
-    const party = partyMustExist(db, seed)
 
     // v2a: autenticazione via cookie gdr_session letto all'upgrade.
     const token = extractSessionCookie(peer)
@@ -1403,82 +1487,7 @@ async function handleHello(peer: Peer, seed: string) {
     // volta che qualcuno contatta questa party dopo il boot server.
     ensurePartyHydrated(db, seed)
 
-    const players = listOnlinePlayers(db, seed).map(p => ({
-      id: p.id, nickname: p.nickname, role: p.role,
-      currentAreaId: p.currentAreaId,
-      currentMapId: p.currentMapId ?? null
-    }))
-    const areasState = listAreasState(db, seed).map(a => ({
-      ...a,
-      // v2d: T14 ha reso mapId nullable.optional sullo schema. Lo scrive
-      // esplicitamente per chiarezza; T16 valorizzerà sempre la coppia.
-      mapId: (a as { mapId?: string | null }).mapId ?? null
-    }))
-    const messagesByArea: Record<string, MessageRow[]> = {}
-    messagesByArea[player.currentAreaId] = listAreaMessages(db, seed, player.currentAreaId, 100)
-    const dms = listRecentDmsForPlayer(db, seed, player.id, 50)
-    const zombies = listPartyZombies(seed).map(z => ({
-      ...z,
-      mapId: z.mapId ?? null
-    }))
-    const playerPositions = listPlayerPositions(seed).map(p => ({
-      ...p,
-      mapId: p.mapId ?? null
-    }))
-    const weatherOverridesList = listOverrides(db, seed).map(w => ({
-      ...w,
-      mapId: (w as { mapId?: string | null }).mapId ?? null
-    }))
-
-    // v2d/T15: maps + transitions della party. Per party legacy senza mappe
-    // (T17 non ancora applicato) i due array sono vuoti — il client deve
-    // restare retrocompatibile.
-    const allMaps = listPartyMaps(db, seed)
-    const mapsPublic: PartyMapPublic[] = allMaps.map((m) => {
-      // T20: il client rigenera la mappa via stesso generator deterministico.
-      // Servono mapSeed e i params effettivi (defaultParams del map_type).
-      // Se il map_type non esiste più (edge case post-cleanup), fallback {}.
-      const mt = findMapType(db, m.mapTypeId)
-      const params = mt ? parseDefaultParams(mt) : {}
-      return {
-        id: m.id,
-        mapTypeId: m.mapTypeId,
-        mapSeed: m.mapSeed,
-        params,
-        name: m.name,
-        isSpawn: m.isSpawn,
-        createdAt: m.createdAt
-      }
-    })
-    const transitionsPublic: TransitionPublic[] = listTransitionsForParty(db, seed).map(t => ({
-      id: t.id,
-      fromMapId: t.fromMapId,
-      fromAreaId: t.fromAreaId,
-      toMapId: t.toMapId,
-      toAreaId: t.toAreaId,
-      label: t.label
-    }))
-
-    const init: StateInitEvent = {
-      type: 'state:init',
-      me: {
-        id: player.id, nickname: player.nickname, role: player.role,
-        currentAreaId: player.currentAreaId,
-        currentMapId: player.currentMapId ?? null
-      },
-      party: { seed: party.seed, cityName: party.cityName, createdAt: party.createdAt, lastActivityAt: party.lastActivityAt },
-      players,
-      areasState,
-      messagesByArea: messagesByArea as never,
-      dms,
-      zombies,
-      playerPositions,
-      weatherOverrides: weatherOverridesList,
-      maps: mapsPublic,
-      transitions: transitionsPublic,
-      serverTime: Date.now()
-    }
-    sendJson(peer, init)
+    sendJson(peer, composeStateInit(db, seed, player))
     touchPlayer(db, player.id)
 
     // Notifica agli altri player della party del nuovo arrivo.
