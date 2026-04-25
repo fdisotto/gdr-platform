@@ -1,11 +1,15 @@
-import { eq } from 'drizzle-orm'
+import { and, asc, eq, isNull } from 'drizzle-orm'
 import type { Db } from '~~/server/db/client'
-import { parties, players, areasState } from '~~/server/db/schema'
+import { parties, players, areasState, partyJoinRequests } from '~~/server/db/schema'
+import { MAX_MEMBERS_PER_PARTY } from '~~/shared/limits'
 import { deriveCityState, type CityState } from '~~/shared/seed/derive-city'
 import {
   generateToken, generateUuid, hashMasterToken, verifyMasterToken
 } from '~~/server/utils/crypto'
 import { DomainError } from '~~/shared/errors'
+
+export type PartyVisibility = 'public' | 'private'
+export type PartyJoinPolicy = 'auto' | 'request'
 
 export interface CreatePartyInput {
   userId: string
@@ -13,6 +17,9 @@ export interface CreatePartyInput {
   // cityName non è ancora usato nella derivazione (deriveCityState è
   // deterministica sul seed); lo accettiamo per compat con l'endpoint.
   cityName?: string
+  // v2b: default come da schema (private + request) quando non specificati.
+  visibility?: PartyVisibility
+  joinPolicy?: PartyJoinPolicy
 }
 
 export interface CreatePartyResult {
@@ -42,7 +49,9 @@ export async function createParty(db: Db, input: CreatePartyInput): Promise<Crea
     masterTokenHash: hash,
     cityName: cityState.cityName,
     createdAt: now,
-    lastActivityAt: now
+    lastActivityAt: now,
+    visibility: input.visibility ?? 'private',
+    joinPolicy: input.joinPolicy ?? 'request'
   }).run()
 
   const areaRows = Object.entries(cityState.areas).map(([areaId, s]) => ({
@@ -107,4 +116,225 @@ export function partyMustExist(db: Db, seed: string) {
   const p = findParty(db, seed)
   if (!p) throw new DomainError('not_found', `party ${seed}`)
   return p
+}
+
+export function archiveParty(db: Db, seed: string): void {
+  db.update(parties)
+    .set({ archivedAt: Date.now() })
+    .where(eq(parties.seed, seed))
+    .run()
+}
+
+export function restoreParty(db: Db, seed: string): void {
+  db.update(parties)
+    .set({ archivedAt: null })
+    .where(eq(parties.seed, seed))
+    .run()
+}
+
+// v2b: una membership "attiva" = riga players con leftAt IS NULL e
+// isKicked=false. Il count opera su righe distinte (party,user). I master
+// contano come membri.
+export function countActivePartiesForUser(db: Db, userId: string): number {
+  const rows = db.select({
+    seed: players.partySeed
+  }).from(players)
+    .where(and(
+      eq(players.userId, userId),
+      isNull(players.leftAt),
+      eq(players.isKicked, false)
+    ))
+    .all() as { seed: string }[]
+  // Una sola riga attiva per (party,user) per costruzione, ma usiamo Set
+  // come difesa in profondità contro eventuali residui.
+  return new Set(rows.map(r => r.seed)).size
+}
+
+export function isMaster(db: Db, seed: string, userId: string): boolean {
+  const rows = db.select().from(players)
+    .where(and(
+      eq(players.partySeed, seed),
+      eq(players.userId, userId),
+      eq(players.role, 'master'),
+      isNull(players.leftAt),
+      eq(players.isKicked, false)
+    ))
+    .all()
+  return rows.length > 0
+}
+
+export interface MasterPlayerRow {
+  id: string
+  userId: string
+  nickname: string
+  joinedAt: number
+}
+
+export function listMasters(db: Db, seed: string): MasterPlayerRow[] {
+  return db.select({
+    id: players.id,
+    userId: players.userId,
+    nickname: players.nickname,
+    joinedAt: players.joinedAt
+  }).from(players)
+    .where(and(
+      eq(players.partySeed, seed),
+      eq(players.role, 'master'),
+      isNull(players.leftAt),
+      eq(players.isKicked, false)
+    ))
+    .orderBy(asc(players.joinedAt))
+    .all() as MasterPlayerRow[]
+}
+
+export type BrowserSort = 'lastActivity' | 'members' | 'recent'
+
+export interface BrowserFilters {
+  mine?: boolean
+  auto?: boolean
+  withSlots?: boolean
+}
+
+export interface BrowserOpts {
+  userId: string
+  sort?: BrowserSort
+  filters?: BrowserFilters
+  q?: string
+  cursor?: string
+  limit?: number
+}
+
+export interface BrowserItem {
+  seed: string
+  cityName: string
+  visibility: PartyVisibility
+  joinPolicy: PartyJoinPolicy
+  memberCount: number
+  masterDisplays: string[]
+  lastActivityAt: number
+  isMember: boolean
+  hasPendingRequest: boolean
+}
+
+export interface BrowserPage {
+  items: BrowserItem[]
+  nextCursor: string | null
+}
+
+// Cursor è il `lastActivityAt:seed` della riga finale, codifica numerica
+// per evitare ambiguità di parse e tie-break sul seed. listPartiesForBrowser
+// applica i filtri post-query in 2 step quando servono aggregati per evitare
+// JOIN complessi su SQLite — accettabile per scale MVP (≤100 party).
+export function listPartiesForBrowser(db: Db, opts: BrowserOpts): BrowserPage {
+  const limit = Math.min(Math.max(opts.limit ?? 20, 1), 100)
+  const sort = opts.sort ?? 'lastActivity'
+  const filters = opts.filters ?? {}
+
+  // Step 1: shortlist party non archiviate, applichiamo filtro visibility e
+  // ricerca su cityName a livello SQL. Per il filtro `mine` partiamo dalla
+  // membership attiva.
+  const allParties = db.select().from(parties)
+    .where(isNull(parties.archivedAt))
+    .all()
+
+  const myMembership = db.select({ seed: players.partySeed }).from(players)
+    .where(and(
+      eq(players.userId, opts.userId),
+      isNull(players.leftAt),
+      eq(players.isKicked, false)
+    ))
+    .all() as { seed: string }[]
+  const mySeeds = new Set(myMembership.map(r => r.seed))
+
+  const pendingSeeds = new Set(
+    listPendingRequestSeedsForUser(db, opts.userId)
+  )
+
+  // Filtra per visibility/q/membership
+  const q = opts.q?.trim().toLowerCase() ?? ''
+  const filtered = allParties.filter((p) => {
+    // private visibili solo se membership
+    if (p.visibility === 'private' && !mySeeds.has(p.seed)) return false
+    if (q && !p.cityName.toLowerCase().includes(q)) return false
+    if (filters.mine && !mySeeds.has(p.seed)) return false
+    if (filters.auto && p.joinPolicy !== 'auto') return false
+    return true
+  })
+
+  // Hydrate aggregati: memberCount + masterDisplays per ogni party rimasta.
+  const items: BrowserItem[] = filtered.map((p) => {
+    const memberCount = countActiveMembers(db, p.seed)
+    const masters = listMasters(db, p.seed)
+    return {
+      seed: p.seed,
+      cityName: p.cityName,
+      visibility: p.visibility as PartyVisibility,
+      joinPolicy: p.joinPolicy as PartyJoinPolicy,
+      memberCount,
+      masterDisplays: masters.map(m => m.nickname),
+      lastActivityAt: p.lastActivityAt,
+      isMember: mySeeds.has(p.seed),
+      hasPendingRequest: pendingSeeds.has(p.seed)
+    }
+  })
+
+  // withSlots dopo aver calcolato memberCount.
+  const slotted = filters.withSlots
+    ? items.filter(i => i.memberCount < MAX_MEMBERS_PER_PARTY)
+    : items
+
+  // Sort
+  if (sort === 'members') {
+    slotted.sort((a, b) => b.memberCount - a.memberCount || b.lastActivityAt - a.lastActivityAt)
+  } else if (sort === 'recent') {
+    // recent = creazione recente. usiamo lastActivityAt come proxy se non
+    // abbiamo createdAt qui — recuperiamolo dalla shortlist.
+    const createdMap = new Map(allParties.map(p => [p.seed, p.createdAt]))
+    slotted.sort((a, b) =>
+      (createdMap.get(b.seed) ?? 0) - (createdMap.get(a.seed) ?? 0)
+    )
+  } else {
+    slotted.sort((a, b) => b.lastActivityAt - a.lastActivityAt || a.seed.localeCompare(b.seed))
+  }
+
+  // Cursor: numero+seed tie-break. Ignoriamo il cursor per gli altri sort
+  // (semplificazione MVP: il browser usa lastActivity by default).
+  let startIdx = 0
+  if (opts.cursor && sort === 'lastActivity') {
+    const [tsStr, cseed] = opts.cursor.split(':')
+    const ts = Number(tsStr)
+    if (Number.isFinite(ts)) {
+      startIdx = slotted.findIndex(i =>
+        i.lastActivityAt < ts || (i.lastActivityAt === ts && i.seed > (cseed ?? ''))
+      )
+      if (startIdx < 0) startIdx = slotted.length
+    }
+  }
+
+  const pageItems = slotted.slice(startIdx, startIdx + limit)
+  const nextCursor = startIdx + limit < slotted.length
+    ? `${pageItems.at(-1)!.lastActivityAt}:${pageItems.at(-1)!.seed}`
+    : null
+  return { items: pageItems, nextCursor }
+}
+
+function countActiveMembers(db: Db, seed: string): number {
+  const rows = db.select({ id: players.id }).from(players)
+    .where(and(
+      eq(players.partySeed, seed),
+      isNull(players.leftAt),
+      eq(players.isKicked, false)
+    ))
+    .all()
+  return rows.length
+}
+
+function listPendingRequestSeedsForUser(db: Db, userId: string): string[] {
+  const rows = db.select({ seed: partyJoinRequests.partySeed }).from(partyJoinRequests)
+    .where(and(
+      eq(partyJoinRequests.userId, userId),
+      eq(partyJoinRequests.status, 'pending')
+    ))
+    .all() as { seed: string }[]
+  return rows.map(r => r.seed)
 }
