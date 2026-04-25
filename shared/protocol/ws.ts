@@ -69,7 +69,10 @@ const PlayerSnapshot = z.object({
   id: z.string(),
   nickname: z.string(),
   role: z.enum(['user', 'master']),
-  currentAreaId: z.string()
+  currentAreaId: z.string(),
+  // v2d: mapId della mappa corrente del player. Nullable per legacy
+  // (player creati pre-T17), optional per backward compat con server pre-T15.
+  currentMapId: z.string().nullable().optional()
 })
 
 const PartySnapshot = z.object({
@@ -81,14 +84,37 @@ const PartySnapshot = z.object({
 
 const AreaStateSnapshot = z.object({
   partySeed: z.string(),
+  // v2d: scope della riga area_state per (mapId, areaId). Nullable per legacy.
+  mapId: z.string().nullable().optional(),
   areaId: z.string(),
   status: z.enum(['intact', 'infested', 'ruined', 'closed']),
   customName: z.string().nullable(),
   notes: z.string().nullable()
 })
 
+export const PartyMapPublicSchema = z.object({
+  id: z.string(),
+  mapTypeId: z.string(),
+  name: z.string(),
+  isSpawn: z.boolean(),
+  createdAt: z.number()
+})
+export type PartyMapPublic = z.infer<typeof PartyMapPublicSchema>
+
+export const TransitionPublicSchema = z.object({
+  id: z.string(),
+  fromMapId: z.string(),
+  fromAreaId: z.string(),
+  toMapId: z.string(),
+  toAreaId: z.string(),
+  label: z.string().nullable()
+})
+export type TransitionPublic = z.infer<typeof TransitionPublicSchema>
+
 export const PlayerPositionSchema = z.object({
   playerId: z.string(),
+  // v2d: posizione scoped per mappa. Nullable per legacy.
+  mapId: z.string().nullable().optional(),
   areaId: z.string(),
   x: z.number(),
   y: z.number()
@@ -96,6 +122,8 @@ export const PlayerPositionSchema = z.object({
 export type PlayerPosition = z.infer<typeof PlayerPositionSchema>
 
 const WeatherOverridePublicSchema = z.object({
+  // v2d: override scoped per mappa.
+  mapId: z.string().nullable().optional(),
   areaId: z.string().nullable(),
   code: z.string(),
   intensity: z.number()
@@ -112,6 +140,8 @@ export const StateInitEvent = z.object({
   zombies: z.array(z.object({
     id: z.string(),
     partySeed: z.string(),
+    // v2d
+    mapId: z.string().nullable().optional(),
     areaId: z.string(),
     x: z.number(),
     y: z.number(),
@@ -119,13 +149,19 @@ export const StateInitEvent = z.object({
   })),
   playerPositions: z.array(PlayerPositionSchema),
   weatherOverrides: z.array(WeatherOverridePublicSchema),
+  // v2d: lista mappe della party e transizioni cross-map.
+  // Required come array, T15 li popolerà lato server. Default semantico: [].
+  maps: z.array(PartyMapPublicSchema),
+  transitions: z.array(TransitionPublicSchema),
   serverTime: z.number()
 })
 export type StateInitEvent = z.infer<typeof StateInitEvent>
 
 export const MoveRequestEvent = z.object({
   type: z.literal('move:request'),
-  toAreaId: z.string()
+  toAreaId: z.string(),
+  // v2d: cross-map. Se presente, il move attraversa una transition.
+  toMapId: z.string().optional()
 })
 export type MoveRequestEvent = z.infer<typeof MoveRequestEvent>
 
@@ -133,7 +169,9 @@ const PlayerSnapshotSchema = z.object({
   id: z.string(),
   nickname: z.string(),
   role: z.enum(['user', 'master']),
-  currentAreaId: z.string()
+  currentAreaId: z.string(),
+  // v2d
+  currentMapId: z.string().nullable().optional()
 })
 
 export const PlayerJoinedEvent = z.object({
@@ -154,12 +192,18 @@ export const PlayerMovedEvent = z.object({
   playerId: z.string(),
   fromAreaId: z.string(),
   toAreaId: z.string(),
+  // v2d: per move stessa-mappa entrambi null; per cross-map valorizzati.
+  // Optional per backward compat con server pre-T15.
+  fromMapId: z.string().nullable().optional(),
+  toMapId: z.string().nullable().optional(),
   teleported: z.boolean()
 })
 export type PlayerMovedEvent = z.infer<typeof PlayerMovedEvent>
 
 const AreaStateSnapshotSchema = z.object({
   partySeed: z.string(),
+  // v2d
+  mapId: z.string().nullable().optional(),
   areaId: z.string(),
   status: z.enum(['intact', 'infested', 'ruined', 'closed']),
   customName: z.string().nullable(),
@@ -215,6 +259,8 @@ export type MasterAreaEvent = z.infer<typeof MasterAreaEvent>
 export const ZombieSchema = z.object({
   id: z.string(),
   partySeed: z.string(),
+  // v2d: zombie scoped per mappa.
+  mapId: z.string().nullable().optional(),
   areaId: z.string(),
   x: z.number(),
   y: z.number(),

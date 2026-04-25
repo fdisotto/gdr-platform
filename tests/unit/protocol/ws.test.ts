@@ -92,6 +92,8 @@ describe('StateInitEvent', () => {
       zombies: [],
       playerPositions: [],
       weatherOverrides: [],
+      maps: [],
+      transitions: [],
       serverTime: 1
     }).success).toBe(true)
   })

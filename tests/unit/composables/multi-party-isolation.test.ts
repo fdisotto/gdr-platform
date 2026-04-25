@@ -68,6 +68,8 @@ function fakeStateInit(seed: string, areaId: string, body: string) {
     zombies: [],
     playerPositions: [],
     weatherOverrides: [],
+    maps: [],
+    transitions: [],
     serverTime: 1
   }
 }
