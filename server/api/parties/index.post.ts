@@ -1,11 +1,15 @@
 import { createError } from 'h3'
+import { count } from 'drizzle-orm'
 import { CreatePartyBody } from '~~/shared/protocol/http'
-import { createParty } from '~~/server/services/parties'
+import { createParty, countActivePartiesForUser } from '~~/server/services/parties'
 import { listAreasState } from '~~/server/services/areas'
 import { listOnlinePlayers } from '~~/server/services/players'
+import { parties } from '~~/server/db/schema'
 import { useDb } from '~~/server/utils/db'
 import { toH3Error } from '~~/server/utils/http'
 import { requireUser } from '~~/server/utils/auth-middleware'
+import { DomainError } from '~~/shared/errors'
+import { MAX_PARTIES_PER_USER, MAX_TOTAL_PARTIES } from '~~/shared/limits'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -17,10 +21,25 @@ export default defineEventHandler(async (event) => {
     }
     const body = parsed.data
     const db = useDb()
+
+    // Limite per utente: max 5 party attive (master+user, escluse archived/left).
+    const myActive = countActivePartiesForUser(db, me.id)
+    if (myActive >= MAX_PARTIES_PER_USER) {
+      throw new DomainError('party_limit', `max ${MAX_PARTIES_PER_USER} per user`)
+    }
+    // Limite di sistema: max 100 party totali (anche archiviate, per ora).
+    const totalRow = db.select({ c: count() }).from(parties).all() as { c: number }[]
+    const total = totalRow[0]?.c ?? 0
+    if (total >= MAX_TOTAL_PARTIES) {
+      throw new DomainError('party_limit', `max ${MAX_TOTAL_PARTIES} total`)
+    }
+
     const result = await createParty(db, {
       userId: me.id,
       displayName: body.displayName,
-      cityName: body.cityName
+      cityName: body.cityName,
+      visibility: body.visibility,
+      joinPolicy: body.joinPolicy
     })
     const areasState = listAreasState(db, result.seed)
     const players = listOnlinePlayers(db, result.seed)

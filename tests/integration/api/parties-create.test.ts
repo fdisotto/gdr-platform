@@ -64,6 +64,56 @@ describe('POST /api/parties', () => {
     })
     expect(res.status).toBe(400)
   })
+
+  it('accetta visibility=public e joinPolicy=auto', async () => {
+    const { cookie } = await registerApproveLogin(dbPath, uniqueUsername('c3'))
+    const res = await fetch('/api/parties', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({
+        displayName: 'Pub', visibility: 'public', joinPolicy: 'auto'
+      })
+    })
+    expect(res.status).toBe(200)
+    const r = await res.json() as { seed: string }
+    // verifichiamo via browser endpoint che la party sia visibile a un altro user
+    const other = await registerApproveLogin(dbPath, uniqueUsername('c4'))
+    const browseRes = await fetch('/api/parties', {
+      headers: { cookie: other.cookie }
+    })
+    const page = await browseRes.json() as { items: { seed: string, visibility: string, joinPolicy: string }[] }
+    const item = page.items.find(i => i.seed === r.seed)!
+    expect(item.visibility).toBe('public')
+    expect(item.joinPolicy).toBe('auto')
+  })
+
+  it('rifiuta visibility invalido', async () => {
+    const { cookie } = await registerApproveLogin(dbPath, uniqueUsername('c5'))
+    const res = await fetch('/api/parties', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ displayName: 'X', visibility: 'wrong' })
+    })
+    expect(res.status).toBe(400)
+  })
+
+  it('blocca al 6° create dello stesso utente con party_limit (429)', async () => {
+    const { cookie } = await registerApproveLogin(dbPath, uniqueUsername('c6'))
+    for (let i = 0; i < 5; i++) {
+      const res = await fetch('/api/parties', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ displayName: `M${i}` })
+      })
+      expect(res.status).toBe(200)
+    }
+    const sixth = await fetch('/api/parties', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({ displayName: 'M5' })
+    })
+    expect(sixth.status).toBe(429)
+  })
 })
 
 process.on('exit', () => {
