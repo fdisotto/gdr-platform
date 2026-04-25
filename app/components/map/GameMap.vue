@@ -14,6 +14,7 @@ import MapLegend from '~/components/map/MapLegend.vue'
 import MapPlayersBox from '~/components/map/MapPlayersBox.vue'
 import MapRoads from '~/components/map/MapRoads.vue'
 import MapDecor from '~/components/map/MapDecor.vue'
+import MapTransitionDoors from '~/components/map/MapTransitionDoors.vue'
 
 // T20: GameMap consuma un GeneratedMap deterministico quando passato
 // (path multi-mappa post-T20). In assenza, usa la mappa hardcoded legacy
@@ -34,12 +35,6 @@ const props = defineProps<{
   // un'area target di una transition, send move:request con toMapId+toAreaId.
   transitions?: TransitionOutgoing[]
 }>()
-
-const transitionByFromArea = computed(() => {
-  const m = new Map<string, TransitionOutgoing>()
-  for (const t of props.transitions ?? []) m.set(t.fromAreaId, t)
-  return m
-})
 
 const areas = computed<readonly Area[]>(() => {
   if (props.generatedMap) {
@@ -417,15 +412,16 @@ function onAreaClick(areaId: AreaId) {
     const targetState = stateById.value.get(areaId)
     if (targetState?.status === 'closed') return
   }
-  // v2d T28: se è la mia area corrente E ha una transition outgoing, lancia
-  // il cross-map move alla destinazione (toMapId+toAreaId). Altrimenti invio
-  // intra-map come prima.
-  const tr = transitionByFromArea.value.get(myArea)
-  if (tr && areaId === myArea) {
-    connection.send({ type: 'move:request', toAreaId: tr.toAreaId, toMapId: tr.toMapId })
-    return
-  }
   connection.send({ type: 'move:request', toAreaId: areaId })
+}
+
+// v2d T28+UX: per ogni transition outgoing, click sulla strada-porta dedicata
+// (renderizzata in MapTransitionDoors) invia il move cross-map. La strada esce
+// dall'area edge verso il bordo del viewport per essere visivamente distinta
+// dalle adiacenze intra-mappa.
+function onTransitionClick(toMapId: string, toAreaId: string) {
+  if (!partyStore.me) return
+  connection.send({ type: 'move:request', toAreaId, toMapId })
 }
 </script>
 
@@ -541,6 +537,13 @@ function onAreaClick(areaId: AreaId) {
           <MapRoads
             :areas="areas"
             :pairs="adjacencyPairs"
+          />
+          <MapTransitionDoors
+            :areas="areas"
+            :transitions="props.transitions ?? []"
+            :logical-w="LOGICAL_W"
+            :logical-h="LOGICAL_H"
+            @transition-click="onTransitionClick"
           />
 
           <MapArea
