@@ -36,10 +36,12 @@ export const ERROR_CODES = [
   'setting_invalid',
   // v2d multi-map
   'map_type_not_found',
+  'map_not_found',
   'map_limit',
   'map_not_empty',
   'cannot_delete_spawn',
-  'transition_invalid'
+  'transition_invalid',
+  'not_a_transition'
 ] as const
 
 export type ErrorCode = typeof ERROR_CODES[number]

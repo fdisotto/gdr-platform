@@ -30,10 +30,13 @@ export function toH3Error(e: unknown): never {
       last_admin: 409,
       setting_invalid: 400,
       // v2d multi-map
+      map_type_not_found: 404,
+      map_not_found: 404,
       map_limit: 429,
       map_not_empty: 409,
       cannot_delete_spawn: 409,
-      transition_invalid: 400
+      transition_invalid: 400,
+      not_a_transition: 403
     }
     throw createError({
       statusCode: statusByCode[e.code] ?? 400,

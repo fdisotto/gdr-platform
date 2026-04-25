@@ -39,7 +39,15 @@ const TOAST_MAP: Record<string, ToastSpec> = {
   invite_invalid: { level: 'warn', title: 'Invito non valido o scaduto' },
   // v2c admin
   last_admin: { level: 'warn', title: 'Sei l\'unico superadmin attivo' },
-  setting_invalid: { level: 'warn', title: 'Valore impostazione non valido' }
+  setting_invalid: { level: 'warn', title: 'Valore impostazione non valido' },
+  // v2d multi-map
+  map_type_not_found: { level: 'warn', title: 'Tipo di mappa sconosciuto' },
+  map_not_found: { level: 'warn', title: 'Mappa non trovata' },
+  map_limit: { level: 'warn', title: 'Limite di mappe per party raggiunto' },
+  map_not_empty: { level: 'warn', title: 'Mappa non vuota: rimuovi prima player, zombi e porte in entrata' },
+  cannot_delete_spawn: { level: 'warn', title: 'Non puoi cancellare la mappa di spawn: cambia spawn prima' },
+  transition_invalid: { level: 'warn', title: 'Porta non valida: aree inesistenti nelle mappe collegate' },
+  not_a_transition: { level: 'warn', title: 'Da qui non c\'è una porta verso quella mappa' }
 }
 
 interface BlockingSpec {
