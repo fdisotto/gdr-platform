@@ -86,11 +86,14 @@ export function tryNextMessage(
 }
 
 // Crea una party via API usando il cookie master e ritorna il seed.
+// v2b: forziamo public+auto così i test WS, che si aspettano join diretto
+// di altri user, continuano a girare senza richieste/inviti. I test che
+// vogliono testare visibility/policy specifiche chiamano l'API direttamente.
 export async function createPartyApi(cookie: string, displayName: string): Promise<string> {
   const res = await fetch('/api/parties', {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({ displayName })
+    body: JSON.stringify({ displayName, visibility: 'public', joinPolicy: 'auto' })
   })
   if (res.status !== 200) throw new Error(`createParty failed ${res.status}`)
   const body = await res.json() as { seed: string }

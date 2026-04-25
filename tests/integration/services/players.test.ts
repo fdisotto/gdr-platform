@@ -162,17 +162,16 @@ describe('players service', () => {
 
   it('joinParty rispetta MAX_MEMBERS_PER_PARTY (member_limit)', async () => {
     // Riempiamo la party con 30 membri (master + 29 user). Il 30° join è ok,
-    // il 31° fallisce. Riduciamo a 30 totali per non esagerare con I/O.
-    // Master è già il 1° membro. Aggiungiamo 29 user → totale 30.
+    // il 31° fallisce. bcrypt cost 8 nei test rende createApprovedUser lento;
+    // serve un timeout esplicito.
     for (let i = 0; i < 29; i++) {
       const u = await createApprovedUser(db, `m${i}`)
       joinParty(db, seed, `M${i}`, { userId: u })
     }
-    // 30° tentativo deve fallire
     const overflow = await createApprovedUser(db, 'overflow')
     expect(() => joinParty(db, seed, 'Over', { userId: overflow }))
       .toThrowError(/member_limit/)
-  })
+  }, 30_000)
 
   it('joinParty rispetta MAX_PARTIES_PER_USER (party_limit)', async () => {
     // L'utente è già master in `seed`. Crea altre 4 party (totale 5 attive).
