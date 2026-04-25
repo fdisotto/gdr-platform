@@ -21,8 +21,10 @@ export type AdminActionKind
     | 'setting.update'
     | 'maintenance.enable'
     | 'maintenance.disable'
+    // v2d multi-map
+    | 'map_type.update'
 
-export type AdminActionTargetKind = 'user' | 'party' | 'admin' | 'setting' | null
+export type AdminActionTargetKind = 'user' | 'party' | 'admin' | 'setting' | 'map_type' | null
 
 export interface AdminActionRow {
   id: string
