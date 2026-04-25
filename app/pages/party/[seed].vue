@@ -15,7 +15,7 @@ import { useErrorFeedback } from '~/composables/useErrorFeedback'
 import PartyHeader from '~/components/layout/PartyHeader.vue'
 import ConnectionBanner from '~/components/layout/ConnectionBanner.vue'
 import PartyChat from '~/components/chat/PartyChat.vue'
-import GameMap from '~/components/map/GameMap.vue'
+import MapView from '~/components/map/MapView.vue'
 import AreaDetailView from '~/components/map/AreaDetailView.vue'
 import DirectMessagesView from '~/components/dm/DirectMessagesView.vue'
 import MasterPanel from '~/components/master/MasterPanel.vue'
@@ -161,7 +161,7 @@ onBeforeRouteLeave(() => {
       <PartyHeader />
       <ConnectionBanner />
       <div class="flex-1 flex flex-col overflow-hidden min-h-0">
-        <GameMap v-if="viewStore.mainView === 'map'" />
+        <MapView v-if="viewStore.mainView === 'map'" />
         <AreaDetailView v-else-if="viewStore.mainView === 'area'" />
         <DirectMessagesView v-else-if="viewStore.mainView === 'dm'" />
         <MasterPanel v-else-if="viewStore.mainView === 'master'" />
