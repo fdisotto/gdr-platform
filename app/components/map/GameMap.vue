@@ -392,10 +392,19 @@ const stateById = computed(() => {
 
 const playersByArea = computed(() => {
   const map = new Map<string, typeof party.players>()
+  // v2d-shape-B: se il player ha currentAreaId che non corrisponde ad
+  // alcuna area della mappa attiva (es. party legacy creata prima del
+  // cambio dei pool nomi → slug obsoleti), fallback sulla spawn area
+  // della mappa per renderlo comunque visibile.
+  const validIds = new Set(areas.value.map(a => a.id))
+  const fallbackId = props.generatedMap?.spawnAreaId ?? areas.value[0]?.id ?? null
   for (const p of party.players) {
-    const list = map.get(p.currentAreaId) ?? []
+    const areaId = validIds.has(p.currentAreaId)
+      ? p.currentAreaId
+      : (fallbackId ?? p.currentAreaId)
+    const list = map.get(areaId) ?? []
     list.push(p)
-    map.set(p.currentAreaId, list)
+    map.set(areaId, list)
   }
   return map
 })

@@ -4,6 +4,8 @@ import { Delaunay } from 'd3-delaunay'
 import { usePartySeed } from '~/composables/usePartySeed'
 import { usePartyStore } from '~/stores/party'
 import { useViewStore } from '~/stores/view'
+import { usePartyConnections } from '~/composables/usePartyConnections'
+import { useFeedbackStore } from '~/stores/feedback'
 import { generate } from '~~/shared/map/generators'
 import type { GeneratedMap } from '~~/shared/map/generators/types'
 import type { PartyMapPublic } from '~~/shared/protocol/ws'
@@ -18,6 +20,8 @@ import type { PartyMapPublic } from '~~/shared/protocol/ws'
 const seed = usePartySeed()
 const party = usePartyStore(seed)
 const viewStore = useViewStore(seed)
+const connection = usePartyConnections().open(seed)
+const feedback = useFeedbackStore()
 
 const TILE_W = 240
 const TILE_H = 168
@@ -141,11 +145,33 @@ function selectTile(idx: number) {
   const tile = tiles.value[idx]
   if (!tile) return
   if (tile.fullyFogged) return // niente click su mappa fog
-  // Per ora: torna alla map view. Se la mappa cliccata è diversa dalla
-  // currentMapId del player, in futuro implementeremo il "view-only"
-  // (guardare una mappa altra senza spostarsi). Master può teleport
-  // tramite cross-map move WS direttamente dalla normale MapView.
-  viewStore.backToMap()
+
+  // Se è la mappa in cui sono già fisicamente, basta tornare alla MapView.
+  if (party.currentMapId === tile.map.id) {
+    viewStore.backToMap()
+    return
+  }
+
+  // Master: teleport via WS move:request cross-map alla spawn area della
+  // mappa target (il server bypassa not_a_transition per i master).
+  if (isMaster.value && tile.generated) {
+    connection.send({
+      type: 'move:request',
+      toMapId: tile.map.id,
+      toAreaId: tile.generated.spawnAreaId
+    })
+    viewStore.backToMap()
+    return
+  }
+
+  // Non-master: niente teleport diretto. Per cambiare mappa devi
+  // attraversare una transition fisicamente dalla GameMap.
+  feedback.pushToast({
+    level: 'info',
+    title: 'Devi raggiungere una porta per cambiare mappa',
+    detail: tile.map.name,
+    ttlMs: 3500
+  })
 }
 </script>
 
