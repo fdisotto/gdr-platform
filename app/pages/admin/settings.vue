@@ -50,7 +50,6 @@ const SECTIONS: Section[] = [
       { key: 'features.registrationEnabled', label: 'Registrazioni aperte', description: 'Se disattivato, l\'endpoint /api/auth/register restituisce 403.', kind: 'bool', defaultValue: true },
       { key: 'features.partyCreationEnabled', label: 'Creazione party abilitata', description: 'Se disattivato, gli utenti non possono creare nuove party.', kind: 'bool', defaultValue: true },
       { key: 'features.voiceChatEnabled', label: 'Chat vocale abilitata', description: 'Toggle globale per la voice chat.', kind: 'bool', defaultValue: true },
-      { key: 'features.renderEngine', label: 'Render engine mappa', description: 'Engine principale per il rendering della mappa: pixi (canvas WebGL) o svg (fallback). Globale.', kind: 'enum', defaultValue: 'pixi', options: ['pixi', 'svg'] },
       { key: 'features.mapTransitionsEnabled', label: 'Transizioni multi-mappa abilitate', description: 'Se disattivato, le porte tra mappe sono ignorate (kill-switch v2d).', kind: 'bool', defaultValue: true }
     ]
   },

@@ -219,22 +219,15 @@ client.
 
 ### Render engine
 
-`<MapView />` è il router pluggable: legge
-`features.renderEngine` da `system_settings` (default `pixi`) e
-istanzia `<MapViewSvg />` o `<MapViewPixi />` con lazy import
-(evita di bundle pixi.js se l'engine attivo è SVG).
+`<MapView />` istanzia `<MapViewSvg />`, wrapper su `<GameMap />` che
+consuma la `GeneratedMap` deterministica via `useGeneratedMap` e riusa
+zoom/pan, MapPlayersBox, MapLegend, MapAvatar, MapWeatherOverlay,
+MapTransitionDoors.
 
-- **SVG** (`MapViewSvg.vue`): wrapper su `<GameMap />`, consuma la
-  `GeneratedMap` deterministica via `useGeneratedMap`. Riusa zoom/pan,
-  MapPlayersBox, MapLegend, MapAvatar, MapWeatherOverlay,
-  MapTransitionDoors.
-- **Pixi** (`MapViewPixi.vue`): canvas `pixi.js@^8` minimal viable
-  (aree Graphics rect/polygon, etichette, avatar self, pan/zoom). Lazy
-  import attraverso `defineAsyncComponent`.
-
-Lo switch è globale, governato dal superadmin via
-`/admin/settings → Features → Render engine mappa`. Ricarica la pagina
-party per applicare.
+In v2d era stato sperimentato un secondo engine canvas (PixiJS)
+dietro a un toggle admin: rimosso per concentrare il polish sul path
+SVG. La struttura router-friendly resta in `MapView.vue` per re-introdurre
+altri engine in futuro (es. Leaflet per multi-city zoomabile).
 
 ### Codici errore v2d
 

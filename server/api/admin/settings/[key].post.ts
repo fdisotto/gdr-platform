@@ -21,7 +21,6 @@ const KEY_SCHEMAS: Record<string, z.ZodType> = {
   'features.registrationEnabled': z.boolean(),
   'features.partyCreationEnabled': z.boolean(),
   'features.voiceChatEnabled': z.boolean(),
-  'features.renderEngine': z.enum(['pixi', 'svg']),
   'features.mapTransitionsEnabled': z.boolean(),
   'limits.maxMapsPerParty': z.number().int().min(1).max(50),
   'system.maintenanceMode': z.boolean(),
