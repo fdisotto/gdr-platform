@@ -144,6 +144,112 @@ I limiti hardcoded in `shared/limits.ts` restano come **default
 fallback** se la tabella `system_settings` è ancora vuota (primo boot
 prima del seed migration).
 
+## Multi-mappa procedurale (v2d)
+
+La mappa fissa MVP (14 zone hardcoded di `shared/map/areas.ts`) è stata
+sostituita da un sistema **multi-mappa procedurale** per party. Migration
+`0005_brown_killmonger` fa clean break dei dati party-scoped, introduce
+le tabelle `map_types`, `party_maps`, `map_transitions` e aggiunge
+`mapId` (nullable in T1, NOT NULL+PK estesa nella futura 0006) sulle
+tabelle area-scoped.
+
+### Tipologie
+
+Catalogo `map_types` seed-ato dalla migration con tre tipi base:
+
+- **`city`** — tessuto urbano denso, areaCount 10–15, default
+  `{density:0.5, roadStyle:'grid'}`. Pool nomi: Chiesa, Ospedale,
+  Supermercato, Polizia, Scuola, Ponte, Quartiere Residenziale, Fogne,
+  Porto, Radio-Torre, Stazione Servizio, Rifugio, Giardino, Caserma,
+  Mercato.
+- **`country`** — aree aperte e zone agricole, areaCount 6–10, default
+  `{forestRatio:0.4, riverChance:0.6}`. Pool nomi: Casolare, Fattoria,
+  Stalla, Silo, Fienile, Pozzo, Cantina, Mulino, Sentiero, Recinto,
+  Vigneto, Bosco, Fiume, Ponte.
+- **`wasteland`** — distese desolate post-apocalittiche, areaCount 6–12,
+  default `{ruinRatio:0.5, craterCount:2}`. Pool nomi: Accampamento,
+  Avamposto, Bunker, Posto di Blocco, Dune, Discarica, Carcassa,
+  Trincea, Rovine, Cratere, Cratere Radiazioni, Ponte Sgretolato.
+
+I superadmin possono modificare `defaultParams`/`enabled` da
+`/admin/map-types` (POST `/api/admin/map-types/[id]`); il codice del
+generator è TS hardcoded in `shared/map/generators/{city,country,wasteland}.ts`,
+deterministico (stesso `(typeId, seed, params)` → stessa mappa
+bit-identica) con cache process-locale via `cacheKey`.
+
+### Flow master
+
+`createParty` crea automaticamente una **spawn map** city con seed
+random. Il master dalla tab **Mondo** del MasterPanel:
+
+- Vede la lista `party_maps` con badge isSpawn, count membri/zombi.
+- **Crea nuova mappa** (modal): seleziona tipo, nome (1–32 char), seed
+  opzionale, flag isSpawn. POST `/api/parties/[seed]/maps`.
+- Per ogni mappa: bottone **Spawn** (set-spawn), **Porte**
+  (TransitionsModal: lista outgoing+incoming, aggiungi/elimina porta
+  con select aree del generator + bidirectional default true),
+  **Elimina** (con pre-check: vuota, non spawn).
+
+Limite `MAX_MAPS_PER_PARTY = 10` con override runtime via
+`limits.maxMapsPerParty`.
+
+### Cross-map move
+
+Il client riceve `state:init` con `maps[]` + `transitions[]` + `me.currentMapId`.
+Quando un master crea una `map_transition` da `(fromMap, fromArea)` →
+`(toMap, toArea)`, il componente `MapTransitionDoors` disegna nella
+SVG/canvas una **strada-porta** dashed che esce dall'area edge verso
+il bordo. Click sulla porta invia `move:request` con `toMapId` +
+`toAreaId`.
+
+Server `handleMoveRequest`:
+
+- Intra-map (`toMapId` omesso o uguale al currentMapId): valida via
+  `GeneratedMap.adjacency` della mappa attiva. Master bypassa
+  adjacency e closed-status.
+- Cross-map: cerca `map_transition` matching, in caso negativo errore
+  `not_a_transition` (403). Master può attraversare anche senza
+  transition (admin teleport free).
+
+Dopo il move il server emette `player:moved` con `fromMapId`/`toMapId`
+e re-emette uno **`state:init` aggiornato** al solo peer che ha
+cambiato mappa (zombie, posizioni, meteo, areasState, messaggi della
+nuova mappa). Niente broadcast del refresh: idempotente via hydrate
+client.
+
+### Render engine
+
+`<MapView />` è il router pluggable: legge
+`features.renderEngine` da `system_settings` (default `pixi`) e
+istanzia `<MapViewSvg />` o `<MapViewPixi />` con lazy import
+(evita di bundle pixi.js se l'engine attivo è SVG).
+
+- **SVG** (`MapViewSvg.vue`): wrapper su `<GameMap />`, consuma la
+  `GeneratedMap` deterministica via `useGeneratedMap`. Riusa zoom/pan,
+  MapPlayersBox, MapLegend, MapAvatar, MapWeatherOverlay,
+  MapTransitionDoors.
+- **Pixi** (`MapViewPixi.vue`): canvas `pixi.js@^8` minimal viable
+  (aree Graphics rect/polygon, etichette, avatar self, pan/zoom). Lazy
+  import attraverso `defineAsyncComponent`.
+
+Lo switch è globale, governato dal superadmin via
+`/admin/settings → Features → Render engine mappa`. Ricarica la pagina
+party per applicare.
+
+### Codici errore v2d
+
+- `map_type_not_found` (404)
+- `map_not_found` (404)
+- `map_limit` (429) — superato `limits.maxMapsPerParty`
+- `map_not_empty` (409) — delete bloccato (player/zombi/transitions
+  in entrata)
+- `cannot_delete_spawn` (409) — delete della mappa spawn
+- `transition_invalid` (400) — fromArea/toArea non esistono nel
+  GeneratedMap
+- `not_a_transition` (403) — move cross-map senza transition (user)
+
+Toast IT in `useErrorFeedback`.
+
 ## Come si gioca
 
 1. Fai **login** (o registrati e aspetta l'approvazione di un superadmin).
