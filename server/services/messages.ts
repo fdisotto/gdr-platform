@@ -82,6 +82,12 @@ export function softDeleteMessage(db: Db, messageId: string, byPlayerId: string)
     .run()
 }
 
+// Hard delete: rimuove la riga dal DB. Usato per la "purge" master quando
+// soft-delete (placeholder "[messaggio rimosso]") non basta. Niente recovery.
+export function hardDeleteMessage(db: Db, messageId: string): void {
+  db.delete(messages).where(eq(messages.id, messageId)).run()
+}
+
 export function editMessage(db: Db, messageId: string, newBody: string): void {
   db.update(messages)
     .set({ body: newBody, editedAt: Date.now() })

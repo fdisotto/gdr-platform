@@ -396,6 +396,22 @@ export const MasterDeleteMessageEvent = z.object({
 })
 export type MasterDeleteMessageEvent = z.infer<typeof MasterDeleteMessageEvent>
 
+// "Oscura" (soft delete): la riga resta in DB con deletedAt valorizzato;
+// gli utenti vedono "[messaggio rimosso]", il master vede ancora il body.
+// Purge è hard delete: la riga sparisce per tutti.
+export const MasterPurgeMessageEvent = z.object({
+  type: z.literal('master:purge-message'),
+  messageId: z.string()
+})
+export type MasterPurgeMessageEvent = z.infer<typeof MasterPurgeMessageEvent>
+
+// Broadcast emesso dopo una purge: i client rimuovono la riga dal feed.
+export const MessageRemovedEvent = z.object({
+  type: z.literal('message:removed'),
+  messageId: z.string()
+})
+export type MessageRemovedEvent = z.infer<typeof MessageRemovedEvent>
+
 export const MasterEditMessageEvent = z.object({
   type: z.literal('master:edit-message'),
   messageId: z.string(),
@@ -541,7 +557,7 @@ export const ServerEvent = z.discriminatedUnion('type', [
   PlayerPlacedEvent,
   ZombieMovedEvent, ZombiesBatchSpawnedEvent,
   VoiceSignalEvent,
-  MessageUpdateEvent, PlayerMutedEvent, KickedEvent,
+  MessageUpdateEvent, MessageRemovedEvent, PlayerMutedEvent, KickedEvent,
   MasterActionsSnapshotEvent, MasterBansSnapshotEvent
 ])
 export type ServerEvent = z.infer<typeof ServerEvent>
@@ -552,7 +568,7 @@ export const ClientEvent = z.discriminatedUnion('type', [
   MasterPlacePlayerEvent,
   MasterMoveZombieEvent, MasterSpawnZombiesEvent,
   VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent,
-  MasterDeleteMessageEvent, MasterEditMessageEvent,
+  MasterDeleteMessageEvent, MasterPurgeMessageEvent, MasterEditMessageEvent,
   MasterMuteEvent, MasterUnmuteEvent,
   MasterKickEvent, MasterBanEvent, MasterUnbanEvent,
   MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent,

@@ -130,6 +130,12 @@ function deleteMsg() {
   connection.send({ type: 'master:delete-message', messageId: props.message.id })
   closeMenu()
 }
+// Hard delete (purge): rimuove la riga dal DB + dal feed di tutti.
+function purgeMsg() {
+  if (!confirm('Cancellare definitivamente questo messaggio?')) return
+  connection.send({ type: 'master:purge-message', messageId: props.message.id })
+  closeMenu()
+}
 function copyText() {
   if (typeof navigator !== 'undefined' && navigator.clipboard) {
     navigator.clipboard.writeText(props.message.body).catch(() => {})
@@ -150,11 +156,11 @@ if (typeof document !== 'undefined') {
 <template>
   <div
     ref="menuRoot"
-    class="relative"
+    class="group relative flex items-start gap-1"
     @contextmenu="openMenu"
   >
     <div
-      class="text-sm"
+      class="flex-1 min-w-0 text-sm"
       :style="message.pending ? { ...kindStyle, opacity: 0.55 } : kindStyle"
     >
       <span
@@ -209,6 +215,32 @@ if (typeof document !== 'undefined') {
         </span>
       </template>
     </div>
+    <!-- Icone master sempre visibili sulla destra: oscura (soft) + cancella (hard).
+         Right-click apre il menu completo con copia/modifica come fallback. -->
+    <div
+      v-if="isMaster && !message.pending"
+      class="shrink-0 flex items-center gap-0.5 opacity-50 hover:opacity-100 transition-opacity"
+    >
+      <button
+        v-if="!isDeleted"
+        type="button"
+        class="px-1.5 py-0.5 rounded text-xs hover:bg-black/30"
+        style="color: var(--z-rust-300)"
+        title="Oscura messaggio (soft delete)"
+        @click="deleteMsg"
+      >
+        👁
+      </button>
+      <button
+        type="button"
+        class="px-1.5 py-0.5 rounded text-xs hover:bg-black/30"
+        style="color: var(--z-blood-300)"
+        title="Cancella messaggio (hard delete)"
+        @click="purgeMsg"
+      >
+        🗑
+      </button>
+    </div>
     <div
       v-if="editing"
       class="mt-1 flex gap-2"
@@ -259,10 +291,18 @@ if (typeof document !== 'undefined') {
       <button
         type="button"
         class="block w-full text-left px-3 py-1 text-xs hover:opacity-80"
-        style="color: var(--z-blood-300)"
+        style="color: var(--z-rust-300)"
         @click="deleteMsg"
       >
-        Cancella
+        Oscura
+      </button>
+      <button
+        type="button"
+        class="block w-full text-left px-3 py-1 text-xs hover:opacity-80"
+        style="color: var(--z-blood-300)"
+        @click="purgeMsg"
+      >
+        Cancella definitivamente
       </button>
     </div>
   </div>

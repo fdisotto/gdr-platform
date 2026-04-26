@@ -136,6 +136,21 @@ function chatStoreFactory() {
     }
   }
 
+  // Rimozione hard (master:purge): scorre tutti i bucket area + thread DM
+  // perché il client non sa a priori dove sta il messaggio.
+  function remove(messageId: string) {
+    for (const area of Object.keys(messagesByArea.value)) {
+      const list = messagesByArea.value[area]!
+      const next = list.filter(m => m.id !== messageId)
+      if (next.length !== list.length) messagesByArea.value[area] = next
+    }
+    for (const key of Object.keys(dmsByThread.value)) {
+      const list = dmsByThread.value[key]!
+      const next = list.filter(m => m.id !== messageId)
+      if (next.length !== list.length) dmsByThread.value[key] = next
+    }
+  }
+
   function forArea(areaId: string): ChatMessage[] {
     return messagesByArea.value[areaId] ?? []
   }
@@ -238,7 +253,7 @@ function chatStoreFactory() {
     messagesByArea, dmsByThread, inputDraft,
     areaHasMore, threadHasMore,
     lastSpeakerPlayerId, lastSpokeAt,
-    hydrate, hydrateDms, append, update, forArea, forThread,
+    hydrate, hydrateDms, append, update, remove, forArea, forThread,
     appendDm, appendPending, appendPendingDm,
     listDmThreads, threadKey,
     prependArea, prependThread,

@@ -1,4 +1,4 @@
-import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent, MasterDeleteMessageEvent, MasterEditMessageEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, MasterFetchActionsEvent, MasterFetchBansEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type PlayerMutedEvent, type KickedEvent, type WeatherUpdatedEvent, type MasterActionsSnapshotEvent, type MasterBansSnapshotEvent, type TransitionPublic, type PartyMapPublic } from '~~/shared/protocol/ws'
+import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent, MasterDeleteMessageEvent, MasterPurgeMessageEvent, MasterEditMessageEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, MasterFetchActionsEvent, MasterFetchBansEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type MessageRemovedEvent, type PlayerMutedEvent, type KickedEvent, type WeatherUpdatedEvent, type MasterActionsSnapshotEvent, type MasterBansSnapshotEvent, type TransitionPublic, type PartyMapPublic } from '~~/shared/protocol/ws'
 import { useDb } from '~~/server/utils/db'
 import { findPlayerByUserInParty, listOnlinePlayers, touchPlayer, updatePlayerArea, setMute, kickPlayer, findPlayerById, type PlayerRow } from '~~/server/services/players'
 import { findSession, extendSession, revokeSession } from '~~/server/services/sessions'
@@ -8,7 +8,7 @@ import { logMasterAction, listMasterActions } from '~~/server/services/master-ac
 import { setOverride, clearOverride, listOverrides } from '~~/server/services/weather-overrides'
 import { partyMustExist } from '~~/server/services/parties'
 import { listAreasState, updateAreaState, findAreaState } from '~~/server/services/areas'
-import { listAreaMessages, insertMessage, listAreaMessagesBefore, listThreadMessagesBefore, listRecentDmsForPlayer, softDeleteMessage, editMessage, findMessage, type MessageRow } from '~~/server/services/messages'
+import { listAreaMessages, insertMessage, listAreaMessagesBefore, listThreadMessagesBefore, listRecentDmsForPlayer, softDeleteMessage, hardDeleteMessage, editMessage, findMessage, type MessageRow } from '~~/server/services/messages'
 import { registry, sendJson, chatRateLimiter, listPartyZombies, addZombie, removeZombie, moveZombie, addZombies, listPlayerPositions, setPlayerPosition, resetPlayerPosition, ensurePartyHydrated } from '~~/server/ws/state'
 import { insertZombie, insertZombies, deleteZombie, updateZombiePosition } from '~~/server/services/zombies'
 import { upsertPosition, deletePositionsForPlayer } from '~~/server/services/player-positions'
@@ -150,6 +150,10 @@ export default defineWebSocketHandler({
 
     if (parsed.type === 'master:delete-message') {
       await handleMasterDeleteMessage(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:purge-message') {
+      await handleMasterPurgeMessage(peer, parsed)
       return
     }
     if (parsed.type === 'master:edit-message') {
@@ -936,6 +940,30 @@ async function handleMasterDeleteMessage(peer: Peer, raw: unknown) {
   const updated = findMessage(ctx.db, res.data.messageId)
   if (!updated) return
   const event: MessageUpdateEvent = { type: 'message:update', message: updated }
+  const payload = JSON.stringify(event)
+  for (const c of registry.listParty(ctx.conn.partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
+}
+
+async function handleMasterPurgeMessage(peer: Peer, raw: unknown) {
+  const res = MasterPurgeMessageEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  const msg = findMessage(ctx.db, res.data.messageId)
+  if (!msg || msg.partySeed !== ctx.conn.partySeed) {
+    sendJson(peer, { type: 'error', code: 'not_found' })
+    return
+  }
+  hardDeleteMessage(ctx.db, res.data.messageId)
+  logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'purge', target: res.data.messageId })
+  const event: MessageRemovedEvent = { type: 'message:removed', messageId: res.data.messageId }
   const payload = JSON.stringify(event)
   for (const c of registry.listParty(ctx.conn.partySeed)) {
     try {

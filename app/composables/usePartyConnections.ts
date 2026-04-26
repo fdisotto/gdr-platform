@@ -255,6 +255,11 @@ function makeConnection(seed: string): PartyConnection {
         chatStore.update(m)
         break
       }
+      case 'message:removed': {
+        const { messageId } = data as { messageId: string }
+        chatStore.remove(messageId)
+        break
+      }
       case 'time:tick': {
         serverTime.sync((data as { serverTime: number }).serverTime)
         break
