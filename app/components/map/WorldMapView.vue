@@ -238,15 +238,18 @@ function selectTile(idx: number) {
           :style="tile.fullyFogged ? 'cursor: not-allowed' : 'cursor: pointer'"
           @click="selectTile(idx)"
         >
-          <!-- Cornice tile -->
+          <!-- Cornice tile: highlight verde sulla mappa attualmente
+               occupata dal player (priorità sul rosso isSpawn). -->
           <rect
             :width="TILE_W"
             :height="TILE_H"
             rx="6"
             ry="6"
             :fill="tile.fullyFogged ? '#050505' : 'var(--z-bg-800)'"
-            :stroke="tile.map.isSpawn ? 'var(--z-blood-300)' : 'var(--z-border)'"
-            :stroke-width="tile.map.isSpawn ? 2 : 1"
+            :stroke="party.currentMapId === tile.map.id
+              ? 'var(--z-green-300)'
+              : (tile.map.isSpawn ? 'var(--z-blood-300)' : 'var(--z-border)')"
+            :stroke-width="party.currentMapId === tile.map.id ? 3 : (tile.map.isSpawn ? 2 : 1)"
           />
 
           <!-- Voronoi miniature (solo se mappa esplorata) -->
@@ -289,9 +292,15 @@ function selectTile(idx: number) {
               text-anchor="middle"
               font-size="13"
               font-weight="700"
-              :fill="tile.fullyFogged ? 'var(--z-text-lo)' : 'var(--z-text-hi)'"
+              :fill="tile.fullyFogged
+                ? 'var(--z-text-lo)'
+                : (party.currentMapId === tile.map.id ? 'var(--z-green-300)' : 'var(--z-text-hi)')"
             >
               {{ tile.fullyFogged ? '???' : tile.map.name }}
+              <tspan
+                v-if="party.currentMapId === tile.map.id"
+                style="font-size: 0.85em; font-weight: 500"
+              > · sei qui</tspan>
             </text>
             <text
               :x="TILE_W / 2"

@@ -159,6 +159,7 @@ const voronoiByArea = useVoronoiPolygons(voronoiAreas, 1000, 700)
     :transitions="transitionsForActiveMap"
     :map-id="map?.id ?? null"
     :map-type-id="map?.mapTypeId ?? null"
+    :map-name="map?.name ?? null"
     :voronoi-by-area="voronoiByArea"
   />
 </template>

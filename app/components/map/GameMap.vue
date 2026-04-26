@@ -40,6 +40,8 @@ const props = defineProps<{
   // v2d-shape-B: tipo della mappa (city/country/wasteland) — pilota lo
   // stile delle strade e altri dettagli visivi tematici.
   mapTypeId?: string | null
+  // v2d-world: nome della mappa attiva, mostrato nel banner in alto.
+  mapName?: string | null
   // v2d-shape-B: Voronoi polygons pre-calcolati lato MapViewSvg, mappati
   // per areaId. Quando presenti l'area si renderizza come Voronoi cell.
   voronoiByArea?: Map<string, string>
@@ -1049,17 +1051,29 @@ function onSvgBgClick(e: MouseEvent) {
     <MapLegend />
     <MapPlayersBox />
 
-    <!-- v2d-world: toggle 🌐 Mondo (per tutti, vede solo le mappe
-         esplorate; master vede tutto). -->
+    <!-- v2d-world: banner mappa corrente + toggle 🌐 Mondo. Mostra in
+         che mappa si trova il player; click apre la vista mondo. -->
     <div class="absolute top-3 left-1/2 -translate-x-1/2 z-10">
       <button
         type="button"
-        class="px-3 py-1.5 rounded text-xs font-mono-z"
+        class="px-3 py-1.5 rounded text-xs font-mono-z flex items-center gap-2"
         style="background: var(--z-bg-800); color: var(--z-text-md); border: 1px solid var(--z-border)"
         title="Apri vista mondo"
         @click="viewStore.openWorld()"
       >
-        🌐 Mondo
+        <span style="color: var(--z-text-hi); font-weight: 600">
+          🗺 {{ props.mapName ?? 'Mappa' }}
+        </span>
+        <span
+          v-if="props.mapTypeId"
+          class="px-1.5 py-0.5 rounded"
+          style="background: var(--z-bg-900); color: var(--z-text-md); font-size: 0.85em"
+        >
+          {{ props.mapTypeId }}
+        </span>
+        <span style="color: var(--z-text-md); border-left: 1px solid var(--z-border); padding-left: 8px; margin-left: 2px">
+          🌐 Mondo
+        </span>
       </button>
     </div>
 
