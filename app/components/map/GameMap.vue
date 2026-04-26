@@ -37,6 +37,12 @@ const props = defineProps<{
   // v2d-edit: mapId della mappa attiva (necessario per gli eventi
   // master:area-* che richiedono target mapId). null = mappa legacy.
   mapId?: string | null
+  // v2d-shape-B: tipo della mappa (city/country/wasteland) — pilota lo
+  // stile delle strade e altri dettagli visivi tematici.
+  mapTypeId?: string | null
+  // v2d-shape-B: Voronoi polygons pre-calcolati lato MapViewSvg, mappati
+  // per areaId. Quando presenti l'area si renderizza come Voronoi cell.
+  voronoiByArea?: Map<string, string>
 }>()
 
 const areas = computed<readonly Area[]>(() => {
@@ -803,6 +809,7 @@ function onSvgBgClick(e: MouseEvent) {
           <MapRoads
             :areas="effectiveAreas"
             :pairs="adjacencyPairs"
+            :map-type-id="props.mapTypeId ?? null"
           />
           <MapTransitionDoors
             :areas="effectiveAreas"
@@ -840,6 +847,7 @@ function onSvgBgClick(e: MouseEvent) {
               :is-adjacent="adjacentSet.has(a.id)"
               :is-master="isMaster"
               :player-count="(playersByArea.get(a.id)?.length ?? 0)"
+              :voronoi-points="props.voronoiByArea?.get(a.id) ?? null"
               @click="!editMode && onAreaClick(a.id as AreaId)"
             />
             <!-- v2d-edit: overlay edit master. Drag, doppio-click rinomina,

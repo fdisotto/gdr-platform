@@ -12,11 +12,16 @@ interface Props {
   isAdjacent: boolean
   isMaster: boolean
   playerCount: number
+  // v2d-shape-B: poligono Voronoi pre-calcolato in coord ASSOLUTE del
+  // viewBox (NON relative al bbox). Quando presente sostituisce sia il
+  // rect bbox sia il polygon organico per il rendering.
+  voronoiPoints?: string | null
 }
 const props = defineProps<Props>()
 defineEmits<{ (e: 'click'): void }>()
 
-const isPolygon = computed(() => props.area.svg.shape === 'polygon' && !!props.area.svg.points)
+const isVoronoi = computed(() => !!props.voronoiPoints)
+const isPolygon = computed(() => !isVoronoi.value && props.area.svg.shape === 'polygon' && !!props.area.svg.points)
 const polyPoints = computed(() => props.area.svg.points ?? '')
 
 function strokeColor(): string {
@@ -55,15 +60,26 @@ function cursorStyle(): string {
 </script>
 
 <template>
+  <!-- v2d-shape-B: se voronoiPoints è settato, il poligono è in coord
+       assolute (NO transform translate). Etichette/overlay usano la bbox
+       come riferimento (transform separato). -->
   <g
-    :transform="`translate(${area.svg.x}, ${area.svg.y})`"
     :style="cursorStyle()"
     @click="$emit('click')"
   >
-    <!-- v2d-shape: poligono organico (preferito) o rect legacy/custom area. -->
     <polygon
-      v-if="isPolygon"
+      v-if="isVoronoi"
+      :points="voronoiPoints!"
+      fill="url(#area-bg)"
+      :stroke="strokeColor()"
+      :stroke-width="strokeWidth()"
+      :opacity="opacity()"
+      stroke-linejoin="round"
+    />
+    <polygon
+      v-else-if="isPolygon"
       :points="polyPoints"
+      :transform="`translate(${area.svg.x}, ${area.svg.y})`"
       fill="url(#area-bg)"
       :stroke="strokeColor()"
       :stroke-width="strokeWidth()"
@@ -72,6 +88,8 @@ function cursorStyle(): string {
     />
     <rect
       v-else
+      :x="area.svg.x"
+      :y="area.svg.y"
       :width="area.svg.w"
       :height="area.svg.h"
       rx="8"
@@ -82,14 +100,24 @@ function cursorStyle(): string {
       :opacity="opacity()"
     />
     <polygon
-      v-if="isPolygon && status() === 'infested'"
+      v-if="isVoronoi && status() === 'infested'"
+      :points="voronoiPoints!"
+      fill="url(#area-infested)"
+      opacity="0.6"
+      pointer-events="none"
+    />
+    <polygon
+      v-else-if="isPolygon && status() === 'infested'"
       :points="polyPoints"
+      :transform="`translate(${area.svg.x}, ${area.svg.y})`"
       fill="url(#area-infested)"
       opacity="0.6"
       pointer-events="none"
     />
     <rect
       v-else-if="status() === 'infested'"
+      :x="area.svg.x"
+      :y="area.svg.y"
       :width="area.svg.w"
       :height="area.svg.h"
       rx="8"
@@ -99,14 +127,24 @@ function cursorStyle(): string {
       pointer-events="none"
     />
     <polygon
-      v-if="isPolygon && status() === 'ruined'"
+      v-if="isVoronoi && status() === 'ruined'"
+      :points="voronoiPoints!"
+      fill="url(#area-ruined)"
+      opacity="0.35"
+      pointer-events="none"
+    />
+    <polygon
+      v-else-if="isPolygon && status() === 'ruined'"
       :points="polyPoints"
+      :transform="`translate(${area.svg.x}, ${area.svg.y})`"
       fill="url(#area-ruined)"
       opacity="0.35"
       pointer-events="none"
     />
     <rect
       v-else-if="status() === 'ruined'"
+      :x="area.svg.x"
+      :y="area.svg.y"
       :width="area.svg.w"
       :height="area.svg.h"
       rx="8"
@@ -115,57 +153,61 @@ function cursorStyle(): string {
       opacity="0.35"
       pointer-events="none"
     />
-    <g
-      v-if="status() === 'closed'"
-      :transform="`translate(${area.svg.w / 2 - 12}, ${area.svg.h / 2 - 12})`"
-      pointer-events="none"
-    >
-      <rect
-        x="4"
-        y="10"
-        width="16"
-        height="12"
-        rx="2"
-        fill="var(--z-text-lo)"
-      />
-      <path
-        d="M 8 10 L 8 6 A 4 4 0 0 1 16 6 L 16 10"
-        stroke="var(--z-text-lo)"
-        stroke-width="2"
-        fill="none"
-      />
-    </g>
-    <text
-      :x="area.svg.w / 2"
-      :y="area.svg.h / 2 + 4"
-      text-anchor="middle"
-      font-size="13"
-      font-weight="600"
-      :fill="isCurrent ? 'var(--z-green-100)' : 'var(--z-text-hi)'"
-      :opacity="status() === 'closed' ? 0.5 : 1"
-      style="pointer-events: none; user-select: none"
-    >
-      {{ displayName() }}
-    </text>
-    <g
-      v-if="playerCount > 0"
-      :transform="`translate(${area.svg.w - 18}, 14)`"
-    >
-      <circle
-        r="10"
-        fill="var(--z-bg-700)"
-        stroke="var(--z-green-500)"
-        stroke-width="1.2"
-      />
-      <text
-        text-anchor="middle"
-        y="4"
-        font-size="11"
-        font-weight="700"
-        fill="var(--z-green-300)"
+    <!-- Overlay (closed icon, label, player count) sempre posizionati
+         relativi alla bbox dell'area. -->
+    <g :transform="`translate(${area.svg.x}, ${area.svg.y})`">
+      <g
+        v-if="status() === 'closed'"
+        :transform="`translate(${area.svg.w / 2 - 12}, ${area.svg.h / 2 - 12})`"
+        pointer-events="none"
       >
-        {{ playerCount }}
+        <rect
+          x="4"
+          y="10"
+          width="16"
+          height="12"
+          rx="2"
+          fill="var(--z-text-lo)"
+        />
+        <path
+          d="M 8 10 L 8 6 A 4 4 0 0 1 16 6 L 16 10"
+          stroke="var(--z-text-lo)"
+          stroke-width="2"
+          fill="none"
+        />
+      </g>
+      <text
+        :x="area.svg.w / 2"
+        :y="area.svg.h / 2 + 4"
+        text-anchor="middle"
+        font-size="13"
+        font-weight="600"
+        :fill="isCurrent ? 'var(--z-green-100)' : 'var(--z-text-hi)'"
+        :opacity="status() === 'closed' ? 0.5 : 1"
+        style="pointer-events: none; user-select: none"
+      >
+        {{ displayName() }}
       </text>
+      <g
+        v-if="playerCount > 0"
+        :transform="`translate(${area.svg.w - 18}, 14)`"
+      >
+        <circle
+          r="10"
+          fill="var(--z-bg-700)"
+          stroke="var(--z-green-500)"
+          stroke-width="1.2"
+        />
+        <text
+          text-anchor="middle"
+          y="4"
+          font-size="11"
+          font-weight="700"
+          fill="var(--z-green-300)"
+        >
+          {{ playerCount }}
+        </text>
+      </g>
     </g>
   </g>
 </template>
