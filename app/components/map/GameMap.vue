@@ -805,6 +805,25 @@ function onSvgBgClick(e: MouseEvent) {
       <g :transform="userTransform">
         <!-- Contenuto logico 1000x700 scalato uniformemente e centrato -->
         <g :transform="contentTransform">
+          <!-- v2d-shape-B: layer base — poligoni Voronoi (o rect MVP) come
+               sfondo cliccabile, sotto strade/decor/avatar/marker. -->
+          <g
+            v-for="a in effectiveAreas"
+            :key="`area-base-${a.id}`"
+          >
+            <MapArea
+              :area="a"
+              :state="stateById.get(a.id) ?? null"
+              :is-current="currentAreaId === a.id"
+              :is-adjacent="adjacentSet.has(a.id)"
+              :is-master="isMaster"
+              :player-count="(playersByArea.get(a.id)?.length ?? 0)"
+              :voronoi-points="props.voronoiByArea?.get(a.id) ?? null"
+              :layer="props.voronoiByArea && props.voronoiByArea.size > 0 ? 'base' : 'all'"
+              @click="!editMode && onAreaClick(a.id as AreaId)"
+            />
+          </g>
+
           <MapDecor :areas="effectiveAreas" />
           <MapRoads
             :areas="effectiveAreas"
@@ -836,20 +855,32 @@ function onSvgBgClick(e: MouseEvent) {
             />
           </g>
 
+          <!-- v2d-shape-B: layer marker — solo se Voronoi attivo (per il
+               legacy MVP il rect 'all' include già marker+label). -->
+          <template v-if="props.voronoiByArea && props.voronoiByArea.size > 0">
+            <g
+              v-for="a in effectiveAreas"
+              :key="`area-marker-${a.id}`"
+            >
+              <MapArea
+                :area="a"
+                :state="stateById.get(a.id) ?? null"
+                :is-current="currentAreaId === a.id"
+                :is-adjacent="adjacentSet.has(a.id)"
+                :is-master="isMaster"
+                :player-count="(playersByArea.get(a.id)?.length ?? 0)"
+                :voronoi-points="props.voronoiByArea?.get(a.id) ?? null"
+                layer="marker"
+              />
+            </g>
+          </template>
+
+          <!-- Edit overlay: drag rect + × + status icons. Renderizzato sopra
+               tutto così resta cliccabile in edit mode. -->
           <g
             v-for="a in effectiveAreas"
-            :key="`area-wrap-${a.id}`"
+            :key="`area-edit-${a.id}`"
           >
-            <MapArea
-              :area="a"
-              :state="stateById.get(a.id) ?? null"
-              :is-current="currentAreaId === a.id"
-              :is-adjacent="adjacentSet.has(a.id)"
-              :is-master="isMaster"
-              :player-count="(playersByArea.get(a.id)?.length ?? 0)"
-              :voronoi-points="props.voronoiByArea?.get(a.id) ?? null"
-              @click="!editMode && onAreaClick(a.id as AreaId)"
-            />
             <!-- v2d-edit: overlay edit master. Drag, doppio-click rinomina,
                  X rimuove. Click singolo seleziona per aggiungere/rimuovere
                  una strada con un'altra area. Posizionato sopra MapArea

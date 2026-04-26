@@ -16,6 +16,12 @@ interface Props {
   // viewBox (NON relative al bbox). Quando presente sostituisce sia il
   // rect bbox sia il polygon organico per il rendering.
   voronoiPoints?: string | null
+  // v2d-shape-B: rendering "splittato" per layering corretto in mappe
+  // Voronoi (poligono base sotto strade/decor, marker+label sopra):
+  // - 'all' (default): renderizza tutto in un blocco (legacy MVP)
+  // - 'base': solo poligono fondo + pattern status (cliccabile, hover)
+  // - 'marker': solo marker centrale + label + player count (no events)
+  layer?: 'all' | 'base' | 'marker'
 }
 const props = defineProps<Props>()
 defineEmits<{ (e: 'click'): void }>()
@@ -23,6 +29,8 @@ defineEmits<{ (e: 'click'): void }>()
 const isVoronoi = computed(() => !!props.voronoiPoints)
 const isPolygon = computed(() => !isVoronoi.value && props.area.svg.shape === 'polygon' && !!props.area.svg.points)
 const polyPoints = computed(() => props.area.svg.points ?? '')
+const showBase = computed(() => !props.layer || props.layer === 'all' || props.layer === 'base')
+const showMarker = computed(() => !props.layer || props.layer === 'all' || props.layer === 'marker')
 
 function strokeColor(): string {
   if (props.isCurrent) return 'var(--z-green-100)'
@@ -38,147 +46,152 @@ function displayName(): string {
 function status(): string {
   return props.state?.status ?? 'intact'
 }
-function opacity(): number {
-  const s = status()
-  if (s === 'ruined') return 0.65
-  if (s === 'closed') return 0.5
+function fillOpacity(): number {
+  // Voronoi: fill semi-trasparente così MapDecor/MapRoads renderizzati SOPRA
+  // restano visibili. Con i pattern infested/ruined giocano da overlay.
+  if (isVoronoi.value) {
+    if (status() === 'closed') return 0.55
+    if (status() === 'ruined') return 0.45
+    return 0.40
+  }
+  // Legacy/organic: fill pieno come MVP.
+  if (status() === 'ruined') return 0.65
+  if (status() === 'closed') return 0.5
   return 1
 }
 function cursorStyle(): string {
-  // Area corrente: click apre il dettaglio → pointer
   if (props.isCurrent) return 'cursor: pointer'
-  // Master può muoversi ovunque
   if (props.isMaster) return 'cursor: pointer'
   const s = status()
-  // Aree chiuse per non-master: ingresso negato
   if (s === 'closed') return 'cursor: not-allowed'
-  // Aree adiacenti raggiungibili
   if (props.isAdjacent) return 'cursor: pointer'
-  // Aree remote: niente click utile per il giocatore
   return 'cursor: default'
 }
 </script>
 
 <template>
-  <!-- v2d-shape-B: se voronoiPoints è settato, il poligono è in coord
-       assolute (NO transform translate). Etichette/overlay usano la bbox
-       come riferimento (transform separato). -->
-  <g
-    :style="cursorStyle()"
-    @click="$emit('click')"
-  >
-    <polygon
-      v-if="isVoronoi"
-      :points="voronoiPoints!"
-      fill="url(#area-bg)"
-      :stroke="strokeColor()"
-      :stroke-width="strokeWidth()"
-      :opacity="opacity()"
-      stroke-linejoin="round"
-    />
-    <polygon
-      v-else-if="isPolygon"
-      :points="polyPoints"
+  <g>
+    <!-- ── LAYER BASE: poligono Voronoi/organico/rect, cliccabile, hover. ── -->
+    <g
+      v-if="showBase"
+      class="map-area-base"
+      :style="cursorStyle()"
+      @click="$emit('click')"
+    >
+      <polygon
+        v-if="isVoronoi"
+        :points="voronoiPoints!"
+        fill="url(#area-bg)"
+        :stroke="strokeColor()"
+        :stroke-width="strokeWidth()"
+        :fill-opacity="fillOpacity()"
+        stroke-linejoin="round"
+      />
+      <polygon
+        v-else-if="isPolygon"
+        :points="polyPoints"
+        :transform="`translate(${area.svg.x}, ${area.svg.y})`"
+        fill="url(#area-bg)"
+        :stroke="strokeColor()"
+        :stroke-width="strokeWidth()"
+        :fill-opacity="fillOpacity()"
+        stroke-linejoin="round"
+      />
+      <rect
+        v-else
+        :x="area.svg.x"
+        :y="area.svg.y"
+        :width="area.svg.w"
+        :height="area.svg.h"
+        rx="8"
+        ry="8"
+        fill="url(#area-bg)"
+        :stroke="strokeColor()"
+        :stroke-width="strokeWidth()"
+        :fill-opacity="fillOpacity()"
+      />
+      <!-- pattern status: per Voronoi attaccato al poligono, per legacy al rect -->
+      <polygon
+        v-if="isVoronoi && status() === 'infested'"
+        :points="voronoiPoints!"
+        fill="url(#area-infested)"
+        opacity="0.6"
+        pointer-events="none"
+      />
+      <polygon
+        v-else-if="isPolygon && status() === 'infested'"
+        :points="polyPoints"
+        :transform="`translate(${area.svg.x}, ${area.svg.y})`"
+        fill="url(#area-infested)"
+        opacity="0.6"
+        pointer-events="none"
+      />
+      <rect
+        v-else-if="status() === 'infested'"
+        :x="area.svg.x"
+        :y="area.svg.y"
+        :width="area.svg.w"
+        :height="area.svg.h"
+        rx="8"
+        ry="8"
+        fill="url(#area-infested)"
+        opacity="0.6"
+        pointer-events="none"
+      />
+      <polygon
+        v-if="isVoronoi && status() === 'ruined'"
+        :points="voronoiPoints!"
+        fill="url(#area-ruined)"
+        opacity="0.35"
+        pointer-events="none"
+      />
+      <polygon
+        v-else-if="isPolygon && status() === 'ruined'"
+        :points="polyPoints"
+        :transform="`translate(${area.svg.x}, ${area.svg.y})`"
+        fill="url(#area-ruined)"
+        opacity="0.35"
+        pointer-events="none"
+      />
+      <rect
+        v-else-if="status() === 'ruined'"
+        :x="area.svg.x"
+        :y="area.svg.y"
+        :width="area.svg.w"
+        :height="area.svg.h"
+        rx="8"
+        ry="8"
+        fill="url(#area-ruined)"
+        opacity="0.35"
+        pointer-events="none"
+      />
+    </g>
+
+    <!-- ── LAYER MARKER: marker centrale + label + closed icon + player count.
+         Renderizzato sopra strade/decor in modalità Voronoi. ── -->
+    <g
+      v-if="showMarker"
       :transform="`translate(${area.svg.x}, ${area.svg.y})`"
-      fill="url(#area-bg)"
-      :stroke="strokeColor()"
-      :stroke-width="strokeWidth()"
-      :opacity="opacity()"
-      stroke-linejoin="round"
-    />
-    <rect
-      v-else
-      :x="area.svg.x"
-      :y="area.svg.y"
-      :width="area.svg.w"
-      :height="area.svg.h"
-      rx="8"
-      ry="8"
-      fill="url(#area-bg)"
-      :stroke="strokeColor()"
-      :stroke-width="strokeWidth()"
-      :opacity="opacity()"
-    />
-    <polygon
-      v-if="isVoronoi && status() === 'infested'"
-      :points="voronoiPoints!"
-      fill="url(#area-infested)"
-      opacity="0.6"
       pointer-events="none"
-    />
-    <polygon
-      v-else-if="isPolygon && status() === 'infested'"
-      :points="polyPoints"
-      :transform="`translate(${area.svg.x}, ${area.svg.y})`"
-      fill="url(#area-infested)"
-      opacity="0.6"
-      pointer-events="none"
-    />
-    <rect
-      v-else-if="status() === 'infested'"
-      :x="area.svg.x"
-      :y="area.svg.y"
-      :width="area.svg.w"
-      :height="area.svg.h"
-      rx="8"
-      ry="8"
-      fill="url(#area-infested)"
-      opacity="0.6"
-      pointer-events="none"
-    />
-    <polygon
-      v-if="isVoronoi && status() === 'ruined'"
-      :points="voronoiPoints!"
-      fill="url(#area-ruined)"
-      opacity="0.35"
-      pointer-events="none"
-    />
-    <polygon
-      v-else-if="isPolygon && status() === 'ruined'"
-      :points="polyPoints"
-      :transform="`translate(${area.svg.x}, ${area.svg.y})`"
-      fill="url(#area-ruined)"
-      opacity="0.35"
-      pointer-events="none"
-    />
-    <rect
-      v-else-if="status() === 'ruined'"
-      :x="area.svg.x"
-      :y="area.svg.y"
-      :width="area.svg.w"
-      :height="area.svg.h"
-      rx="8"
-      ry="8"
-      fill="url(#area-ruined)"
-      opacity="0.35"
-      pointer-events="none"
-    />
-    <!-- Overlay (marker, closed icon, label, player count) sempre
-         posizionati relativi alla bbox dell'area. -->
-    <g :transform="`translate(${area.svg.x}, ${area.svg.y})`">
-      <!-- v2d-shape-B: marker centrale (pin) da cui partono le strade.
-           Visibile solo in modalità Voronoi/multi-mappa per non sovrapporsi
-           col rect rounded MVP. -->
+    >
       <g
         v-if="isVoronoi"
         :transform="`translate(${area.svg.w / 2}, ${area.svg.h / 2})`"
-        pointer-events="none"
       >
         <circle
-          r="5"
+          r="6"
           fill="var(--z-bg-900)"
           :stroke="strokeColor()"
           stroke-width="2"
         />
         <circle
-          r="1.6"
+          r="2"
           :fill="strokeColor()"
         />
       </g>
       <g
         v-if="status() === 'closed'"
         :transform="`translate(${area.svg.w / 2 - 12}, ${area.svg.h / 2 - 12})`"
-        pointer-events="none"
       >
         <rect
           x="4"
@@ -195,13 +208,10 @@ function cursorStyle(): string {
           fill="none"
         />
       </g>
-      <!-- Label: sopra il marker quando Voronoi (offset -14), centrata
-           sulla bbox per il fallback rect MVP. Background pill per leggibilità. -->
       <g
         :transform="isVoronoi
-          ? `translate(${area.svg.w / 2}, ${area.svg.h / 2 - 14})`
+          ? `translate(${area.svg.w / 2}, ${area.svg.h / 2 - 16})`
           : `translate(${area.svg.w / 2}, ${area.svg.h / 2 + 4})`"
-        style="pointer-events: none; user-select: none"
       >
         <rect
           v-if="isVoronoi"
@@ -248,3 +258,17 @@ function cursorStyle(): string {
     </g>
   </g>
 </template>
+
+<style scoped>
+/* v2d-shape-B: hover effect sul poligono base. Aumenta saturazione fill
+   e intensità stroke per feedback visivo immediato. */
+.map-area-base polygon,
+.map-area-base rect {
+  transition: fill-opacity 0.12s ease, stroke-width 0.12s ease, filter 0.12s ease;
+}
+.map-area-base:hover polygon:not([pointer-events="none"]),
+.map-area-base:hover rect:not([pointer-events="none"]) {
+  fill-opacity: 0.7;
+  filter: brightness(1.25);
+}
+</style>

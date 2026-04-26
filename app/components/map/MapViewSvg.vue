@@ -145,7 +145,16 @@ const voronoiByArea = useVoronoiPolygons(voronoiAreas, 1000, 700)
 </script>
 
 <template>
+  <!-- v2d-shape-B: finché la mappa attiva non è stata caricata via state:init,
+       NON renderizzare GameMap così l'utente non vede flash della mappa
+       MVP legacy prima del Voronoi. Placeholder vuoto sullo sfondo bg. -->
+  <div
+    v-if="!map"
+    class="w-full flex-1 min-h-0"
+    style="background: var(--z-bg-900)"
+  />
   <GameMap
+    v-else
     :generated-map="generatedMap"
     :transitions="transitionsForActiveMap"
     :map-id="map?.id ?? null"
