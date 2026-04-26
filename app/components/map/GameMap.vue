@@ -62,6 +62,27 @@ const adjacency = computed<Record<string, string[]>>(() => {
   return LEGACY_ADJACENCY as Record<string, string[]>
 })
 
+// v2d-edit: offset di drag live (popolato dai handler di edit più sotto).
+// Dichiarato qui per essere già definito quando le computed che lo usano
+// vengono valutate.
+const liveDragOffset = ref<{ id: string, dx: number, dy: number } | null>(null)
+
+// Aree con l'offset di drag live applicato. Quando il master sta
+// trascinando un'area, restituisce la stessa lista con le coord dell'area
+// trascinata aggiornate, così MapRoads/MapDecor/MapTransitionDoors si
+// aggiornano in tempo reale senza aspettare il commit di pointerup.
+const effectiveAreas = computed<readonly Area[]>(() => {
+  const live = liveDragOffset.value
+  if (!live) return areas.value
+  return areas.value.map((a) => {
+    if (a.id !== live.id) return a
+    return {
+      ...a,
+      svg: { ...a.svg, x: a.svg.x + live.dx, y: a.svg.y + live.dy }
+    }
+  })
+})
+
 const adjacencyPairs = computed<Array<[string, string]>>(() => {
   const pairs: Array<[string, string]> = []
   const seen = new Set<string>()
@@ -486,8 +507,6 @@ function moveAreaDrag(e: PointerEvent) {
   liveDragOffset.value = { id: draggingAreaId.value, dx, dy }
 }
 
-const liveDragOffset = ref<{ id: string, dx: number, dy: number } | null>(null)
-
 function endAreaDrag(e: PointerEvent) {
   if (!draggingAreaId.value || !dragOrigin.value || !props.mapId) {
     draggingAreaId.value = null
@@ -702,13 +721,13 @@ function onSvgBgClick(e: MouseEvent) {
       <g :transform="userTransform">
         <!-- Contenuto logico 1000x700 scalato uniformemente e centrato -->
         <g :transform="contentTransform">
-          <MapDecor :areas="areas" />
+          <MapDecor :areas="effectiveAreas" />
           <MapRoads
-            :areas="areas"
+            :areas="effectiveAreas"
             :pairs="adjacencyPairs"
           />
           <MapTransitionDoors
-            :areas="areas"
+            :areas="effectiveAreas"
             :transitions="props.transitions ?? []"
             :logical-w="LOGICAL_W"
             :logical-h="LOGICAL_H"
@@ -716,9 +735,8 @@ function onSvgBgClick(e: MouseEvent) {
           />
 
           <g
-            v-for="a in areas"
+            v-for="a in effectiveAreas"
             :key="`area-wrap-${a.id}`"
-            :transform="liveDragOffset && liveDragOffset.id === a.id ? `translate(${liveDragOffset.dx}, ${liveDragOffset.dy})` : ''"
           >
             <MapArea
               :area="a"
@@ -773,7 +791,7 @@ function onSvgBgClick(e: MouseEvent) {
           </g>
 
           <template
-            v-for="a in areas"
+            v-for="a in effectiveAreas"
             :key="`av-${a.id}`"
           >
             <MapAvatar
