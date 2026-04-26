@@ -16,6 +16,7 @@ import PartyHeader from '~/components/layout/PartyHeader.vue'
 import ConnectionBanner from '~/components/layout/ConnectionBanner.vue'
 import PartyChat from '~/components/chat/PartyChat.vue'
 import MapView from '~/components/map/MapView.vue'
+import WorldMapView from '~/components/map/WorldMapView.vue'
 import AreaDetailView from '~/components/map/AreaDetailView.vue'
 import DirectMessagesView from '~/components/dm/DirectMessagesView.vue'
 import MasterPanel from '~/components/master/MasterPanel.vue'
@@ -162,6 +163,7 @@ onBeforeRouteLeave(() => {
       <ConnectionBanner />
       <div class="flex-1 flex flex-col overflow-hidden min-h-0">
         <MapView v-if="viewStore.mainView === 'map'" />
+        <WorldMapView v-else-if="viewStore.mainView === 'world'" />
         <AreaDetailView v-else-if="viewStore.mainView === 'area'" />
         <DirectMessagesView v-else-if="viewStore.mainView === 'dm'" />
         <MasterPanel v-else-if="viewStore.mainView === 'master'" />

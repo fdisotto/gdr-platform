@@ -2,7 +2,7 @@ import { ref, watch } from 'vue'
 import { makeKeyed } from '~/stores/factory'
 import type { AreaId } from '~~/shared/map/areas'
 
-export type MainView = 'map' | 'dm' | 'area' | 'master'
+export type MainView = 'map' | 'world' | 'dm' | 'area' | 'master'
 
 const CHAT_COLLAPSED_KEY = 'gdr.chatCollapsed'
 
@@ -47,6 +47,10 @@ function viewStoreFactory() {
     mainView.value = 'map'
   }
 
+  function openWorld() {
+    mainView.value = 'world'
+  }
+
   function reset() {
     mainView.value = 'map'
     selectedThreadKey.value = null
@@ -64,7 +68,7 @@ function viewStoreFactory() {
 
   return {
     mainView, selectedThreadKey, viewedAreaId, chatCollapsed, unreadWhileCollapsed,
-    show, openThread, openArea, openMaster, backToMap, reset,
+    show, openThread, openArea, openMaster, openWorld, backToMap, reset,
     toggleChatCollapsed, bumpUnreadIfCollapsed
   }
 }

@@ -1040,6 +1040,20 @@ function onSvgBgClick(e: MouseEvent) {
     <MapLegend />
     <MapPlayersBox />
 
+    <!-- v2d-world: toggle 🌐 Mondo (per tutti, vede solo le mappe
+         esplorate; master vede tutto). -->
+    <div class="absolute top-3 left-1/2 -translate-x-1/2 z-10">
+      <button
+        type="button"
+        class="px-3 py-1.5 rounded text-xs font-mono-z"
+        style="background: var(--z-bg-800); color: var(--z-text-md); border: 1px solid var(--z-border)"
+        title="Apri vista mondo"
+        @click="viewStore.openWorld()"
+      >
+        🌐 Mondo
+      </button>
+    </div>
+
     <!-- v2d-edit: toggle "Modifica mappa" (master only, solo se mapId valido).
          Top-left per non collidere con MapPlayersBox (top-right). -->
     <div
