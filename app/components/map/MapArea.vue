@@ -22,6 +22,10 @@ interface Props {
   // - 'base': solo poligono fondo + pattern status (cliccabile, hover)
   // - 'marker': solo marker centrale + label + player count (no events)
   layer?: 'all' | 'base' | 'marker'
+  // v2d-fog: se true l'area è "coperta da fog of war" (non ancora
+  // esplorata dalla party). Il base fill diventa nero solido e marker/
+  // label sono sostituiti da un punto interrogativo.
+  fog?: boolean
 }
 const props = defineProps<Props>()
 defineEmits<{ (e: 'click'): void }>()
@@ -33,9 +37,13 @@ const showBase = computed(() => !props.layer || props.layer === 'all' || props.l
 const showMarker = computed(() => !props.layer || props.layer === 'all' || props.layer === 'marker')
 
 function strokeColor(): string {
+  if (props.fog) return '#1f1f1f'
   if (props.isCurrent) return 'var(--z-green-100)'
   if (props.isAdjacent) return 'var(--z-green-300)'
   return 'var(--z-green-700)'
+}
+function baseFillUrl(): string {
+  return props.fog ? 'url(#area-fog)' : 'url(#area-bg)'
 }
 function strokeWidth(): number {
   return props.isCurrent ? 2.5 : 1.5
@@ -81,7 +89,7 @@ function cursorStyle(): string {
       <polygon
         v-if="isVoronoi"
         :points="voronoiPoints!"
-        fill="url(#area-bg)"
+        :fill="baseFillUrl()"
         :stroke="strokeColor()"
         :stroke-width="strokeWidth()"
         :fill-opacity="fillOpacity()"
@@ -91,7 +99,7 @@ function cursorStyle(): string {
         v-else-if="isPolygon"
         :points="polyPoints"
         :transform="`translate(${area.svg.x}, ${area.svg.y})`"
-        fill="url(#area-bg)"
+        :fill="baseFillUrl()"
         :stroke="strokeColor()"
         :stroke-width="strokeWidth()"
         :fill-opacity="fillOpacity()"
@@ -105,7 +113,7 @@ function cursorStyle(): string {
         :height="area.svg.h"
         rx="8"
         ry="8"
-        fill="url(#area-bg)"
+        :fill="baseFillUrl()"
         :stroke="strokeColor()"
         :stroke-width="strokeWidth()"
         :fill-opacity="fillOpacity()"
@@ -168,14 +176,35 @@ function cursorStyle(): string {
     </g>
 
     <!-- ── LAYER MARKER: marker centrale + label + closed icon + player count.
-         Renderizzato sopra strade/decor in modalità Voronoi. ── -->
+         Renderizzato sopra strade/decor in modalità Voronoi.
+         In fog: solo "?" centrale, niente label né player count. ── -->
     <g
       v-if="showMarker"
       :transform="`translate(${area.svg.x}, ${area.svg.y})`"
       pointer-events="none"
     >
       <g
-        v-if="isVoronoi"
+        v-if="fog"
+        :transform="`translate(${area.svg.w / 2}, ${area.svg.h / 2})`"
+      >
+        <circle
+          r="9"
+          fill="#0a0a0a"
+          stroke="#3a3a3a"
+          stroke-width="1.5"
+        />
+        <text
+          text-anchor="middle"
+          y="4"
+          font-size="13"
+          font-weight="700"
+          fill="#5a5a5a"
+        >
+          ?
+        </text>
+      </g>
+      <g
+        v-else-if="isVoronoi"
         :transform="`translate(${area.svg.w / 2}, ${area.svg.h / 2})`"
       >
         <circle
@@ -209,6 +238,7 @@ function cursorStyle(): string {
         />
       </g>
       <g
+        v-if="!fog"
         :transform="isVoronoi
           ? `translate(${area.svg.w / 2}, ${area.svg.h / 2 - 16})`
           : `translate(${area.svg.w / 2}, ${area.svg.h / 2 + 4})`"
@@ -236,7 +266,7 @@ function cursorStyle(): string {
         </text>
       </g>
       <g
-        v-if="playerCount > 0"
+        v-if="playerCount > 0 && !fog"
         :transform="`translate(${area.svg.w - 18}, 14)`"
       >
         <circle

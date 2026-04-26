@@ -396,6 +396,23 @@ export const areaOverrides = sqliteTable('area_overrides', {
   index('area_overrides_map_idx').on(t.partySeed, t.mapId)
 ])
 
+// v2d-fog: tracking esplorazione party-shared. Quando un player entra
+// in un'area (move:request, join, createParty per il master) facciamo
+// upsert qui. Tutti i player della party vedono come "esplorate" le aree
+// con una riga; le altre sono coperte da fog of war. Il master bypassa
+// il filtro lato client (vede tutto a prescindere). PK su (partySeed,
+// mapId, areaId): append-only, niente duplicati.
+export const areaVisits = sqliteTable('area_visits', {
+  partySeed: text('party_seed').notNull().references(() => parties.seed, { onDelete: 'cascade' }),
+  mapId: text('map_id').notNull().references(() => partyMaps.id, { onDelete: 'cascade' }),
+  areaId: text('area_id').notNull(),
+  firstVisitedBy: text('first_visited_by'), // playerId del primo a entrare
+  firstVisitedAt: integer('first_visited_at').notNull()
+}, t => [
+  primaryKey({ columns: [t.partySeed, t.mapId, t.areaId] }),
+  index('area_visits_map_idx').on(t.partySeed, t.mapId)
+])
+
 // v2d-edit: delta master sul grafo adjacency. Il client ricalcola le
 // adiacenze dalla prossimità spaziale; gli override permettono di
 // aggiungere strade tra aree non vicine ('add') o rimuovere strade

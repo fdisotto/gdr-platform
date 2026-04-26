@@ -1,7 +1,8 @@
 import { ref } from 'vue'
 import { makeKeyed } from '~/stores/factory'
 import type {
-  PartyMapPublic, TransitionPublic, AreaOverridePublic, AdjacencyOverridePublic
+  PartyMapPublic, TransitionPublic, AreaOverridePublic, AdjacencyOverridePublic,
+  AreaVisitPublic
 } from '~~/shared/protocol/ws'
 
 export interface MeSnapshot {
@@ -50,6 +51,8 @@ function partyStoreFactory() {
   const areaOverrides = ref<AreaOverridePublic[]>([])
   // v2d-edit: delta sul grafo adjacency.
   const adjacencyOverrides = ref<AdjacencyOverridePublic[]>([])
+  // v2d-fog: aree esplorate party-shared.
+  const visitedAreas = ref<AreaVisitPublic[]>([])
 
   function hydrate(payload: {
     me: MeSnapshot
@@ -61,6 +64,7 @@ function partyStoreFactory() {
     currentMapId?: string | null
     areaOverrides?: AreaOverridePublic[]
     adjacencyOverrides?: AdjacencyOverridePublic[]
+    visitedAreas?: AreaVisitPublic[]
   }) {
     me.value = payload.me
     party.value = payload.party
@@ -71,6 +75,7 @@ function partyStoreFactory() {
     currentMapId.value = payload.currentMapId ?? payload.me.currentMapId ?? null
     areaOverrides.value = payload.areaOverrides ?? []
     adjacencyOverrides.value = payload.adjacencyOverrides ?? []
+    visitedAreas.value = payload.visitedAreas ?? []
   }
 
   function reset() {
@@ -83,6 +88,7 @@ function partyStoreFactory() {
     currentMapId.value = null
     areaOverrides.value = []
     adjacencyOverrides.value = []
+    visitedAreas.value = []
   }
 
   function applyOverride(o: AreaOverridePublic) {
@@ -121,13 +127,19 @@ function partyStoreFactory() {
     )
   }
 
+  function markAreaDiscovered(mapId: string, areaId: string) {
+    if (visitedAreas.value.some(v => v.mapId === mapId && v.areaId === areaId)) return
+    visitedAreas.value = [...visitedAreas.value, { mapId, areaId }]
+  }
+
   return {
     me, party, players, areasState,
     maps, transitions, currentMapId,
-    areaOverrides, adjacencyOverrides,
+    areaOverrides, adjacencyOverrides, visitedAreas,
     hydrate, reset,
     applyOverride, removeOverride,
-    applyAdjacencyOverride, removeAdjacencyOverride
+    applyAdjacencyOverride, removeAdjacencyOverride,
+    markAreaDiscovered
   }
 }
 

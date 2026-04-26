@@ -3,6 +3,7 @@ import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterA
   MasterRoadAddEvent, MasterRoadRemoveEvent, MasterRoadResetEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, MasterFetchActionsEvent, MasterFetchBansEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type MessageRemovedEvent,
   type AreaOverrideUpdatedEvent, type AreaOverrideRemovedEvent, type AreaOverridePublic,
   type AdjacencyOverrideUpdatedEvent, type AdjacencyOverrideRemovedEvent, type AdjacencyOverridePublic,
+  type AreaDiscoveredEvent,
   type PlayerMutedEvent, type KickedEvent, type WeatherUpdatedEvent, type MasterActionsSnapshotEvent, type MasterBansSnapshotEvent, type TransitionPublic, type PartyMapPublic } from '~~/shared/protocol/ws'
 import { useDb } from '~~/server/utils/db'
 import { findPlayerByUserInParty, listOnlinePlayers, touchPlayer, updatePlayerArea, setMute, kickPlayer, findPlayerById, type PlayerRow } from '~~/server/services/players'
@@ -22,6 +23,7 @@ import { isAreaId, areAdjacent } from '~~/shared/map/areas'
 import { isAreaClosed } from '~~/server/services/area-access'
 import { upsertOverride, deleteOverride, listOverridesForParty } from '~~/server/services/area-overrides'
 import { upsertAdjacencyOverride, deleteAdjacencyOverride, listAdjacencyOverridesForParty, normalizePair } from '~~/server/services/area-adjacency'
+import { markVisited, listVisitedForParty } from '~~/server/services/area-visits'
 import { listPartyMaps, findPartyMap } from '~~/server/services/party-maps'
 import { listTransitionsForParty, findTransition } from '~~/server/services/map-transitions'
 import { findMapType, parseDefaultParams } from '~~/server/services/map-types'
@@ -513,6 +515,22 @@ async function handleMoveRequest(peer: Peer, raw: unknown) {
       } catch { /* skip */ }
     }
 
+    // v2d-fog: marca area visitata + broadcast discovery.
+    if (currentMapId) {
+      const newDiscovery = markVisited(db, conn.partySeed, currentMapId, toAreaId, conn.playerId)
+      if (newDiscovery) {
+        const event: AreaDiscoveredEvent = {
+          type: 'area:discovered', mapId: currentMapId, areaId: toAreaId
+        }
+        const eventPayload = JSON.stringify(event)
+        for (const c of registry.listParty(conn.partySeed)) {
+          try {
+            c.ws.send(eventPayload)
+          } catch { /* skip */ }
+        }
+      }
+    }
+
     resetPlayerPosition(conn.partySeed, conn.playerId)
     deletePositionsForPlayer(db, conn.partySeed, conn.playerId)
     const resetEvent: PlayerPlacedEvent = {
@@ -603,6 +621,24 @@ async function handleMoveRequest(peer: Peer, raw: unknown) {
 
   const messages = listAreaMessages(db, conn.partySeed, toAreaId, 100)
   sendJson(peer, { type: 'area:entered', areaId: toAreaId, messages })
+
+  // v2d-fog: marca area come visitata dalla party. Se è una nuova
+  // discovery, broadcast `area:discovered` a tutti.
+  const visitedMapId = targetMapId ?? currentMapId
+  if (visitedMapId) {
+    const newDiscovery = markVisited(db, conn.partySeed, visitedMapId, toAreaId, conn.playerId)
+    if (newDiscovery) {
+      const event: AreaDiscoveredEvent = {
+        type: 'area:discovered', mapId: visitedMapId, areaId: toAreaId
+      }
+      const eventPayload = JSON.stringify(event)
+      for (const c of registry.listParty(conn.partySeed)) {
+        try {
+          c.ws.send(eventPayload)
+        } catch { /* skip */ }
+      }
+    }
+  }
 
   // v2d: dopo cross-map re-emette uno state:init aggiornato al solo peer
   // che ha cambiato mappa. Lo stato area-scoped (zombi, posizioni, meteo,
@@ -1714,6 +1750,9 @@ function composeStateInit(
     adjacencyOverrides: listAdjacencyOverridesForParty(db, seed).map(r => ({
       mapId: r.mapId, areaA: r.areaA, areaB: r.areaB, kind: r.kind
     })),
+    visitedAreas: listVisitedForParty(db, seed).map(r => ({
+      mapId: r.mapId, areaId: r.areaId
+    })),
     serverTime: Date.now()
   }
 }
@@ -1760,6 +1799,12 @@ async function handleHello(peer: Peer, seed: string) {
     // Lazy-hydrate lo stato in-memory (zombi + posizioni) dal DB la prima
     // volta che qualcuno contatta questa party dopo il boot server.
     ensurePartyHydrated(db, seed)
+
+    // v2d-fog: marca l'area di spawn/current come visitata appena il
+    // player si connette. Idempotente: se già visitata non fa nulla.
+    if (player.currentMapId) {
+      markVisited(db, seed, player.currentMapId, player.currentAreaId, player.id)
+    }
 
     sendJson(peer, composeStateInit(db, seed, player))
     touchPlayer(db, player.id)

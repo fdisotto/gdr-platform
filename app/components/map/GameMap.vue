@@ -364,6 +364,24 @@ const adjacentSet = computed(() => {
 
 const isMaster = computed(() => party.me?.role === 'master')
 
+// v2d-fog: insieme degli areaId visitati nella mappa attiva. Master
+// vede tutto (set vuoto interpretato come "fog disabilitato per il master").
+const visitedSetForMap = computed<Set<string>>(() => {
+  if (isMaster.value) return new Set() // bypass: niente fog
+  if (!props.mapId) return new Set()
+  const set = new Set<string>()
+  for (const v of party.visitedAreas) {
+    if (v.mapId === props.mapId) set.add(v.areaId)
+  }
+  return set
+})
+
+function isFog(areaId: string): boolean {
+  if (isMaster.value) return false
+  if (!props.mapId) return false
+  return !visitedSetForMap.value.has(areaId)
+}
+
 const stateById = computed(() => {
   const map = new Map<string, { status: 'intact' | 'infested' | 'ruined' | 'closed', customName: string | null }>()
   for (const s of party.areasState) {
@@ -775,6 +793,37 @@ function onSvgBgClick(e: MouseEvent) {
             fill="none"
           />
         </pattern>
+        <!-- v2d-fog: pattern per area non esplorata. Tessitura scura
+             cross-hatch + base nera. -->
+        <pattern
+          id="area-fog"
+          width="10"
+          height="10"
+          patternUnits="userSpaceOnUse"
+          patternTransform="rotate(30)"
+        >
+          <rect
+            width="10"
+            height="10"
+            fill="#0a0a0a"
+          />
+          <line
+            x1="0"
+            y1="0"
+            x2="0"
+            y2="10"
+            stroke="#181818"
+            stroke-width="1"
+          />
+          <line
+            x1="5"
+            y1="0"
+            x2="5"
+            y2="10"
+            stroke="#141414"
+            stroke-width="0.6"
+          />
+        </pattern>
         <filter id="map-grain">
           <feTurbulence
             type="fractalNoise"
@@ -820,6 +869,7 @@ function onSvgBgClick(e: MouseEvent) {
               :player-count="(playersByArea.get(a.id)?.length ?? 0)"
               :voronoi-points="props.voronoiByArea?.get(a.id) ?? null"
               :layer="props.voronoiByArea && props.voronoiByArea.size > 0 ? 'base' : 'all'"
+              :fog="isFog(a.id)"
               @click="!editMode && onAreaClick(a.id as AreaId)"
             />
           </g>
@@ -871,6 +921,7 @@ function onSvgBgClick(e: MouseEvent) {
                 :player-count="(playersByArea.get(a.id)?.length ?? 0)"
                 :voronoi-points="props.voronoiByArea?.get(a.id) ?? null"
                 layer="marker"
+                :fog="isFog(a.id)"
               />
             </g>
           </template>

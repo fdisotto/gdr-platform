@@ -142,6 +142,22 @@ export const AdjacencyOverridePublicSchema = z.object({
 })
 export type AdjacencyOverridePublic = z.infer<typeof AdjacencyOverridePublicSchema>
 
+// v2d-fog: aree esplorate party-shared. Tutti i player vedono ciò che
+// almeno uno ha esplorato; il master vede tutto.
+export const AreaVisitPublicSchema = z.object({
+  mapId: z.string(),
+  areaId: z.string()
+})
+export type AreaVisitPublic = z.infer<typeof AreaVisitPublicSchema>
+
+// Broadcast quando un player scopre un'area nuova.
+export const AreaDiscoveredEvent = z.object({
+  type: z.literal('area:discovered'),
+  mapId: z.string(),
+  areaId: z.string()
+})
+export type AreaDiscoveredEvent = z.infer<typeof AreaDiscoveredEvent>
+
 export const PlayerPositionSchema = z.object({
   playerId: z.string(),
   // v2d: posizione scoped per mappa. Nullable per legacy.
@@ -188,6 +204,8 @@ export const StateInitEvent = z.object({
   areaOverrides: z.array(AreaOverridePublicSchema).default([]),
   // v2d-edit: delta sul grafo adjacency.
   adjacencyOverrides: z.array(AdjacencyOverridePublicSchema).default([]),
+  // v2d-fog: aree esplorate dalla party (tutti i player le vedono).
+  visitedAreas: z.array(AreaVisitPublicSchema).default([]),
   serverTime: z.number()
 })
 export type StateInitEvent = z.infer<typeof StateInitEvent>
@@ -685,7 +703,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   MessageUpdateEvent, MessageRemovedEvent, PlayerMutedEvent, KickedEvent,
   MasterActionsSnapshotEvent, MasterBansSnapshotEvent,
   AreaOverrideUpdatedEvent, AreaOverrideRemovedEvent,
-  AdjacencyOverrideUpdatedEvent, AdjacencyOverrideRemovedEvent
+  AdjacencyOverrideUpdatedEvent, AdjacencyOverrideRemovedEvent,
+  AreaDiscoveredEvent
 ])
 export type ServerEvent = z.infer<typeof ServerEvent>
 

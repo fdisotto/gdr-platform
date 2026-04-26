@@ -199,6 +199,7 @@ function makeConnection(seed: string): PartyConnection {
           transitions?: Array<{ id: string, fromMapId: string, fromAreaId: string, toMapId: string, toAreaId: string, label: string | null }>
           areaOverrides?: import('~~/shared/protocol/ws').AreaOverridePublic[]
           adjacencyOverrides?: import('~~/shared/protocol/ws').AdjacencyOverridePublic[]
+          visitedAreas?: import('~~/shared/protocol/ws').AreaVisitPublic[]
           serverTime: number
         }
         partyStore.hydrate({
@@ -210,7 +211,8 @@ function makeConnection(seed: string): PartyConnection {
           transitions: init.transitions ?? [],
           currentMapId: init.me.currentMapId ?? null,
           areaOverrides: init.areaOverrides ?? [],
-          adjacencyOverrides: init.adjacencyOverrides ?? []
+          adjacencyOverrides: init.adjacencyOverrides ?? [],
+          visitedAreas: init.visitedAreas ?? []
         })
         chatStore.hydrate(init.messagesByArea ?? {})
         chatStore.hydrateDms(init.dms ?? [], init.me.id)
@@ -282,6 +284,11 @@ function makeConnection(seed: string): PartyConnection {
       case 'adjacency-override:removed': {
         const { mapId, areaA, areaB } = data as { mapId: string, areaA: string, areaB: string }
         partyStore.removeAdjacencyOverride(mapId, areaA, areaB)
+        break
+      }
+      case 'area:discovered': {
+        const { mapId, areaId } = data as { mapId: string, areaId: string }
+        partyStore.markAreaDiscovered(mapId, areaId)
         break
       }
       case 'time:tick': {
