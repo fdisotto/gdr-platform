@@ -164,7 +164,7 @@ describe('wasteland generator — struttura aree', () => {
     // Forza density alta + ruinRatio basso + craterCount basso → pool si
     // riempie di building/open/crossing con maggior probabilità di toccarli.
     const map = wasteland('seed-bld', { density: 1.0, ruinRatio: 0.0, craterCount: 0 })
-    const buildingNames = new Set(['Bunker della Linea Gotica', 'Avamposto Apuano', 'Posto di Blocco Brennero', 'Hangar di Aviano', 'Caserma Diroccata'])
+    const buildingNames = new Set(['NORAD Bunker', 'Outpost Echo', 'Highway 9 Roadblock', 'Abandoned Hangar', 'Ruined Barracks'])
     for (const a of map.areas) {
       if (a.spawn) continue // Avamposto come spawn è 'open' per design
       if (buildingNames.has(a.name)) {
@@ -179,7 +179,7 @@ describe('wasteland generator — struttura aree', () => {
     for (const seed of ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8']) {
       const map = wasteland(seed, { density: 1.0, ruinRatio: 0.0, craterCount: 0 })
       for (const a of map.areas) {
-        if (a.name === 'Ponte Sgretolato sul Po') {
+        if (a.name === 'Collapsed Mississippi Bridge') {
           expect(a.detail.layout).toBe('crossing')
           foundAtLeastOne = true
         }
@@ -211,7 +211,7 @@ describe('wasteland generator — spawn / edge', () => {
     for (const seed of ['sp1', 'sp2', 'sp3', 'sp4', 'sp5', 'sp6']) {
       const map = wasteland(seed, { density: 0.5 })
       const spawn = map.areas.find(a => a.spawn)!
-      expect(['Accampamento di Pavia', 'Avamposto Apuano']).toContain(spawn.name)
+      expect(['Camp Sherman', 'Outpost Echo']).toContain(spawn.name)
       expect(spawn.detail.layout).toBe('open')
     }
   })
@@ -275,7 +275,7 @@ describe('wasteland generator — ruinRatio', () => {
         ruinRatio: 0.8,
         craterCount: 1
       })
-      const ruinCount = map.areas.filter(a => a.name === 'Rovine di Pompei').length
+      const ruinCount = map.areas.filter(a => a.name === 'Downtown Ruins').length
       expect(ruinCount).toBeGreaterThanOrEqual(1)
     }
   })
@@ -289,7 +289,7 @@ describe('wasteland generator — ruinRatio', () => {
       ruinRatio: 0.0,
       craterCount: 0
     })
-    const ruinCount = map.areas.filter(a => a.name === 'Rovine di Pompei').length
+    const ruinCount = map.areas.filter(a => a.name === 'Downtown Ruins').length
     expect(ruinCount).toBe(0)
   })
 
@@ -308,8 +308,8 @@ describe('wasteland generator — ruinRatio', () => {
         ruinRatio: 0.9,
         craterCount: 0
       })
-      lowTotal += low.areas.filter(a => a.name === 'Rovine di Pompei').length
-      highTotal += high.areas.filter(a => a.name === 'Rovine di Pompei').length
+      lowTotal += low.areas.filter(a => a.name === 'Downtown Ruins').length
+      highTotal += high.areas.filter(a => a.name === 'Downtown Ruins').length
     }
     expect(highTotal).toBeGreaterThan(lowTotal)
   })
@@ -323,7 +323,7 @@ describe('wasteland generator — craterCount', () => {
         ruinRatio: 0.2,
         craterCount: 2
       })
-      const craterCount = map.areas.filter(a => a.name.startsWith('Cratere')).length
+      const craterCount = map.areas.filter(a => a.name === 'Atlanta Blast Crater' || a.name === 'Savannah Fallout Pit').length
       // Spec semplificata: almeno 1 cratere se craterCount > 0 e areaCount > 1.
       expect(map.areas.length).toBeGreaterThan(1)
       expect(craterCount).toBeGreaterThanOrEqual(1)
@@ -336,7 +336,7 @@ describe('wasteland generator — craterCount', () => {
       ruinRatio: 0.5,
       craterCount: 0
     })
-    const craterCount = map.areas.filter(a => a.name.startsWith('Cratere')).length
+    const craterCount = map.areas.filter(a => a.name === 'Atlanta Blast Crater' || a.name === 'Savannah Fallout Pit').length
     expect(craterCount).toBe(0)
   })
 
@@ -347,7 +347,7 @@ describe('wasteland generator — craterCount', () => {
       ruinRatio: 0.0,
       craterCount: 99
     })
-    const craterCount = map.areas.filter(a => a.name.startsWith('Cratere')).length
+    const craterCount = map.areas.filter(a => a.name === 'Atlanta Blast Crater' || a.name === 'Savannah Fallout Pit').length
     expect(map.areas.length).toBe(AREA_COUNT_MIN)
     // Almeno areaCount-1 (5) crateri perché craterCount richiesto > slot.
     expect(craterCount).toBeGreaterThanOrEqual(map.areas.length - 1)
@@ -360,7 +360,7 @@ describe('wasteland generator — craterCount', () => {
       ruinRatio: 0.0,
       craterCount: 4
     })
-    const craters = map.areas.filter(a => a.name.startsWith('Cratere'))
+    const craters = map.areas.filter(a => a.name === 'Atlanta Blast Crater' || a.name === 'Savannah Fallout Pit')
     expect(craters.length).toBeGreaterThan(0)
     // Il pool decor dei crateri include sempre 'crater'; il PRNG può
     // pescare anche bone/wreck/radiation, quindi verifichiamo solo che

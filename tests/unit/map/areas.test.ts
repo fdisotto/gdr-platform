@@ -27,8 +27,16 @@ describe('AREAS catalog', () => {
   })
 
   it('isAreaId discrimina', () => {
+    // Legacy ids accettati come prima.
     expect(isAreaId('piazza')).toBe(true)
-    expect(isAreaId('nonexiste')).toBe(false)
+    // Generic slug accettato (post-v2d: aree generate hanno slug stabili
+    // come `chiesa_3`, `bunker_2`).
+    expect(isAreaId('chiesa_3')).toBe(true)
+    // Non-string o malformed → falso.
+    expect(isAreaId('Foo Bar')).toBe(false)
+    expect(isAreaId('123_no_letter_first')).toBe(false)
+    expect(isAreaId('')).toBe(false)
+    expect(isAreaId(42)).toBe(false)
   })
 })
 

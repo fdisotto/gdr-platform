@@ -56,48 +56,48 @@ const SPAWN_Y = Math.round((VIEWBOX_H - SPAWN_H) / 2)
 const DEFAULT_RUIN_RATIO = 0.5
 const DEFAULT_CRATER_COUNT = 2
 
-// Nomi spawn realistici post-disastro (entrambi layout open).
-const SPAWN_NAME = 'Accampamento di Pavia'
-const ALT_SPAWN_NAME = 'Avamposto Apuano'
+// Nomi spawn post-disastro US "The Walking Dead" style (layout open).
+const SPAWN_NAME = 'Camp Sherman'
+const ALT_SPAWN_NAME = 'Outpost Echo'
 
-// Crateri: ispirati a luoghi reali italiani.
-const CRATER_NAME = 'Cratere di Cassino'
-const CRATER_RAD_NAME = 'Cratere Radioattivo del Garda'
+// Crateri: nomi tipo TWD, geografici US.
+const CRATER_NAME = 'Atlanta Blast Crater'
+const CRATER_RAD_NAME = 'Savannah Fallout Pit'
 
-// Aree con nome che inizia per "Cratere" (per filtri test/registry).
+// Aree con nome che inizia per "Crater" (per filtri test/registry).
 const CRATER_NAMES = [CRATER_NAME, CRATER_RAD_NAME] as const
 
-const RUIN_NAME = 'Rovine di Pompei'
+const RUIN_NAME = 'Downtown Ruins'
 
 // Pool nomi "open" generici (non spawn, non rovine, non crateri).
 const OPEN_NAMES_POOL = [
-  'Dune del Tirreno',
-  'Discarica di Caivano',
-  'Carcassa Autostrada A1',
-  'Trincea del Carso',
-  'Stradario Crollato',
-  'Pianura Bruciata'
+  'Mojave Dunes',
+  'Sutter County Dump',
+  'I-95 Wreckage',
+  'Old Trench Line',
+  'Cracked Highway',
+  'Burnt Plains'
 ] as const
 
 // Pool nomi "building" (chiusi). Includono lo spawn alt come building?
-// No: l'Avamposto è gestito come spawn alt e non finisce nel pool building.
+// No: l'Outpost Echo è gestito come spawn alt e non finisce nel pool building.
 const BUILDING_NAMES_POOL = [
-  'Bunker della Linea Gotica',
-  'Posto di Blocco Brennero',
-  'Hangar di Aviano',
-  'Caserma Diroccata'
+  'NORAD Bunker',
+  'Highway 9 Roadblock',
+  'Abandoned Hangar',
+  'Ruined Barracks'
 ] as const
 
 // Pool nomi "crossing".
-const CROSSING_NAME = 'Ponte Sgretolato sul Po'
+const CROSSING_NAME = 'Collapsed Mississippi Bridge'
 
-// Layout 'building' per Bunker/Avamposto/Posto di Blocco.
+// Layout 'building' per Bunker/Outpost/Posto di Blocco.
 const BUILDING_LAYOUT_NAMES = new Set<string>([
-  'Bunker della Linea Gotica',
+  'NORAD Bunker',
   ALT_SPAWN_NAME,
-  'Posto di Blocco Brennero',
-  'Hangar di Aviano',
-  'Caserma Diroccata'
+  'Highway 9 Roadblock',
+  'Abandoned Hangar',
+  'Ruined Barracks'
 ])
 
 // Layout 'crossing' per Ponte Sgretolato.

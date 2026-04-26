@@ -57,31 +57,31 @@ const RIVER_THRESHOLD = 0.5
 const DEFAULT_FOREST_RATIO = 0.4
 const DEFAULT_RIVER_CHANCE = 0.6
 
-// Pool nomi a tema rurale italiano (escluso lo spawn name riservato).
+// Pool nomi a tema rurale US "The Walking Dead" style.
 const BUILDING_NAMES = [
-  'Stalla del Conte',
-  'Silo Brianzolo',
-  'Fienile dei Nonni',
-  'Pozzo San Rocco',
-  'Cantina Sociale',
-  'Mulino Bianco',
-  'Cascina Lombarda',
-  'Granaio Comunale'
+  'Greene Family Barn',
+  'Hilltop Silo',
+  'Old Hayloft',
+  'Saint Mary\'s Well',
+  'Moonshine Cellar',
+  'Hershel\'s Mill',
+  'Oakwood Farmhouse',
+  'County Granary'
 ] as const
 
 const OPEN_NAMES_POOL = [
-  'Sentiero della Valle',
-  'Recinto delle Pecore',
-  'Vigneto del Chianti',
-  'Frutteto Vecchio',
-  'Pascolo Alto'
+  'Cherry Lane Trail',
+  'Sheep Pasture',
+  'Vineyard Hollow',
+  'Apple Orchard',
+  'Sunset Pasture'
 ] as const
 
-const FOREST_NAME = 'Bosco di Vallombrosa'
-const RIVER_NAME = 'Fiume Po'
-const BRIDGE_NAME = 'Ponte sul Tagliamento'
-const SPAWN_NAME = 'Casolare San Pietro'
-const ALT_SPAWN_NAME = 'Fattoria Bianchi'
+const FOREST_NAME = 'Walker Woods'
+const RIVER_NAME = 'Cherokee River'
+const BRIDGE_NAME = 'Stone Creek Bridge'
+const SPAWN_NAME = 'Greene Family Farm'
+const ALT_SPAWN_NAME = 'Hilltop Colony'
 
 // Nomi che producono layout "open" (zone all'aperto).
 const OPEN_NAMES = new Set<string>([

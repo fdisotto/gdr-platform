@@ -38,6 +38,12 @@ const effectivePairs = computed<ReadonlyArray<readonly [string, string]>>(() => 
   return uniqueAdjacencyPairs() as ReadonlyArray<readonly [AreaId, AreaId]>
 })
 
+// v2d-shape-B: in modalità multi-mappa (mapTypeId valorizzato) le strade
+// partono e arrivano direttamente al CENTROIDE dell'area (= marker central),
+// così visivamente si "innestano" nel pin della zona, look cartina vera.
+// In modalità legacy (mapTypeId null) restano sul bordo bbox come MVP.
+const useCentroids = computed(() => props.mapTypeId !== null && props.mapTypeId !== undefined)
+
 const roads = computed(() => {
   return effectivePairs.value.map(([a, b]) => {
     const areaA = areaById.value.get(a)
@@ -45,8 +51,8 @@ const roads = computed(() => {
     if (!areaA || !areaB) return null
     const centerA = areaCenter(areaA)
     const centerB = areaCenter(areaB)
-    const startPoint = exitPoint(areaA, centerB)
-    const endPoint = exitPoint(areaB, centerA)
+    const startPoint = useCentroids.value ? centerA : exitPoint(areaA, centerB)
+    const endPoint = useCentroids.value ? centerB : exitPoint(areaB, centerA)
     return {
       id: `${a}::${b}`,
       x1: startPoint.x, y1: startPoint.y,

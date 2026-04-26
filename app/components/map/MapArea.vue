@@ -153,9 +153,28 @@ function cursorStyle(): string {
       opacity="0.35"
       pointer-events="none"
     />
-    <!-- Overlay (closed icon, label, player count) sempre posizionati
-         relativi alla bbox dell'area. -->
+    <!-- Overlay (marker, closed icon, label, player count) sempre
+         posizionati relativi alla bbox dell'area. -->
     <g :transform="`translate(${area.svg.x}, ${area.svg.y})`">
+      <!-- v2d-shape-B: marker centrale (pin) da cui partono le strade.
+           Visibile solo in modalità Voronoi/multi-mappa per non sovrapporsi
+           col rect rounded MVP. -->
+      <g
+        v-if="isVoronoi"
+        :transform="`translate(${area.svg.w / 2}, ${area.svg.h / 2})`"
+        pointer-events="none"
+      >
+        <circle
+          r="5"
+          fill="var(--z-bg-900)"
+          :stroke="strokeColor()"
+          stroke-width="2"
+        />
+        <circle
+          r="1.6"
+          :fill="strokeColor()"
+        />
+      </g>
       <g
         v-if="status() === 'closed'"
         :transform="`translate(${area.svg.w / 2 - 12}, ${area.svg.h / 2 - 12})`"
@@ -176,18 +195,36 @@ function cursorStyle(): string {
           fill="none"
         />
       </g>
-      <text
-        :x="area.svg.w / 2"
-        :y="area.svg.h / 2 + 4"
-        text-anchor="middle"
-        font-size="13"
-        font-weight="600"
-        :fill="isCurrent ? 'var(--z-green-100)' : 'var(--z-text-hi)'"
-        :opacity="status() === 'closed' ? 0.5 : 1"
+      <!-- Label: sopra il marker quando Voronoi (offset -14), centrata
+           sulla bbox per il fallback rect MVP. Background pill per leggibilità. -->
+      <g
+        :transform="isVoronoi
+          ? `translate(${area.svg.w / 2}, ${area.svg.h / 2 - 14})`
+          : `translate(${area.svg.w / 2}, ${area.svg.h / 2 + 4})`"
         style="pointer-events: none; user-select: none"
       >
-        {{ displayName() }}
-      </text>
+        <rect
+          v-if="isVoronoi"
+          :x="-(displayName().length * 3.6 + 6)"
+          y="-9"
+          :width="displayName().length * 7.2 + 12"
+          height="14"
+          rx="3"
+          ry="3"
+          fill="var(--z-bg-900)"
+          opacity="0.85"
+        />
+        <text
+          text-anchor="middle"
+          :y="isVoronoi ? 1 : 0"
+          font-size="11"
+          font-weight="700"
+          :fill="isCurrent ? 'var(--z-green-100)' : 'var(--z-text-hi)'"
+          :opacity="status() === 'closed' ? 0.5 : 1"
+        >
+          {{ displayName() }}
+        </text>
+      </g>
       <g
         v-if="playerCount > 0"
         :transform="`translate(${area.svg.w - 18}, 14)`"

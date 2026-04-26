@@ -115,10 +115,10 @@ describe('city generator — spawn / edge', () => {
     expect(spawns[0]!.id).toBe(map.spawnAreaId)
   })
 
-  it('lo spawn area è la piazza centrale (nome contiene "Piazza")', () => {
+  it('lo spawn area è la piazza centrale (nome contiene "Town Square")', () => {
     const map = city('seed-piazza', { density: 0.5 })
     const spawn = map.areas.find(a => a.spawn)!
-    expect(spawn.name.toLowerCase()).toContain('piazza')
+    expect(spawn.name.toLowerCase()).toContain('town square')
   })
 
   it('numero di edge area è tra 2 e 4', () => {

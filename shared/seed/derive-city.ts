@@ -13,21 +13,27 @@ export interface CityState {
   areas: Record<AreaId, AreaInitialState>
 }
 
-// Nomi città reali italiane (mix di metropoli e capoluoghi). Combinati
+// Nomi città americane (mix di location di "The Walking Dead" e città
+// reali del Sud-Est USA, ambientazione canonica della serie). Combinati
 // con un suffisso post-apocalittico danno l'effetto "città reale dopo
 // l'evento" senza inventare toponimi.
 const CITY_NAMES = [
-  'Milano', 'Roma', 'Napoli', 'Torino', 'Bologna',
-  'Firenze', 'Genova', 'Venezia', 'Verona', 'Padova',
-  'Trieste', 'Bari', 'Palermo', 'Catania', 'Cagliari',
-  'Brescia', 'Bergamo', 'Modena', 'Parma', 'Reggio Emilia',
-  'Pavia', 'Como', 'Lecco', 'Treviso', 'Vicenza',
-  'Pisa', 'Livorno', 'Lucca', 'Siena', 'Perugia',
-  'Ancona', 'Pescara', 'Foggia', 'Lecce', 'Salerno',
-  'Cosenza', 'Reggio Calabria', 'Messina', 'Trapani', 'Sassari'
+  // The Walking Dead landmarks
+  'Atlanta', 'Alexandria', 'Woodbury', 'Senoia', 'Terminus',
+  'Hilltop Colony', 'The Kingdom', 'Oceanside', 'The Sanctuary',
+  'King County', 'Greene Farm', 'Cynthiana',
+  // Georgia & dintorni (setting reale TWD)
+  'Macon', 'Savannah', 'Athens', 'Augusta', 'Columbus',
+  'Albany', 'Valdosta', 'Marietta', 'Decatur', 'Newnan',
+  'Griffin', 'Covington', 'Carrollton', 'Cartersville',
+  // Città iconiche US
+  'Houston', 'Dallas', 'Austin', 'Phoenix', 'Tucson',
+  'Denver', 'Seattle', 'Portland', 'Chicago', 'Detroit',
+  'New Orleans', 'Miami', 'Tampa', 'Orlando', 'Jacksonville',
+  'Nashville', 'Memphis', 'Louisville', 'Birmingham', 'Charlotte'
 ]
 
-const CITY_SUFFIXES = ['— Quarantena', '— Zona 3', '— Settore C', '— Focolaio 7', '']
+const CITY_SUFFIXES = ['— Quarantine Zone', '— Walker County', '— Safe Zone', '— Outpost', '']
 
 const AREA_NAME_VARIANTS: Partial<Record<AreaId, string[]>> = {
   piazza: ['Piazza del Mercato', 'Piazza dei Martiri', 'Piazza Grande'],
