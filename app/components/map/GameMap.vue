@@ -956,6 +956,7 @@ function onSvgBgClick(e: MouseEvent) {
               :area="a"
               :index="i"
               :is-self="party.me?.id === p.id"
+              :centered="!!(props.voronoiByArea && props.voronoiByArea.size > 0)"
               @click="(ev) => onAvatarClick(ev, p)"
             />
             <!-- Pill "+N" quando ci sono più player di quanti ne stiano -->

@@ -10,6 +10,10 @@ interface Props {
   area: Area
   index: number
   isSelf: boolean
+  // v2d-shape-B: nelle mappe Voronoi gli avatar si dispongono in griglia
+  // SOTTO il marker centrale invece che nell'angolo top-left della bbox
+  // (che con poligoni grandi finirebbe sotto la pill della label).
+  centered?: boolean
 }
 const props = defineProps<Props>()
 const emit = defineEmits<{ (e: 'click', ev: MouseEvent): void }>()
@@ -28,12 +32,21 @@ const color = computed(() => {
 })
 
 const position = computed(() => {
-  const col = props.index % 4
-  const row = Math.floor(props.index / 4)
-  const paddingX = 14
-  const paddingY = 30
+  const cols = 4
+  const col = props.index % cols
+  const row = Math.floor(props.index / cols)
   const cellW = 18
   const cellH = 18
+  if (props.centered) {
+    // Voronoi: griglia centrata orizzontalmente, sotto il marker (offset
+    // di +14 da centroY per non sovrapporsi al pin centrale).
+    const startX = props.area.svg.w / 2 - (cols * cellW) / 2 + cellW / 2
+    const startY = props.area.svg.h / 2 + 14
+    return { x: startX + col * cellW, y: startY + row * cellH }
+  }
+  // Legacy MVP: angolo top-left della bbox.
+  const paddingX = 14
+  const paddingY = 30
   return {
     x: paddingX + col * cellW,
     y: paddingY + row * cellH
