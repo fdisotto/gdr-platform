@@ -132,6 +132,16 @@ export const AreaOverridePublicSchema = z.object({
 })
 export type AreaOverridePublic = z.infer<typeof AreaOverridePublicSchema>
 
+// v2d-edit: delta sul grafo adjacency. Coppia (areaA, areaB) sempre
+// normalizzata in ordine lessicografico (areaA < areaB).
+export const AdjacencyOverridePublicSchema = z.object({
+  mapId: z.string(),
+  areaA: z.string(),
+  areaB: z.string(),
+  kind: z.enum(['add', 'remove'])
+})
+export type AdjacencyOverridePublic = z.infer<typeof AdjacencyOverridePublicSchema>
+
 export const PlayerPositionSchema = z.object({
   playerId: z.string(),
   // v2d: posizione scoped per mappa. Nullable per legacy.
@@ -176,6 +186,8 @@ export const StateInitEvent = z.object({
   transitions: z.array(TransitionPublicSchema),
   // v2d-edit: override master delle aree per ogni mappa della party.
   areaOverrides: z.array(AreaOverridePublicSchema).default([]),
+  // v2d-edit: delta sul grafo adjacency.
+  adjacencyOverrides: z.array(AdjacencyOverridePublicSchema).default([]),
   serverTime: z.number()
 })
 export type StateInitEvent = z.infer<typeof StateInitEvent>
@@ -467,6 +479,36 @@ export const MasterAreaRemoveEvent = z.object({
 })
 export type MasterAreaRemoveEvent = z.infer<typeof MasterAreaRemoveEvent>
 
+// v2d-edit: aggiunge/rimuove una strada di collegamento fra due aree
+// della stessa mappa. add = forza adiacenza anche se la prossimità auto
+// non l'avrebbe creata. remove = oscura un'adiacenza calcolata auto.
+// La coppia viene normalizzata server-side.
+export const MasterRoadAddEvent = z.object({
+  type: z.literal('master:road-add'),
+  mapId: z.string(),
+  areaA: z.string(),
+  areaB: z.string()
+})
+export type MasterRoadAddEvent = z.infer<typeof MasterRoadAddEvent>
+
+export const MasterRoadRemoveEvent = z.object({
+  type: z.literal('master:road-remove'),
+  mapId: z.string(),
+  areaA: z.string(),
+  areaB: z.string()
+})
+export type MasterRoadRemoveEvent = z.infer<typeof MasterRoadRemoveEvent>
+
+// "Reset": cancella l'override per quella coppia (torna al
+// comportamento prossimità auto).
+export const MasterRoadResetEvent = z.object({
+  type: z.literal('master:road-reset'),
+  mapId: z.string(),
+  areaA: z.string(),
+  areaB: z.string()
+})
+export type MasterRoadResetEvent = z.infer<typeof MasterRoadResetEvent>
+
 // Broadcast a tutti i player della party dopo qualsiasi area-edit.
 export const AreaOverrideUpdatedEvent = z.object({
   type: z.literal('area-override:updated'),
@@ -480,6 +522,20 @@ export const AreaOverrideRemovedEvent = z.object({
   areaId: z.string()
 })
 export type AreaOverrideRemovedEvent = z.infer<typeof AreaOverrideRemovedEvent>
+
+export const AdjacencyOverrideUpdatedEvent = z.object({
+  type: z.literal('adjacency-override:updated'),
+  override: AdjacencyOverridePublicSchema
+})
+export type AdjacencyOverrideUpdatedEvent = z.infer<typeof AdjacencyOverrideUpdatedEvent>
+
+export const AdjacencyOverrideRemovedEvent = z.object({
+  type: z.literal('adjacency-override:removed'),
+  mapId: z.string(),
+  areaA: z.string(),
+  areaB: z.string()
+})
+export type AdjacencyOverrideRemovedEvent = z.infer<typeof AdjacencyOverrideRemovedEvent>
 
 export const MasterEditMessageEvent = z.object({
   type: z.literal('master:edit-message'),
@@ -628,7 +684,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   VoiceSignalEvent,
   MessageUpdateEvent, MessageRemovedEvent, PlayerMutedEvent, KickedEvent,
   MasterActionsSnapshotEvent, MasterBansSnapshotEvent,
-  AreaOverrideUpdatedEvent, AreaOverrideRemovedEvent
+  AreaOverrideUpdatedEvent, AreaOverrideRemovedEvent,
+  AdjacencyOverrideUpdatedEvent, AdjacencyOverrideRemovedEvent
 ])
 export type ServerEvent = z.infer<typeof ServerEvent>
 
@@ -645,6 +702,7 @@ export const ClientEvent = z.discriminatedUnion('type', [
   MasterWeatherOverrideEvent, MasterMovePlayerEvent,
   MasterFetchActionsEvent, MasterFetchBansEvent,
   MasterAreaRenameEvent, MasterAreaMoveEvent,
-  MasterAreaAddEvent, MasterAreaRemoveEvent
+  MasterAreaAddEvent, MasterAreaRemoveEvent,
+  MasterRoadAddEvent, MasterRoadRemoveEvent, MasterRoadResetEvent
 ])
 export type ClientEvent = z.infer<typeof ClientEvent>

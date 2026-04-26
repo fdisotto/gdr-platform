@@ -198,6 +198,7 @@ function makeConnection(seed: string): PartyConnection {
           maps?: Array<{ id: string, mapTypeId: string, mapSeed: string, name: string, isSpawn: boolean, createdAt: number, params?: Record<string, unknown> }>
           transitions?: Array<{ id: string, fromMapId: string, fromAreaId: string, toMapId: string, toAreaId: string, label: string | null }>
           areaOverrides?: import('~~/shared/protocol/ws').AreaOverridePublic[]
+          adjacencyOverrides?: import('~~/shared/protocol/ws').AdjacencyOverridePublic[]
           serverTime: number
         }
         partyStore.hydrate({
@@ -208,7 +209,8 @@ function makeConnection(seed: string): PartyConnection {
           maps: init.maps ?? [],
           transitions: init.transitions ?? [],
           currentMapId: init.me.currentMapId ?? null,
-          areaOverrides: init.areaOverrides ?? []
+          areaOverrides: init.areaOverrides ?? [],
+          adjacencyOverrides: init.adjacencyOverrides ?? []
         })
         chatStore.hydrate(init.messagesByArea ?? {})
         chatStore.hydrateDms(init.dms ?? [], init.me.id)
@@ -270,6 +272,16 @@ function makeConnection(seed: string): PartyConnection {
       case 'area-override:removed': {
         const { mapId, areaId } = data as { mapId: string, areaId: string }
         partyStore.removeOverride(mapId, areaId)
+        break
+      }
+      case 'adjacency-override:updated': {
+        const { override } = data as { override: import('~~/shared/protocol/ws').AdjacencyOverridePublic }
+        partyStore.applyAdjacencyOverride(override)
+        break
+      }
+      case 'adjacency-override:removed': {
+        const { mapId, areaA, areaB } = data as { mapId: string, areaA: string, areaB: string }
+        partyStore.removeAdjacencyOverride(mapId, areaA, areaB)
         break
       }
       case 'time:tick': {

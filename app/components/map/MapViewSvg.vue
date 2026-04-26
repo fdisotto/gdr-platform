@@ -81,11 +81,20 @@ const generatedMap = computed<GeneratedMap | null>(() => {
   }
 
   // 3) Ricalcola adjacency client-side: aree i cui centri distano meno
-  //    della soglia di prossimità sono adiacenti. Lo spawnAreaId/edge
-  //    restano dal generatore base (filtrati su aree visibili).
+  //    della soglia di prossimità sono adiacenti. Poi applica gli
+  //    adjacency overrides del master ('add' aggiunge la coppia, 'remove'
+  //    la rimuove). Lo spawnAreaId/edge restano dal generatore base.
   const ADJ_THRESHOLD = 280
   const adjacency: Record<string, string[]> = {}
   for (const a of patched) adjacency[a.id] = []
+  function addPair(aId: string, bId: string) {
+    if (!adjacency[aId]!.includes(bId)) adjacency[aId]!.push(bId)
+    if (!adjacency[bId]!.includes(aId)) adjacency[bId]!.push(aId)
+  }
+  function removePair(aId: string, bId: string) {
+    adjacency[aId] = (adjacency[aId] ?? []).filter(x => x !== bId)
+    adjacency[bId] = (adjacency[bId] ?? []).filter(x => x !== aId)
+  }
   for (let i = 0; i < patched.length; i++) {
     for (let j = i + 1; j < patched.length; j++) {
       const a = patched[i]!
@@ -95,10 +104,17 @@ const generatedMap = computed<GeneratedMap | null>(() => {
       const bx = b.shape.x + b.shape.w / 2
       const by = b.shape.y + b.shape.h / 2
       if (Math.hypot(bx - ax, by - ay) <= ADJ_THRESHOLD) {
-        adjacency[a.id]!.push(b.id)
-        adjacency[b.id]!.push(a.id)
+        addPair(a.id, b.id)
       }
     }
+  }
+  // Adjacency overrides (kind='add' forza la coppia, 'remove' la cancella).
+  const adjOverrides = party.adjacencyOverrides.filter(o => o.mapId === mapId)
+  const validIds = new Set(patched.map(a => a.id))
+  for (const o of adjOverrides) {
+    if (!validIds.has(o.areaA) || !validIds.has(o.areaB)) continue
+    if (o.kind === 'add') addPair(o.areaA, o.areaB)
+    else removePair(o.areaA, o.areaB)
   }
   const visibleIds = new Set(patched.map(a => a.id))
   const spawnAreaId = visibleIds.has(base.spawnAreaId)

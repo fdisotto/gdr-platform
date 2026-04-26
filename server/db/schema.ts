@@ -395,3 +395,20 @@ export const areaOverrides = sqliteTable('area_overrides', {
   primaryKey({ columns: [t.partySeed, t.mapId, t.areaId] }),
   index('area_overrides_map_idx').on(t.partySeed, t.mapId)
 ])
+
+// v2d-edit: delta master sul grafo adjacency. Il client ricalcola le
+// adiacenze dalla prossimità spaziale; gli override permettono di
+// aggiungere strade tra aree non vicine ('add') o rimuovere strade
+// generate automaticamente ('remove'). PK normalizzata su areaA < areaB
+// (lessicografico) così non ci sono righe duplicate per la stessa coppia.
+export const areaAdjacencyOverrides = sqliteTable('area_adjacency_overrides', {
+  partySeed: text('party_seed').notNull().references(() => parties.seed, { onDelete: 'cascade' }),
+  mapId: text('map_id').notNull().references(() => partyMaps.id, { onDelete: 'cascade' }),
+  areaA: text('area_a').notNull(),
+  areaB: text('area_b').notNull(),
+  kind: text('kind', { enum: ['add', 'remove'] }).notNull(),
+  createdAt: integer('created_at').notNull()
+}, t => [
+  primaryKey({ columns: [t.partySeed, t.mapId, t.areaA, t.areaB] }),
+  index('area_adjacency_overrides_map_idx').on(t.partySeed, t.mapId)
+])

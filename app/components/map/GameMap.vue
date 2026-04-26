@@ -580,6 +580,50 @@ function removeArea(areaId: string) {
   })
 }
 
+// ── v2d-edit: editor strade (adjacency) ────────────────────────────────────
+// Click su un'area (dentro l'overlay edit) seleziona l'origine. Click su
+// una seconda area aggiunge/rimuove la strada toggle in base allo stato
+// corrente: se le aree erano adiacenti → master:road-remove, altrimenti
+// master:road-add. Click sulla stessa area = annulla selezione.
+const roadFromAreaId = ref<string | null>(null)
+function onAreaEditClick(areaId: string, e: MouseEvent) {
+  if (!editMode.value || !props.mapId) return
+  e.stopPropagation()
+  if (!roadFromAreaId.value) {
+    roadFromAreaId.value = areaId
+    return
+  }
+  if (roadFromAreaId.value === areaId) {
+    roadFromAreaId.value = null
+    return
+  }
+  const a = roadFromAreaId.value
+  const b = areaId
+  // Già adiacenti? Toggle.
+  const adj = adjacency.value[a] ?? []
+  const arePaired = adj.includes(b)
+  connection.send({
+    type: arePaired ? 'master:road-remove' : 'master:road-add',
+    mapId: props.mapId,
+    areaA: a,
+    areaB: b
+  })
+  roadFromAreaId.value = null
+}
+
+// Click su una strada: in edit mode rimuove la connessione (o forza
+// l'override 'remove' se era automatica via prossimità).
+function onRoadClick(areaA: string, areaB: string) {
+  if (!editMode.value || !props.mapId) return
+  if (!confirm('Rimuovere questa strada?')) return
+  connection.send({
+    type: 'master:road-remove',
+    mapId: props.mapId,
+    areaA,
+    areaB
+  })
+}
+
 // Aggiungi area al click sullo sfondo (in edit mode, solo su zona vuota)
 function addAreaAtPoint(clientX: number, clientY: number) {
   if (!editMode.value || !props.mapId) return
@@ -733,6 +777,23 @@ function onSvgBgClick(e: MouseEvent) {
             :logical-h="LOGICAL_H"
             @transition-click="onTransitionClick"
           />
+          <!-- v2d-edit: hit-area cliccabile per ogni strada quando il
+               master è in edit mode. Click → conferma rimozione strada. -->
+          <g v-if="editMode">
+            <line
+              v-for="[a, b] in adjacencyPairs"
+              :key="`hit-${a}-${b}`"
+              :x1="(effectiveAreas.find(x => x.id === a)?.svg.x ?? 0) + (effectiveAreas.find(x => x.id === a)?.svg.w ?? 0) / 2"
+              :y1="(effectiveAreas.find(x => x.id === a)?.svg.y ?? 0) + (effectiveAreas.find(x => x.id === a)?.svg.h ?? 0) / 2"
+              :x2="(effectiveAreas.find(x => x.id === b)?.svg.x ?? 0) + (effectiveAreas.find(x => x.id === b)?.svg.w ?? 0) / 2"
+              :y2="(effectiveAreas.find(x => x.id === b)?.svg.y ?? 0) + (effectiveAreas.find(x => x.id === b)?.svg.h ?? 0) / 2"
+              stroke="var(--z-blood-300)"
+              stroke-width="14"
+              stroke-opacity="0"
+              style="cursor: pointer"
+              @click.stop="onRoadClick(a, b)"
+            />
+          </g>
 
           <g
             v-for="a in effectiveAreas"
@@ -748,7 +809,9 @@ function onSvgBgClick(e: MouseEvent) {
               @click="!editMode && onAreaClick(a.id as AreaId)"
             />
             <!-- v2d-edit: overlay edit master. Drag, doppio-click rinomina,
-                 X rimuove. Posizionato sopra MapArea per intercettare i pointer. -->
+                 X rimuove. Click singolo seleziona per aggiungere/rimuovere
+                 una strada con un'altra area. Posizionato sopra MapArea
+                 per intercettare i pointer. -->
             <g v-if="editMode">
               <rect
                 :x="a.svg.x"
@@ -756,13 +819,14 @@ function onSvgBgClick(e: MouseEvent) {
                 :width="a.svg.w"
                 :height="a.svg.h"
                 fill="transparent"
-                stroke="var(--z-rust-300)"
-                stroke-width="2"
+                :stroke="roadFromAreaId === a.id ? 'var(--z-toxic-500, #b3d33a)' : 'var(--z-rust-300)'"
+                :stroke-width="roadFromAreaId === a.id ? 3 : 2"
                 stroke-dasharray="6 4"
                 style="cursor: move"
                 @pointerdown="(e: PointerEvent) => startAreaDrag(e, a.id)"
                 @pointermove="moveAreaDrag"
                 @pointerup="endAreaDrag"
+                @click.stop="(e: MouseEvent) => onAreaEditClick(a.id, e)"
                 @dblclick.stop="startRename(a.id)"
               />
               <g
@@ -849,13 +913,22 @@ function onSvgBgClick(e: MouseEvent) {
       >
         {{ editMode ? '✎ Modifica ON' : '✎ Modifica mappa' }}
       </button>
-      <p
+      <div
         v-if="editMode"
-        class="mt-1 text-xs font-mono-z"
-        style="color: var(--z-text-md); max-width: 220px"
+        class="mt-1 text-xs font-mono-z space-y-0.5"
+        style="color: var(--z-text-md); max-width: 240px"
       >
-        drag = sposta · doppio-click = rinomina · × = rimuovi · click vuoto = aggiungi
-      </p>
+        <p>drag = sposta · doppio-click = rinomina · × = rimuovi</p>
+        <p>click vuoto = aggiungi area</p>
+        <p>click area + click area = aggiungi/rimuovi strada</p>
+        <p>click strada = rimuovi</p>
+        <p
+          v-if="roadFromAreaId"
+          style="color: var(--z-toxic-500, #b3d33a)"
+        >
+          ↪ origine strada selezionata, clicca un'altra area
+        </p>
+      </div>
     </div>
 
     <!-- v2d-edit: input inline rinomina (overlay assoluto). -->

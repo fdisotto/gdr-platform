@@ -1,6 +1,8 @@
 import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent, MasterDeleteMessageEvent, MasterPurgeMessageEvent, MasterEditMessageEvent,
-  MasterAreaRenameEvent, MasterAreaMoveEvent, MasterAreaAddEvent, MasterAreaRemoveEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, MasterFetchActionsEvent, MasterFetchBansEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type MessageRemovedEvent,
+  MasterAreaRenameEvent, MasterAreaMoveEvent, MasterAreaAddEvent, MasterAreaRemoveEvent,
+  MasterRoadAddEvent, MasterRoadRemoveEvent, MasterRoadResetEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, MasterFetchActionsEvent, MasterFetchBansEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type MessageRemovedEvent,
   type AreaOverrideUpdatedEvent, type AreaOverrideRemovedEvent, type AreaOverridePublic,
+  type AdjacencyOverrideUpdatedEvent, type AdjacencyOverrideRemovedEvent, type AdjacencyOverridePublic,
   type PlayerMutedEvent, type KickedEvent, type WeatherUpdatedEvent, type MasterActionsSnapshotEvent, type MasterBansSnapshotEvent, type TransitionPublic, type PartyMapPublic } from '~~/shared/protocol/ws'
 import { useDb } from '~~/server/utils/db'
 import { findPlayerByUserInParty, listOnlinePlayers, touchPlayer, updatePlayerArea, setMute, kickPlayer, findPlayerById, type PlayerRow } from '~~/server/services/players'
@@ -19,6 +21,7 @@ import { pickFanoutRecipients } from '~~/server/ws/fanout'
 import { isAreaId, areAdjacent } from '~~/shared/map/areas'
 import { isAreaClosed } from '~~/server/services/area-access'
 import { upsertOverride, deleteOverride, listOverridesForParty } from '~~/server/services/area-overrides'
+import { upsertAdjacencyOverride, deleteAdjacencyOverride, listAdjacencyOverridesForParty, normalizePair } from '~~/server/services/area-adjacency'
 import { listPartyMaps, findPartyMap } from '~~/server/services/party-maps'
 import { listTransitionsForParty, findTransition } from '~~/server/services/map-transitions'
 import { findMapType, parseDefaultParams } from '~~/server/services/map-types'
@@ -178,6 +181,18 @@ export default defineWebSocketHandler({
     }
     if (parsed.type === 'master:area-remove') {
       await handleMasterAreaRemove(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:road-add') {
+      await handleMasterRoadAdd(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:road-remove') {
+      await handleMasterRoadRemove(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:road-reset') {
+      await handleMasterRoadReset(peer, parsed)
       return
     }
     if (parsed.type === 'master:mute') {
@@ -1089,6 +1104,92 @@ async function handleMasterAreaRemove(peer: Peer, raw: unknown) {
   logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'area-remove', target: areaId, payload: { mapId: res.data.mapId } })
 }
 
+function broadcastAdjacencyUpdate(partySeed: string, override: AdjacencyOverridePublic): void {
+  const event: AdjacencyOverrideUpdatedEvent = { type: 'adjacency-override:updated', override }
+  const payload = JSON.stringify(event)
+  for (const c of registry.listParty(partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
+}
+
+function broadcastAdjacencyRemoved(partySeed: string, mapId: string, areaA: string, areaB: string): void {
+  const [a, b] = normalizePair(areaA, areaB)
+  const event: AdjacencyOverrideRemovedEvent = {
+    type: 'adjacency-override:removed', mapId, areaA: a, areaB: b
+  }
+  const payload = JSON.stringify(event)
+  for (const c of registry.listParty(partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
+}
+
+async function handleMasterRoadAdd(peer: Peer, raw: unknown) {
+  const res = MasterRoadAddEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  if (res.data.areaA === res.data.areaB) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'self_loop' })
+    return
+  }
+  const row = upsertAdjacencyOverride(ctx.db, {
+    partySeed: ctx.conn.partySeed,
+    mapId: res.data.mapId,
+    areaA: res.data.areaA,
+    areaB: res.data.areaB,
+    kind: 'add'
+  })
+  logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'road-add', target: `${row.areaA}::${row.areaB}`, payload: { mapId: res.data.mapId } })
+  broadcastAdjacencyUpdate(ctx.conn.partySeed, {
+    mapId: row.mapId, areaA: row.areaA, areaB: row.areaB, kind: row.kind
+  })
+}
+
+async function handleMasterRoadRemove(peer: Peer, raw: unknown) {
+  const res = MasterRoadRemoveEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  if (res.data.areaA === res.data.areaB) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'self_loop' })
+    return
+  }
+  const row = upsertAdjacencyOverride(ctx.db, {
+    partySeed: ctx.conn.partySeed,
+    mapId: res.data.mapId,
+    areaA: res.data.areaA,
+    areaB: res.data.areaB,
+    kind: 'remove'
+  })
+  logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'road-remove', target: `${row.areaA}::${row.areaB}`, payload: { mapId: res.data.mapId } })
+  broadcastAdjacencyUpdate(ctx.conn.partySeed, {
+    mapId: row.mapId, areaA: row.areaA, areaB: row.areaB, kind: row.kind
+  })
+}
+
+async function handleMasterRoadReset(peer: Peer, raw: unknown) {
+  const res = MasterRoadResetEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  deleteAdjacencyOverride(ctx.db, ctx.conn.partySeed, res.data.mapId, res.data.areaA, res.data.areaB)
+  logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'road-reset', target: `${res.data.areaA}::${res.data.areaB}`, payload: { mapId: res.data.mapId } })
+  broadcastAdjacencyRemoved(ctx.conn.partySeed, res.data.mapId, res.data.areaA, res.data.areaB)
+}
+
 async function handleMasterPurgeMessage(peer: Peer, raw: unknown) {
   const res = MasterPurgeMessageEvent.safeParse(raw)
   if (!res.success) {
@@ -1610,6 +1711,9 @@ function composeStateInit(
     maps: mapsPublic,
     transitions: transitionsPublic,
     areaOverrides: listOverridesForParty(db, seed).map(rowToOverridePublic),
+    adjacencyOverrides: listAdjacencyOverridesForParty(db, seed).map(r => ({
+      mapId: r.mapId, areaA: r.areaA, areaB: r.areaB, kind: r.kind
+    })),
     serverTime: Date.now()
   }
 }

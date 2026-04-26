@@ -1,6 +1,8 @@
 import { ref } from 'vue'
 import { makeKeyed } from '~/stores/factory'
-import type { PartyMapPublic, TransitionPublic, AreaOverridePublic } from '~~/shared/protocol/ws'
+import type {
+  PartyMapPublic, TransitionPublic, AreaOverridePublic, AdjacencyOverridePublic
+} from '~~/shared/protocol/ws'
 
 export interface MeSnapshot {
   id: string
@@ -46,6 +48,8 @@ function partyStoreFactory() {
   const currentMapId = ref<string | null>(null)
   // v2d-edit: override master sulle aree per ogni mappa.
   const areaOverrides = ref<AreaOverridePublic[]>([])
+  // v2d-edit: delta sul grafo adjacency.
+  const adjacencyOverrides = ref<AdjacencyOverridePublic[]>([])
 
   function hydrate(payload: {
     me: MeSnapshot
@@ -56,6 +60,7 @@ function partyStoreFactory() {
     transitions?: TransitionPublic[]
     currentMapId?: string | null
     areaOverrides?: AreaOverridePublic[]
+    adjacencyOverrides?: AdjacencyOverridePublic[]
   }) {
     me.value = payload.me
     party.value = payload.party
@@ -65,6 +70,7 @@ function partyStoreFactory() {
     transitions.value = payload.transitions ?? []
     currentMapId.value = payload.currentMapId ?? payload.me.currentMapId ?? null
     areaOverrides.value = payload.areaOverrides ?? []
+    adjacencyOverrides.value = payload.adjacencyOverrides ?? []
   }
 
   function reset() {
@@ -76,6 +82,7 @@ function partyStoreFactory() {
     transitions.value = []
     currentMapId.value = null
     areaOverrides.value = []
+    adjacencyOverrides.value = []
   }
 
   function applyOverride(o: AreaOverridePublic) {
@@ -96,12 +103,31 @@ function partyStoreFactory() {
     )
   }
 
+  function applyAdjacencyOverride(o: AdjacencyOverridePublic) {
+    const idx = adjacencyOverrides.value.findIndex(
+      x => x.mapId === o.mapId && x.areaA === o.areaA && x.areaB === o.areaB
+    )
+    if (idx === -1) adjacencyOverrides.value = [...adjacencyOverrides.value, o]
+    else {
+      const copy = [...adjacencyOverrides.value]
+      copy[idx] = o
+      adjacencyOverrides.value = copy
+    }
+  }
+
+  function removeAdjacencyOverride(mapId: string, areaA: string, areaB: string) {
+    adjacencyOverrides.value = adjacencyOverrides.value.filter(
+      x => !(x.mapId === mapId && x.areaA === areaA && x.areaB === areaB)
+    )
+  }
+
   return {
     me, party, players, areasState,
     maps, transitions, currentMapId,
-    areaOverrides,
+    areaOverrides, adjacencyOverrides,
     hydrate, reset,
-    applyOverride, removeOverride
+    applyOverride, removeOverride,
+    applyAdjacencyOverride, removeAdjacencyOverride
   }
 }
 
