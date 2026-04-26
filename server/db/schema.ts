@@ -424,6 +424,11 @@ export const areaAdjacencyOverrides = sqliteTable('area_adjacency_overrides', {
   areaA: text('area_a').notNull(),
   areaB: text('area_b').notNull(),
   kind: text('kind', { enum: ['add', 'remove'] }).notNull(),
+  // v2d-roads: stile della strada quando kind='add'. NULL → usa lo stile
+  // di default derivato dal mapTypeId. Tipi disponibili: 'urban' (asfalto),
+  // 'path' (sentiero sterrato), 'wasteland' (strada crepata), 'highway'
+  // (autostrada doppia corsia), 'bridge' (ponte/passerella).
+  roadKind: text('road_kind', { enum: ['urban', 'path', 'wasteland', 'highway', 'bridge'] }),
   createdAt: integer('created_at').notNull()
 }, t => [
   primaryKey({ columns: [t.partySeed, t.mapId, t.areaA, t.areaB] }),

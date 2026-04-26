@@ -455,5 +455,9 @@ CREATE INDEX \`area_adjacency_overrides_map_idx\` ON \`area_adjacency_overrides\
 );
 --> statement-breakpoint
 CREATE INDEX \`area_visits_map_idx\` ON \`area_visits\` (\`party_seed\`,\`map_id\`);`
+  },
+  {
+    hash: '0009_solid_guardian',
+    sql: `ALTER TABLE \`area_adjacency_overrides\` ADD \`road_kind\` text;`
   }
 ]

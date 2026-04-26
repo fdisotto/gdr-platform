@@ -64,6 +64,13 @@
       "when": 1777200709538,
       "tag": "0008_premium_jetstream",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1777205579662,
+      "tag": "0009_solid_guardian",
+      "breakpoints": true
     }
   ]
 }

@@ -9,12 +9,15 @@ import { areaAdjacencyOverrides } from '~~/server/db/schema'
 // ordine lessicografico, così non esistono righe duplicate per la stessa
 // strada simmetrica.
 
+export type RoadKind = 'urban' | 'path' | 'wasteland' | 'highway' | 'bridge'
+
 export interface AdjacencyOverrideRow {
   partySeed: string
   mapId: string
   areaA: string
   areaB: string
   kind: 'add' | 'remove'
+  roadKind: RoadKind | null
   createdAt: number
 }
 
@@ -34,11 +37,15 @@ export interface UpsertAdjacencyOverrideInput {
   areaA: string
   areaB: string
   kind: 'add' | 'remove'
+  // Stile della strada (solo significativo per kind='add'). Null/undefined
+  // → la strada usa lo stile di default del mapTypeId.
+  roadKind?: RoadKind | null
 }
 
-// Upsert: se esiste già una riga per la stessa coppia, sovrascrive il
-// kind. Caso d'uso: il master prima rimuove una strada, poi cambia idea
-// e la riaggiunge → la riga passa da 'remove' a 'add'.
+// Upsert: se esiste già una riga per la stessa coppia, sovrascrive kind
+// e roadKind. Caso d'uso: il master prima rimuove una strada, poi cambia
+// idea e la riaggiunge come highway → la riga passa da 'remove' a 'add'
+// con roadKind='highway'.
 export function upsertAdjacencyOverride(db: Db, input: UpsertAdjacencyOverrideInput): AdjacencyOverrideRow {
   const [areaA, areaB] = normalizePair(input.areaA, input.areaB)
   if (areaA === areaB) throw new Error('areaA === areaB')
@@ -50,8 +57,9 @@ export function upsertAdjacencyOverride(db: Db, input: UpsertAdjacencyOverrideIn
       eq(areaAdjacencyOverrides.areaA, areaA),
       eq(areaAdjacencyOverrides.areaB, areaB)
     )).get() as AdjacencyOverrideRow | undefined
+  const roadKind = input.roadKind ?? null
   if (existing) {
-    db.update(areaAdjacencyOverrides).set({ kind: input.kind })
+    db.update(areaAdjacencyOverrides).set({ kind: input.kind, roadKind })
       .where(and(
         eq(areaAdjacencyOverrides.partySeed, input.partySeed),
         eq(areaAdjacencyOverrides.mapId, input.mapId),
@@ -65,6 +73,7 @@ export function upsertAdjacencyOverride(db: Db, input: UpsertAdjacencyOverrideIn
       areaA,
       areaB,
       kind: input.kind,
+      roadKind,
       createdAt: now
     }).run()
   }
@@ -74,6 +83,7 @@ export function upsertAdjacencyOverride(db: Db, input: UpsertAdjacencyOverrideIn
     areaA,
     areaB,
     kind: input.kind,
+    roadKind,
     createdAt: existing?.createdAt ?? now
   }
 }

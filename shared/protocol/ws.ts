@@ -134,11 +134,16 @@ export type AreaOverridePublic = z.infer<typeof AreaOverridePublicSchema>
 
 // v2d-edit: delta sul grafo adjacency. Coppia (areaA, areaB) sempre
 // normalizzata in ordine lessicografico (areaA < areaB).
+// roadKind è significativo solo per kind='add'; null = stile auto dal mapTypeId.
+export const RoadKindSchema = z.enum(['urban', 'path', 'wasteland', 'highway', 'bridge'])
+export type RoadKind = z.infer<typeof RoadKindSchema>
+
 export const AdjacencyOverridePublicSchema = z.object({
   mapId: z.string(),
   areaA: z.string(),
   areaB: z.string(),
-  kind: z.enum(['add', 'remove'])
+  kind: z.enum(['add', 'remove']),
+  roadKind: RoadKindSchema.nullable()
 })
 export type AdjacencyOverridePublic = z.infer<typeof AdjacencyOverridePublicSchema>
 
@@ -505,7 +510,10 @@ export const MasterRoadAddEvent = z.object({
   type: z.literal('master:road-add'),
   mapId: z.string(),
   areaA: z.string(),
-  areaB: z.string()
+  areaB: z.string(),
+  // Stile esplicito (urban/path/wasteland/highway/bridge); omesso → default
+  // dal mapTypeId.
+  roadKind: RoadKindSchema.optional()
 })
 export type MasterRoadAddEvent = z.infer<typeof MasterRoadAddEvent>
 

@@ -91,6 +91,22 @@ const effectiveAreas = computed<readonly Area[]>(() => {
   })
 })
 
+// v2d-roads: mappa coppia normalizzata "a::b" → roadKind override.
+// Popolata dagli adjacency overrides della party con kind='add' e
+// roadKind != null, filtrati per la mappa attiva.
+const roadKindsByPair = computed<Map<string, RoadKind>>(() => {
+  const m = new Map<string, RoadKind>()
+  if (!props.mapId) return m
+  for (const o of party.adjacencyOverrides) {
+    if (o.mapId !== props.mapId) continue
+    if (o.kind !== 'add') continue
+    if (!o.roadKind) continue
+    const [a, b] = o.areaA < o.areaB ? [o.areaA, o.areaB] : [o.areaB, o.areaA]
+    m.set(`${a}::${b}`, o.roadKind as RoadKind)
+  }
+  return m
+})
+
 const adjacencyPairs = computed<Array<[string, string]>>(() => {
   const pairs: Array<[string, string]> = []
   const seen = new Set<string>()
@@ -630,7 +646,17 @@ function removeArea(areaId: string) {
 // una seconda area aggiunge/rimuove la strada toggle in base allo stato
 // corrente: se le aree erano adiacenti → master:road-remove, altrimenti
 // master:road-add. Click sulla stessa area = annulla selezione.
+type RoadKind = 'urban' | 'path' | 'wasteland' | 'highway' | 'bridge'
+const ROAD_KIND_OPTIONS: Array<{ value: RoadKind, label: string }> = [
+  { value: 'urban', label: 'Asfalto' },
+  { value: 'path', label: 'Sentiero' },
+  { value: 'wasteland', label: 'Strada crepata' },
+  { value: 'highway', label: 'Autostrada' },
+  { value: 'bridge', label: 'Ponte' }
+]
 const roadFromAreaId = ref<string | null>(null)
+const roadKindForNew = ref<RoadKind | 'auto'>('auto')
+
 function onAreaEditClick(areaId: string, e: MouseEvent) {
   if (!editMode.value || !props.mapId) return
   e.stopPropagation()
@@ -654,12 +680,22 @@ function onAreaEditClick(areaId: string, e: MouseEvent) {
   // Già adiacenti? Toggle.
   const adj = adjacency.value[a] ?? []
   const arePaired = adj.includes(b)
-  connection.send({
-    type: arePaired ? 'master:road-remove' : 'master:road-add',
-    mapId: props.mapId,
-    areaA: a,
-    areaB: b
-  })
+  if (arePaired) {
+    connection.send({
+      type: 'master:road-remove',
+      mapId: props.mapId,
+      areaA: a,
+      areaB: b
+    })
+  } else {
+    connection.send({
+      type: 'master:road-add',
+      mapId: props.mapId,
+      areaA: a,
+      areaB: b,
+      ...(roadKindForNew.value !== 'auto' ? { roadKind: roadKindForNew.value } : {})
+    })
+  }
   roadFromAreaId.value = null
 }
 
@@ -890,6 +926,7 @@ function onSvgBgClick(e: MouseEvent) {
             :areas="effectiveAreas"
             :pairs="adjacencyPairs"
             :map-type-id="props.mapTypeId ?? null"
+            :road-kinds="roadKindsByPair"
           />
           <MapTransitionDoors
             :areas="effectiveAreas"
@@ -945,10 +982,27 @@ function onSvgBgClick(e: MouseEvent) {
           >
             <!-- v2d-edit: overlay edit master. Drag, doppio-click rinomina,
                  X rimuove. Click singolo seleziona per aggiungere/rimuovere
-                 una strada con un'altra area. Posizionato sopra MapArea
-                 per intercettare i pointer. -->
+                 una strada con un'altra area. Hit-area: in modalità Voronoi
+                 è il poligono Voronoi intero (così il click arriva ovunque
+                 dentro la cell), altrimenti il rect bbox legacy. -->
             <g v-if="editMode">
+              <polygon
+                v-if="props.voronoiByArea?.get(a.id)"
+                :points="props.voronoiByArea.get(a.id)!"
+                fill="transparent"
+                :stroke="roadFromAreaId === a.id ? 'var(--z-toxic-500, #b3d33a)' : 'var(--z-rust-300)'"
+                :stroke-width="roadFromAreaId === a.id ? 3 : 2"
+                stroke-dasharray="6 4"
+                style="cursor: move"
+                stroke-linejoin="round"
+                @pointerdown="(e: PointerEvent) => startAreaDrag(e, a.id)"
+                @pointermove="moveAreaDrag"
+                @pointerup="endAreaDrag"
+                @click.stop="(e: MouseEvent) => onAreaEditClick(a.id, e)"
+                @dblclick.stop="startRename(a.id)"
+              />
               <rect
+                v-else
                 :x="a.svg.x"
                 :y="a.svg.y"
                 :width="a.svg.w"
@@ -1095,18 +1149,41 @@ function onSvgBgClick(e: MouseEvent) {
       </button>
       <div
         v-if="editMode"
-        class="mt-1 text-xs font-mono-z space-y-0.5"
-        style="color: var(--z-text-md); max-width: 240px"
+        class="mt-1 text-xs font-mono-z space-y-1"
+        style="color: var(--z-text-md); max-width: 280px"
       >
         <p>drag = sposta · doppio-click = rinomina · × = rimuovi</p>
         <p>click vuoto = aggiungi area</p>
         <p>click area + click area = aggiungi/rimuovi strada</p>
         <p>click strada = rimuovi</p>
+        <div
+          class="mt-1 flex items-center gap-1.5 pt-1"
+          style="border-top: 1px solid var(--z-border)"
+        >
+          <span style="color: var(--z-text-md)">tipo strada:</span>
+          <select
+            v-model="roadKindForNew"
+            class="px-1.5 py-0.5 rounded text-xs"
+            style="background: var(--z-bg-900); border: 1px solid var(--z-border); color: var(--z-text-hi)"
+          >
+            <option value="auto">
+              auto ({{ props.mapTypeId ?? 'mvp' }})
+            </option>
+            <option
+              v-for="opt in ROAD_KIND_OPTIONS"
+              :key="opt.value"
+              :value="opt.value"
+            >
+              {{ opt.label }}
+            </option>
+          </select>
+        </div>
         <p
           v-if="roadFromAreaId"
+          class="pt-0.5"
           style="color: var(--z-toxic-500, #b3d33a)"
         >
-          ↪ origine strada selezionata, clicca un'altra area
+          ↪ origine selezionata, clicca un'altra area
         </p>
       </div>
     </div>

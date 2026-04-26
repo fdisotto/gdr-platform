@@ -1180,11 +1180,13 @@ async function handleMasterRoadAdd(peer: Peer, raw: unknown) {
     mapId: res.data.mapId,
     areaA: res.data.areaA,
     areaB: res.data.areaB,
-    kind: 'add'
+    kind: 'add',
+    roadKind: res.data.roadKind ?? null
   })
-  logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'road-add', target: `${row.areaA}::${row.areaB}`, payload: { mapId: res.data.mapId } })
+  logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'road-add', target: `${row.areaA}::${row.areaB}`, payload: { mapId: res.data.mapId, roadKind: row.roadKind } })
   broadcastAdjacencyUpdate(ctx.conn.partySeed, {
-    mapId: row.mapId, areaA: row.areaA, areaB: row.areaB, kind: row.kind
+    mapId: row.mapId, areaA: row.areaA, areaB: row.areaB,
+    kind: row.kind, roadKind: row.roadKind
   })
 }
 
@@ -1209,7 +1211,8 @@ async function handleMasterRoadRemove(peer: Peer, raw: unknown) {
   })
   logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'road-remove', target: `${row.areaA}::${row.areaB}`, payload: { mapId: res.data.mapId } })
   broadcastAdjacencyUpdate(ctx.conn.partySeed, {
-    mapId: row.mapId, areaA: row.areaA, areaB: row.areaB, kind: row.kind
+    mapId: row.mapId, areaA: row.areaA, areaB: row.areaB,
+    kind: row.kind, roadKind: row.roadKind
   })
 }
 
@@ -1748,7 +1751,7 @@ function composeStateInit(
     transitions: transitionsPublic,
     areaOverrides: listOverridesForParty(db, seed).map(rowToOverridePublic),
     adjacencyOverrides: listAdjacencyOverridesForParty(db, seed).map(r => ({
-      mapId: r.mapId, areaA: r.areaA, areaB: r.areaB, kind: r.kind
+      mapId: r.mapId, areaA: r.areaA, areaB: r.areaB, kind: r.kind, roadKind: r.roadKind
     })),
     visitedAreas: listVisitedForParty(db, seed).map(r => ({
       mapId: r.mapId, areaId: r.areaId

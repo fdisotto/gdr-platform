@@ -1,0 +1,1 @@
+ALTER TABLE `area_adjacency_overrides` ADD `road_kind` text;

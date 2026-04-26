@@ -4,19 +4,20 @@ import { AREAS as LEGACY_AREAS, uniqueAdjacencyPairs, areaCenter, exitPoint, typ
 
 // T20: il GameMap passa areas + pairs derivati dalla GeneratedMap quando
 // presente. In assenza fallback alle costanti legacy.
-// v2d-shape-B: lo stile della strada cambia col tipo di mappa. urban
-// (city) → asfalto a due corsie con linea bianca centrale; path (country)
-// → sentiero sterrato beige tratteggiato; wasteland → strada crepata
-// rossiccia con interruzioni; mixed/legacy → fallback asfalto MVP.
-type RoadStyle = 'urban' | 'path' | 'wasteland' | 'mixed'
+// v2d-shape-B: lo stile di default deriva dal tipo di mappa (urban/path/
+// wasteland/mixed). v2d-roads: il master può forzare per-strada uno dei
+// 5 stili disponibili (urban, path, wasteland, highway, bridge) tramite
+// la prop road-kinds (Map<"areaA::areaB" → kind>).
+type RoadKind = 'urban' | 'path' | 'wasteland' | 'highway' | 'bridge' | 'mixed'
 
 const props = defineProps<{
   areas?: readonly Area[]
   pairs?: ReadonlyArray<readonly [string, string]>
   mapTypeId?: string | null
+  roadKinds?: Map<string, RoadKind>
 }>()
 
-const roadStyle = computed<RoadStyle>(() => {
+const defaultRoadKind = computed<RoadKind>(() => {
   switch (props.mapTypeId) {
     case 'city': return 'urban'
     case 'country': return 'path'
@@ -38,13 +39,24 @@ const effectivePairs = computed<ReadonlyArray<readonly [string, string]>>(() => 
   return uniqueAdjacencyPairs() as ReadonlyArray<readonly [AreaId, AreaId]>
 })
 
-// v2d-shape-B: in modalità multi-mappa (mapTypeId valorizzato) le strade
-// partono e arrivano direttamente al CENTROIDE dell'area (= marker central),
-// così visivamente si "innestano" nel pin della zona, look cartina vera.
-// In modalità legacy (mapTypeId null) restano sul bordo bbox come MVP.
+// Modalità multi-mappa: in v2d (mapTypeId valorizzato) le strade partono
+// dal CENTROIDE area = marker centrale. Fallback exitPoint per legacy MVP.
 const useCentroids = computed(() => props.mapTypeId !== null && props.mapTypeId !== undefined)
 
-const roads = computed(() => {
+interface Road {
+  id: string
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  kind: RoadKind
+}
+
+function pairKey(a: string, b: string): string {
+  return a < b ? `${a}::${b}` : `${b}::${a}`
+}
+
+const roads = computed<Road[]>(() => {
   return effectivePairs.value.map(([a, b]) => {
     const areaA = areaById.value.get(a)
     const areaB = areaById.value.get(b)
@@ -53,22 +65,29 @@ const roads = computed(() => {
     const centerB = areaCenter(areaB)
     const startPoint = useCentroids.value ? centerA : exitPoint(areaA, centerB)
     const endPoint = useCentroids.value ? centerB : exitPoint(areaB, centerA)
+    const kindOverride = props.roadKinds?.get(pairKey(a, b))
     return {
       id: `${a}::${b}`,
       x1: startPoint.x, y1: startPoint.y,
-      x2: endPoint.x, y2: endPoint.y
+      x2: endPoint.x, y2: endPoint.y,
+      kind: kindOverride ?? defaultRoadKind.value
     }
-  }).filter((r): r is { id: string, x1: number, y1: number, x2: number, y2: number } => r !== null)
+  }).filter((r): r is Road => r !== null)
 })
+
+function roadsOfKind(k: RoadKind): Road[] {
+  return roads.value.filter(r => r.kind === k)
+}
 </script>
 
 <template>
   <g pointer-events="none">
     <!-- urban: asfalto a 3 layer (bordo + manto + linea bianca) -->
-    <template v-if="roadStyle === 'urban'">
+    <template
+      v-for="r in roadsOfKind('urban')"
+      :key="`u-${r.id}`"
+    >
       <line
-        v-for="r in roads"
-        :key="`${r.id}-outer`"
         :x1="r.x1"
         :y1="r.y1"
         :x2="r.x2"
@@ -78,8 +97,6 @@ const roads = computed(() => {
         stroke-linecap="round"
       />
       <line
-        v-for="r in roads"
-        :key="`${r.id}-inner`"
         :x1="r.x1"
         :y1="r.y1"
         :x2="r.x2"
@@ -89,8 +106,6 @@ const roads = computed(() => {
         stroke-linecap="round"
       />
       <line
-        v-for="r in roads"
-        :key="`${r.id}-center`"
         :x1="r.x1"
         :y1="r.y1"
         :x2="r.x2"
@@ -103,11 +118,12 @@ const roads = computed(() => {
       />
     </template>
 
-    <!-- path: sentiero sterrato beige, dash più lungo, niente linea centrale -->
-    <template v-else-if="roadStyle === 'path'">
+    <!-- path: sentiero sterrato beige -->
+    <template
+      v-for="r in roadsOfKind('path')"
+      :key="`p-${r.id}`"
+    >
       <line
-        v-for="r in roads"
-        :key="`${r.id}-outer`"
         :x1="r.x1"
         :y1="r.y1"
         :x2="r.x2"
@@ -118,8 +134,6 @@ const roads = computed(() => {
         opacity="0.8"
       />
       <line
-        v-for="r in roads"
-        :key="`${r.id}-inner`"
         :x1="r.x1"
         :y1="r.y1"
         :x2="r.x2"
@@ -132,11 +146,12 @@ const roads = computed(() => {
       />
     </template>
 
-    <!-- wasteland: strada crepata rossiccia con tratti spezzati -->
-    <template v-else-if="roadStyle === 'wasteland'">
+    <!-- wasteland: strada crepata -->
+    <template
+      v-for="r in roadsOfKind('wasteland')"
+      :key="`w-${r.id}`"
+    >
       <line
-        v-for="r in roads"
-        :key="`${r.id}-outer`"
         :x1="r.x1"
         :y1="r.y1"
         :x2="r.x2"
@@ -146,8 +161,6 @@ const roads = computed(() => {
         stroke-linecap="round"
       />
       <line
-        v-for="r in roads"
-        :key="`${r.id}-inner`"
         :x1="r.x1"
         :y1="r.y1"
         :x2="r.x2"
@@ -159,8 +172,6 @@ const roads = computed(() => {
         opacity="0.9"
       />
       <line
-        v-for="r in roads"
-        :key="`${r.id}-crack`"
         :x1="r.x1"
         :y1="r.y1"
         :x2="r.x2"
@@ -173,11 +184,104 @@ const roads = computed(() => {
       />
     </template>
 
-    <!-- mixed/legacy fallback: stile MVP -->
-    <template v-else>
+    <!-- highway: doppia corsia + bordi gialli (look interstate) -->
+    <template
+      v-for="r in roadsOfKind('highway')"
+      :key="`h-${r.id}`"
+    >
       <line
-        v-for="r in roads"
-        :key="`${r.id}-outer`"
+        :x1="r.x1"
+        :y1="r.y1"
+        :x2="r.x2"
+        :y2="r.y2"
+        stroke="#0e1110"
+        stroke-width="15"
+        stroke-linecap="round"
+      />
+      <line
+        :x1="r.x1"
+        :y1="r.y1"
+        :x2="r.x2"
+        :y2="r.y2"
+        stroke="#e6c34d"
+        stroke-width="13"
+        stroke-linecap="butt"
+        opacity="0.55"
+      />
+      <line
+        :x1="r.x1"
+        :y1="r.y1"
+        :x2="r.x2"
+        :y2="r.y2"
+        stroke="#3a3f3c"
+        stroke-width="11"
+        stroke-linecap="round"
+      />
+      <line
+        :x1="r.x1"
+        :y1="r.y1"
+        :x2="r.x2"
+        :y2="r.y2"
+        stroke="#e6c34d"
+        stroke-width="0.7"
+        opacity="0.85"
+      />
+      <line
+        :x1="r.x1"
+        :y1="r.y1"
+        :x2="r.x2"
+        :y2="r.y2"
+        stroke="#ffffff"
+        stroke-width="0.7"
+        stroke-dasharray="10 6"
+        stroke-linecap="butt"
+        opacity="0.7"
+      />
+    </template>
+
+    <!-- bridge: passerella sopra acqua, bordo doppio, plank dashed -->
+    <template
+      v-for="r in roadsOfKind('bridge')"
+      :key="`b-${r.id}`"
+    >
+      <line
+        :x1="r.x1"
+        :y1="r.y1"
+        :x2="r.x2"
+        :y2="r.y2"
+        stroke="#22507a"
+        stroke-width="13"
+        stroke-linecap="butt"
+        opacity="0.6"
+      />
+      <line
+        :x1="r.x1"
+        :y1="r.y1"
+        :x2="r.x2"
+        :y2="r.y2"
+        stroke="#7c5a3a"
+        stroke-width="8"
+        stroke-linecap="butt"
+      />
+      <line
+        :x1="r.x1"
+        :y1="r.y1"
+        :x2="r.x2"
+        :y2="r.y2"
+        stroke="#3a2a1a"
+        stroke-width="0.8"
+        stroke-dasharray="3 4"
+        stroke-linecap="butt"
+        opacity="0.85"
+      />
+    </template>
+
+    <!-- mixed/legacy fallback: stile MVP -->
+    <template
+      v-for="r in roadsOfKind('mixed')"
+      :key="`m-${r.id}`"
+    >
+      <line
         :x1="r.x1"
         :y1="r.y1"
         :x2="r.x2"
@@ -187,8 +291,6 @@ const roads = computed(() => {
         stroke-linecap="round"
       />
       <line
-        v-for="r in roads"
-        :key="`${r.id}-inner`"
         :x1="r.x1"
         :y1="r.y1"
         :x2="r.x2"
@@ -198,8 +300,6 @@ const roads = computed(() => {
         stroke-linecap="round"
       />
       <line
-        v-for="r in roads"
-        :key="`${r.id}-center`"
         :x1="r.x1"
         :y1="r.y1"
         :x2="r.x2"
