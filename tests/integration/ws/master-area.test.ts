@@ -9,6 +9,7 @@ import {
   openWsWithCookie, nextMessageMatching,
   createPartyApi, joinPartyApi
 } from '../helpers/ws-helpers'
+import { generate } from '~~/shared/map/generators'
 
 const rootDir = fileURLToPath(new URL('../../..', import.meta.url))
 const tmpDir = mkdtempSync(join(tmpdir(), 'gdr-ws-mastarea-'))
@@ -25,6 +26,19 @@ await setup({
   env: { DATABASE_URL: dbPath }
 })
 
+interface InitLike {
+  me: { currentMapId: string, currentAreaId: string }
+  maps: Array<{ id: string, mapTypeId: string, mapSeed: string, params: Record<string, unknown> }>
+}
+
+// v2d: ricava un'area adiacente alla spawn area dal GeneratedMap della
+// mappa corrente, così i test non dipendono dai nomi legacy AREA_IDS.
+function adjacentArea(init: InitLike): string {
+  const myMap = init.maps.find(m => m.id === init.me.currentMapId)!
+  const gm = generate(myMap.mapTypeId, myMap.mapSeed, myMap.params)
+  return gm.adjacency[init.me.currentAreaId]![0]!
+}
+
 describe('master:area (close/open)', () => {
   it('master chiude un area, user riceve area:updated e non puo entrarci', async () => {
     const { cookie: masterCookie } = await registerApproveLogin(dbPath, uniqueUsername('m'))
@@ -35,29 +49,30 @@ describe('master:area (close/open)', () => {
     const wsM = await openWsWithCookie(seed, masterCookie)
     await nextMessageMatching(wsM, m => m.type === 'state:init')
     const wsA = await openWsWithCookie(seed, annaCookie)
-    await nextMessageMatching(wsA, m => m.type === 'state:init')
+    const initA = await nextMessageMatching(wsA, m => m.type === 'state:init') as unknown as InitLike
+    const targetArea = adjacentArea(initA)
 
-    // Master chiude chiesa
-    wsM.send(JSON.stringify({ type: 'master:area', areaId: 'chiesa', status: 'closed' }))
+    // Master chiude targetArea
+    wsM.send(JSON.stringify({ type: 'master:area', areaId: targetArea, status: 'closed' }))
     const upd = await nextMessageMatching(wsA, m => m.type === 'area:updated')
     const patch = (upd as { patch: { areaId: string, status: string } }).patch
-    expect(patch.areaId).toBe('chiesa')
+    expect(patch.areaId).toBe(targetArea)
     expect(patch.status).toBe('closed')
 
-    // Anna prova a muoversi in chiesa → errore
-    wsA.send(JSON.stringify({ type: 'move:request', toAreaId: 'chiesa' }))
+    // Anna prova a muoversi nella chiusa → errore
+    wsA.send(JSON.stringify({ type: 'move:request', toAreaId: targetArea }))
     const err = await nextMessageMatching(wsA, m => m.type === 'error')
     expect((err as { code: string }).code).toBe('area_closed')
 
     // Master riapre
-    wsM.send(JSON.stringify({ type: 'master:area', areaId: 'chiesa', status: 'intact' }))
+    wsM.send(JSON.stringify({ type: 'master:area', areaId: targetArea, status: 'intact' }))
     const upd2 = await nextMessageMatching(wsA, m => m.type === 'area:updated')
     expect((upd2 as { patch: { status: string } }).patch.status).toBe('intact')
 
-    // Anna ora si muove in chiesa
-    wsA.send(JSON.stringify({ type: 'move:request', toAreaId: 'chiesa' }))
+    // Anna ora si muove
+    wsA.send(JSON.stringify({ type: 'move:request', toAreaId: targetArea }))
     const moved = await nextMessageMatching(wsA, m => m.type === 'player:moved')
-    expect((moved as { toAreaId: string }).toAreaId).toBe('chiesa')
+    expect((moved as { toAreaId: string }).toAreaId).toBe(targetArea)
 
     wsM.close()
     wsA.close()
@@ -70,8 +85,9 @@ describe('master:area (close/open)', () => {
     await joinPartyApi(annaCookie, seed, 'Anna')
 
     const wsA = await openWsWithCookie(seed, annaCookie)
-    await nextMessageMatching(wsA, m => m.type === 'state:init')
-    wsA.send(JSON.stringify({ type: 'master:area', areaId: 'chiesa', status: 'closed' }))
+    const initA = await nextMessageMatching(wsA, m => m.type === 'state:init') as unknown as InitLike
+    const targetArea = adjacentArea(initA)
+    wsA.send(JSON.stringify({ type: 'master:area', areaId: targetArea, status: 'closed' }))
     const err = await nextMessageMatching(wsA, m => m.type === 'error')
     expect((err as { code: string }).code).toBe('master_only')
 

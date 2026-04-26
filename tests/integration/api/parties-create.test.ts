@@ -42,7 +42,10 @@ describe('POST /api/parties', () => {
     // v2a: sessionToken non è più in response (la sessione vive nel cookie)
     expect(r.sessionToken).toBeUndefined()
     const initial = r.initialState as { areasState: unknown[], players: unknown[] }
-    expect(initial.areasState).toHaveLength(14)
+    // T16: createParty non pre-popola più areasState con le 14 aree city
+    // legacy. Le aree del GeneratedMap city vivono sulla spawn party_map
+    // creata dal service; areasState contiene solo override del master.
+    expect(initial.areasState).toHaveLength(0)
     expect(initial.players).toHaveLength(1)
   })
 

@@ -112,7 +112,7 @@ describe('GET /api/parties/:seed/maps', () => {
     expect(body.statusMessage).toBe('master_only')
   })
 
-  it('master su party senza mappe → 200, body []', async () => {
+  it('master su party appena creata → 200, body con la sola spawn map auto', async () => {
     const a = await registerApproveLogin(dbPath, uniqueUsername('a'))
     const seed = await createParty(a.cookie, 'Master')
     const res = await fetch(`/api/parties/${seed}/maps`, {
@@ -121,7 +121,10 @@ describe('GET /api/parties/:seed/maps', () => {
     expect(res.status).toBe(200)
     const body = await res.json() as PartyMapResponse[]
     expect(Array.isArray(body)).toBe(true)
-    expect(body).toEqual([])
+    // T16: createParty crea automaticamente la spawn map city.
+    expect(body.length).toBe(1)
+    expect(body[0]!.isSpawn).toBe(true)
+    expect(body[0]!.mapTypeId).toBe('city')
   })
 })
 
@@ -149,10 +152,13 @@ describe('POST /api/parties/:seed/maps', () => {
     })
     expect(list.status).toBe(200)
     const rows = await list.json() as PartyMapResponse[]
-    expect(rows.length).toBe(1)
-    expect(rows[0]!.id).toBe(created.id)
-    expect(rows[0]!.memberCount).toBe(0)
-    expect(rows[0]!.zombieCount).toBe(0)
+    // T16: la party nasce con una spawn city auto, quindi dopo il POST
+    // ne abbiamo 2 (la auto + Centro).
+    expect(rows.length).toBe(2)
+    const target = rows.find(r => r.id === created.id)!
+    expect(target).toBeDefined()
+    expect(target.memberCount).toBe(0)
+    expect(target.zombieCount).toBe(0)
   })
 
   it('mapTypeId inesistente → 404 map_type_not_found', async () => {

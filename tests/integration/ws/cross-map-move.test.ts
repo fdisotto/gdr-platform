@@ -50,21 +50,22 @@ function uuid(): string {
 }
 
 // Setup multi-mappa diretto su DB condiviso col server di test:
-// - 2 party_maps (city + country) per la party
+// - riusa la spawn city già creata da T16/createParty come cityMap
+// - aggiunge una countryMap
 // - 1 transition city→country (non bidirezionale, basta una direzione)
-// - currentMapId valorizzato per i player passati in playerIds
 function setupMaps(seed: string, playerIds: string[]): MapSetup {
   const db = new Database(dbPath)
   try {
-    const cityMapId = uuid()
-    const cityMapSeed = uuid()
+    const spawnRow = db.prepare(
+      `SELECT id, map_seed FROM party_maps WHERE party_seed = ? AND is_spawn = 1`
+    ).get(seed) as { id: string, map_seed: string } | undefined
+    if (!spawnRow) throw new Error('spawn map mancante: createParty l\'avrebbe dovuta creare')
+    const cityMapId = spawnRow.id
+    const cityMapSeed = spawnRow.map_seed
+
     const countryMapId = uuid()
     const countryMapSeed = uuid()
     const now = Date.now()
-
-    db.prepare(`INSERT INTO party_maps (id, party_seed, map_type_id, map_seed, name, is_spawn, created_at)
-                VALUES (?, ?, 'city', ?, 'Citta', 1, ?)`)
-      .run(cityMapId, seed, cityMapSeed, now)
     db.prepare(`INSERT INTO party_maps (id, party_seed, map_type_id, map_seed, name, is_spawn, created_at)
                 VALUES (?, ?, 'country', ?, 'Campagna', 0, ?)`)
       .run(countryMapId, seed, countryMapSeed, now + 1)
@@ -74,15 +75,11 @@ function setupMaps(seed: string, playerIds: string[]): MapSetup {
     const countryGm = generate('country', countryMapSeed, { forestRatio: 0.4, riverChance: 0.6 })
 
     const cityFromAreaId = cityGm.spawnAreaId
-    // Scegli un'area adiacente al from per il test intra-map adiacente.
     const cityAdjs = cityGm.adjacency[cityFromAreaId] ?? []
     const cityOtherAreaId = cityAdjs[0]!
-    // Un'area NON adiacente al from per il test "not_adjacent".
     const cityNonAdjacentAreaId = cityGm.areas.find(a => a.id !== cityFromAreaId && !cityAdjs.includes(a.id))!.id
 
     const countryToAreaId = countryGm.spawnAreaId
-    // Un'altra area country qualsiasi (per test "master cross-map senza
-    // transition" verso un'area diversa da quella del transition).
     const countryOtherAreaId = countryGm.areas.find(a => a.id !== countryToAreaId)!.id
 
     const transitionId = uuid()
@@ -90,12 +87,9 @@ function setupMaps(seed: string, playerIds: string[]): MapSetup {
                 VALUES (?, ?, ?, ?, ?, ?, NULL, ?)`)
       .run(transitionId, seed, cityMapId, cityFromAreaId, countryMapId, countryToAreaId, now)
 
-    // Aggiorna i player perchè abbiano current_map_id = cityMapId e
-    // current_area_id = cityFromAreaId (override del default 'piazza').
-    const upd = db.prepare('UPDATE players SET current_map_id = ?, current_area_id = ? WHERE id = ?')
-    for (const pid of playerIds) {
-      upd.run(cityMapId, cityFromAreaId, pid)
-    }
+    // I player hanno già current_map_id = cityMapId e current_area_id =
+    // cityFromAreaId grazie a T16/T17 (createParty/joinParty). Niente UPDATE.
+    void playerIds
 
     return {
       cityMapId, cityMapSeed,

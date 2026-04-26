@@ -9,6 +9,7 @@ import {
   openWsWithCookie, nextMessageMatching,
   createPartyApi, joinPartyApi
 } from '../helpers/ws-helpers'
+import { generate } from '~~/shared/map/generators'
 
 const rootDir = fileURLToPath(new URL('../../..', import.meta.url))
 const tmpDir = mkdtempSync(join(tmpdir(), 'gdr-ws-move-'))
@@ -29,6 +30,31 @@ await setup({
   env: { DATABASE_URL: dbPath }
 })
 
+interface StateInit {
+  me: { currentMapId: string, currentAreaId: string }
+  maps: Array<{ id: string, mapTypeId: string, mapSeed: string, params: Record<string, unknown> }>
+}
+
+interface AreasResolved {
+  myAreaId: string
+  adjacentAreaId: string
+  nonAdjacentAreaId: string
+}
+
+// v2d: ricava area corrente + un'area adiacente + un'area NON adiacente
+// dalla spawn map della party (creata da T16/createParty). Le aree hanno
+// id dinamici (slug del generator), niente più 'piazza'/'chiesa' hardcoded.
+function resolveAreasFromInit(init: StateInit): AreasResolved {
+  const myMap = init.maps.find(m => m.id === init.me.currentMapId)!
+  const gm = generate(myMap.mapTypeId, myMap.mapSeed, myMap.params)
+  const myAreaId = init.me.currentAreaId
+  const adj = gm.adjacency[myAreaId] ?? []
+  const adjacentAreaId = adj[0]!
+  const adjSet = new Set<string>([myAreaId, ...adj])
+  const nonAdjacentAreaId = gm.areas.find(a => !adjSet.has(a.id))!.id
+  return { myAreaId, adjacentAreaId, nonAdjacentAreaId }
+}
+
 describe('move:request', () => {
   it('muove verso area adiacente con broadcast player:moved', async () => {
     const { cookie: masterCookie } = await registerApproveLogin(dbPath, uniqueUsername('mm'))
@@ -39,14 +65,15 @@ describe('move:request', () => {
     const masterWs = await openWsWithCookie(seed, masterCookie)
     await nextMessageMatching(masterWs, m => m.type === 'state:init')
     const annaWs = await openWsWithCookie(seed, annaCookie)
-    await nextMessageMatching(annaWs, m => m.type === 'state:init')
+    const annaInit = await nextMessageMatching(annaWs, m => m.type === 'state:init') as unknown as StateInit
+    const { adjacentAreaId } = resolveAreasFromInit(annaInit)
 
-    annaWs.send(JSON.stringify({ type: 'move:request', toAreaId: 'chiesa' }))
+    annaWs.send(JSON.stringify({ type: 'move:request', toAreaId: adjacentAreaId }))
 
     const masterMoved = await nextMessageMatching(masterWs, m => m.type === 'player:moved')
     const annaMoved = await nextMessageMatching(annaWs, m => m.type === 'player:moved')
-    expect((masterMoved as { toAreaId: string }).toAreaId).toBe('chiesa')
-    expect((annaMoved as { toAreaId: string }).toAreaId).toBe('chiesa')
+    expect((masterMoved as { toAreaId: string }).toAreaId).toBe(adjacentAreaId)
+    expect((annaMoved as { toAreaId: string }).toAreaId).toBe(adjacentAreaId)
 
     masterWs.close()
     annaWs.close()
@@ -59,9 +86,10 @@ describe('move:request', () => {
     await joinPartyApi(lucaCookie, seed, 'Luca')
 
     const ws = await openWsWithCookie(seed, lucaCookie)
-    await nextMessageMatching(ws, m => m.type === 'state:init')
+    const init = await nextMessageMatching(ws, m => m.type === 'state:init') as unknown as StateInit
+    const { nonAdjacentAreaId } = resolveAreasFromInit(init)
 
-    ws.send(JSON.stringify({ type: 'move:request', toAreaId: 'rifugio' }))
+    ws.send(JSON.stringify({ type: 'move:request', toAreaId: nonAdjacentAreaId }))
     const err = await nextMessageMatching(ws, m => m.type === 'error')
     expect((err as { code: string }).code).toBe('not_adjacent')
 
@@ -73,11 +101,12 @@ describe('move:request', () => {
     const seed = await createPartyApi(masterCookie, 'MM3')
 
     const ws = await openWsWithCookie(seed, masterCookie)
-    await nextMessageMatching(ws, m => m.type === 'state:init')
+    const init = await nextMessageMatching(ws, m => m.type === 'state:init') as unknown as StateInit
+    const { nonAdjacentAreaId } = resolveAreasFromInit(init)
 
-    ws.send(JSON.stringify({ type: 'move:request', toAreaId: 'rifugio' }))
+    ws.send(JSON.stringify({ type: 'move:request', toAreaId: nonAdjacentAreaId }))
     const moved = await nextMessageMatching(ws, m => m.type === 'player:moved')
-    expect((moved as { toAreaId: string }).toAreaId).toBe('rifugio')
+    expect((moved as { toAreaId: string }).toAreaId).toBe(nonAdjacentAreaId)
 
     ws.close()
   })

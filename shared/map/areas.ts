@@ -96,8 +96,16 @@ export function uniqueAdjacencyPairs(): Array<[AreaId, AreaId]> {
   return pairs
 }
 
+// v2d: con multi-mappa gli area-id non sono più solo le 14 stringhe MVP:
+// ogni GeneratedMap usa slug deterministici (es. `piazza_centrale`,
+// `chiesa_3`, `bunker_2`). Qui accettiamo qualunque slug well-formed
+// (lettere/cifre/underscore, ≤64 char) per non bloccare il path WS al
+// check sintattico iniziale; la validazione semantica (l'area esiste
+// nella mappa corrente del player) avviene a valle dove serve.
 export function isAreaId(value: unknown): value is AreaId {
-  return typeof value === 'string' && (AREA_IDS as readonly string[]).includes(value)
+  if (typeof value !== 'string' || value.length === 0 || value.length > 64) return false
+  if ((AREA_IDS as readonly string[]).includes(value)) return true
+  return /^[a-z][a-z0-9_]*$/.test(value)
 }
 
 export function areAdjacent(a: AreaId, b: AreaId): boolean {

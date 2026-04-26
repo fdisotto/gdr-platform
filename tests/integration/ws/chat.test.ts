@@ -29,17 +29,20 @@ await setup({
   env: { DATABASE_URL: dbPath }
 })
 
+interface InitLike { me: { currentAreaId: string } }
+
 describe('chat:send (say/emote/ooc)', () => {
   it('master invia say e riceve message:new', async () => {
     const { cookie: masterCookie } = await registerApproveLogin(dbPath, uniqueUsername('m1'))
     const seed = await createPartyApi(masterCookie, 'M1')
 
     const ws = await openWsWithCookie(seed, masterCookie)
-    const init = await nextMessage(ws)
+    const init = await nextMessage(ws) as unknown as InitLike & { type: string }
     expect(init.type).toBe('state:init')
+    const myArea = init.me.currentAreaId
 
     ws.send(JSON.stringify({
-      type: 'chat:send', kind: 'say', body: 'ciao', areaId: 'piazza'
+      type: 'chat:send', kind: 'say', body: 'ciao', areaId: myArea
     }))
     const msg = await nextMessage(ws)
     expect(msg.type).toBe('message:new')
@@ -60,10 +63,11 @@ describe('chat:send (say/emote/ooc)', () => {
     await nextMessageMatching(masterWs, m => m.type === 'state:init')
 
     const annaWs = await openWsWithCookie(seed, annaCookie)
-    await nextMessageMatching(annaWs, m => m.type === 'state:init')
+    const annaInit = await nextMessageMatching(annaWs, m => m.type === 'state:init') as unknown as InitLike
+    const annaArea = annaInit.me.currentAreaId
 
     annaWs.send(JSON.stringify({
-      type: 'chat:send', kind: 'say', body: 'aiuto', areaId: 'piazza'
+      type: 'chat:send', kind: 'say', body: 'aiuto', areaId: annaArea
     }))
 
     const [annaEcho, masterReceive] = await Promise.all([
@@ -83,18 +87,19 @@ describe('chat:send (say/emote/ooc)', () => {
     const seed = await createPartyApi(masterCookie, 'M3')
 
     const ws = await openWsWithCookie(seed, masterCookie)
-    await nextMessage(ws)
+    const init = await nextMessage(ws) as unknown as InitLike
+    const myArea = init.me.currentAreaId
 
-    ws.send(JSON.stringify({ type: 'chat:send', kind: 'emote', body: 'annuisce', areaId: 'piazza' }))
+    ws.send(JSON.stringify({ type: 'chat:send', kind: 'emote', body: 'annuisce', areaId: myArea }))
     const emote = await nextMessage(ws)
     expect((emote.message as { kind: string }).kind).toBe('emote')
 
-    ws.send(JSON.stringify({ type: 'chat:send', kind: 'ooc', body: '((sento fame))', areaId: 'piazza' }))
+    ws.send(JSON.stringify({ type: 'chat:send', kind: 'ooc', body: '((sento fame))', areaId: myArea }))
     const ooc = await nextMessage(ws)
     expect((ooc.message as { kind: string }).kind).toBe('ooc')
 
     // kind non valido (es. 'system' non è nella ChatKind enum) → invalid_payload
-    ws.send(JSON.stringify({ type: 'chat:send', kind: 'system', body: 'x', areaId: 'piazza' }))
+    ws.send(JSON.stringify({ type: 'chat:send', kind: 'system', body: 'x', areaId: myArea }))
     const err = await nextMessage(ws)
     expect(err.type).toBe('error')
     expect(err.code).toBe('invalid_payload')

@@ -9,6 +9,7 @@ import {
   openWsWithCookie, nextMessageMatching,
   createPartyApi, joinPartyApi
 } from '../helpers/ws-helpers'
+import { generate } from '~~/shared/map/generators'
 
 const rootDir = fileURLToPath(new URL('../../..', import.meta.url))
 const tmpDir = mkdtempSync(join(tmpdir(), 'gdr-ws-chatadv-'))
@@ -25,6 +26,17 @@ await setup({
   env: { DATABASE_URL: dbPath }
 })
 
+interface InitLike {
+  me: { id: string, currentMapId: string, currentAreaId: string }
+  maps: Array<{ id: string, mapTypeId: string, mapSeed: string, params: Record<string, unknown> }>
+}
+
+function adjacentArea(init: InitLike): string {
+  const myMap = init.maps.find(m => m.id === init.me.currentMapId)!
+  const gm = generate(myMap.mapTypeId, myMap.mapSeed, myMap.params)
+  return gm.adjacency[init.me.currentAreaId]![0]!
+}
+
 describe('chat:send whisper/dm/roll', () => {
   it('whisper tra due player stessa area: entrambi + master', async () => {
     const { cookie: masterCookie } = await registerApproveLogin(dbPath, uniqueUsername('m'))
@@ -37,15 +49,15 @@ describe('chat:send whisper/dm/roll', () => {
     const wsM = await openWsWithCookie(seed, masterCookie)
     await nextMessageMatching(wsM, m => m.type === 'state:init')
     const wsA = await openWsWithCookie(seed, annaCookie)
-    const aInit = await nextMessageMatching(wsA, m => m.type === 'state:init')
-    void aInit
+    const aInit = await nextMessageMatching(wsA, m => m.type === 'state:init') as unknown as InitLike
     const wsB = await openWsWithCookie(seed, beaCookie)
-    const bInit = await nextMessageMatching(wsB, m => m.type === 'state:init')
-    const beaId = (bInit as { me: { id: string } }).me.id
+    const bInit = await nextMessageMatching(wsB, m => m.type === 'state:init') as unknown as InitLike
+    const beaId = bInit.me.id
+    const myArea = aInit.me.currentAreaId
 
     wsA.send(JSON.stringify({
       type: 'chat:send', kind: 'whisper', body: 'segreto',
-      areaId: 'piazza', targetPlayerId: 'Bea'
+      areaId: myArea, targetPlayerId: 'Bea'
     }))
 
     const [mA, mB, mM] = await Promise.all([
@@ -71,18 +83,19 @@ describe('chat:send whisper/dm/roll', () => {
     await joinPartyApi(beaCookie, seed, 'Bea')
 
     const wsA = await openWsWithCookie(seed, annaCookie)
-    await nextMessageMatching(wsA, m => m.type === 'state:init')
+    const aInit = await nextMessageMatching(wsA, m => m.type === 'state:init') as unknown as InitLike
     const wsB = await openWsWithCookie(seed, beaCookie)
-    await nextMessageMatching(wsB, m => m.type === 'state:init')
+    const bInit = await nextMessageMatching(wsB, m => m.type === 'state:init') as unknown as InitLike
+    const adjForB = adjacentArea(bInit)
 
-    // B si muove in chiesa
-    wsB.send(JSON.stringify({ type: 'move:request', toAreaId: 'chiesa' }))
+    // B si muove in area adiacente
+    wsB.send(JSON.stringify({ type: 'move:request', toAreaId: adjForB }))
     await nextMessageMatching(wsB, m => m.type === 'player:moved')
 
-    // A tenta whisper verso B
+    // A tenta whisper verso B (che ora sta altrove)
     wsA.send(JSON.stringify({
       type: 'chat:send', kind: 'whisper', body: 'prova',
-      areaId: 'piazza', targetPlayerId: 'Bea'
+      areaId: aInit.me.currentAreaId, targetPlayerId: 'Bea'
     }))
     const err = await nextMessageMatching(wsA, m => m.type === 'error')
     expect((err as { code: string }).code).toBe('forbidden')
@@ -102,10 +115,11 @@ describe('chat:send whisper/dm/roll', () => {
     const wsA = await openWsWithCookie(seed, annaCookie)
     await nextMessageMatching(wsA, m => m.type === 'state:init')
     const wsB = await openWsWithCookie(seed, beaCookie)
-    await nextMessageMatching(wsB, m => m.type === 'state:init')
+    const bInit = await nextMessageMatching(wsB, m => m.type === 'state:init') as unknown as InitLike
+    const adjForB = adjacentArea(bInit)
 
-    // B va in case
-    wsB.send(JSON.stringify({ type: 'move:request', toAreaId: 'case' }))
+    // B si sposta in area adiacente
+    wsB.send(JSON.stringify({ type: 'move:request', toAreaId: adjForB }))
     await nextMessageMatching(wsB, m => m.type === 'player:moved')
 
     wsA.send(JSON.stringify({
@@ -126,11 +140,12 @@ describe('chat:send whisper/dm/roll', () => {
     const seed = await createPartyApi(masterCookie, 'MM4')
 
     const wsM = await openWsWithCookie(seed, masterCookie)
-    await nextMessageMatching(wsM, m => m.type === 'state:init')
+    const init = await nextMessageMatching(wsM, m => m.type === 'state:init') as unknown as InitLike
+    const myArea = init.me.currentAreaId
 
     wsM.send(JSON.stringify({
       type: 'chat:send', kind: 'roll', body: '2d6', rollExpr: '2d6',
-      areaId: 'piazza'
+      areaId: myArea
     }))
 
     const m = await nextMessageMatching(wsM, x => x.type === 'message:new')
@@ -149,11 +164,12 @@ describe('chat:send whisper/dm/roll', () => {
     const seed = await createPartyApi(masterCookie, 'MM5')
 
     const ws = await openWsWithCookie(seed, masterCookie)
-    await nextMessageMatching(ws, m => m.type === 'state:init')
+    const init = await nextMessageMatching(ws, m => m.type === 'state:init') as unknown as InitLike
+    const myArea = init.me.currentAreaId
 
     ws.send(JSON.stringify({
       type: 'chat:send', kind: 'roll', body: 'gabba', rollExpr: 'gabba',
-      areaId: 'piazza'
+      areaId: myArea
     }))
     const err = await nextMessageMatching(ws, m => m.type === 'error')
     expect((err as { code: string }).code).toBe('bad_roll_expr')
