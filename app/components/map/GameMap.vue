@@ -482,6 +482,12 @@ function screenToLogical(clientX: number, clientY: number): { x: number, y: numb
 // Drag area
 const draggingAreaId = ref<string | null>(null)
 const dragOrigin = ref<{ logicalX: number, logicalY: number, areaX: number, areaY: number } | null>(null)
+// Marker: true se durante il drag corrente il puntatore si è mosso oltre
+// la soglia. Usato per sopprimere il click sintetico che il browser emette
+// dopo pointerup, così il drag&drop non triggera onAreaEditClick (toggle
+// strada) per sbaglio.
+const dragHadMovement = ref(false)
+const DRAG_MOVE_THRESHOLD = 3
 
 function startAreaDrag(e: PointerEvent, areaId: string) {
   if (!editMode.value || !props.mapId) return
@@ -491,6 +497,7 @@ function startAreaDrag(e: PointerEvent, areaId: string) {
   if (!lp) return
   draggingAreaId.value = areaId
   dragOrigin.value = { logicalX: lp.x, logicalY: lp.y, areaX: a.svg.x, areaY: a.svg.y }
+  dragHadMovement.value = false
   ;(e.target as Element | null)?.setPointerCapture?.(e.pointerId)
   e.stopPropagation()
 }
@@ -501,6 +508,9 @@ function moveAreaDrag(e: PointerEvent) {
   if (!lp) return
   const dx = lp.x - dragOrigin.value.logicalX
   const dy = lp.y - dragOrigin.value.logicalY
+  if (Math.hypot(dx, dy) > DRAG_MOVE_THRESHOLD) {
+    dragHadMovement.value = true
+  }
   // Aggiornamento ottimistico locale: il broadcast del server applicherà
   // il delta finale a tutti. Per ora muoviamo solo lo SVG visualmente
   // tramite override transform sul gruppo dell'area (vedi template).
@@ -589,6 +599,13 @@ const roadFromAreaId = ref<string | null>(null)
 function onAreaEditClick(areaId: string, e: MouseEvent) {
   if (!editMode.value || !props.mapId) return
   e.stopPropagation()
+  // Sopprimi il click sintetico emesso dopo un drag effettivo: il drag
+  // ha già committato master:area-move via endAreaDrag, non vogliamo
+  // anche un toggle strada.
+  if (dragHadMovement.value) {
+    dragHadMovement.value = false
+    return
+  }
   if (!roadFromAreaId.value) {
     roadFromAreaId.value = areaId
     return
@@ -622,6 +639,23 @@ function onRoadClick(areaA: string, areaB: string) {
     areaA,
     areaB
   })
+}
+
+// ── v2d-edit: status zona (intact / infested / ruined / closed) ────────────
+// In edit mode, sotto il bordo dell'area appaiono 4 pulsanti mini per
+// cambiare rapidamente lo stato. Riusa il già esistente master:area WS
+// event (gestito da handleMasterArea, persistito in areas_state).
+type AreaStatus = 'intact' | 'infested' | 'ruined' | 'closed'
+const STATUS_OPTIONS: Array<{ value: AreaStatus, color: string, label: string }> = [
+  { value: 'intact', color: 'var(--z-green-300, #6ec3a6)', label: 'intatta' },
+  { value: 'infested', color: 'var(--z-rust-300, #d97757)', label: 'infestata' },
+  { value: 'ruined', color: 'var(--z-text-lo, #6b6b6b)', label: 'in rovina' },
+  { value: 'closed', color: 'var(--z-blood-300, #c26f8e)', label: 'chiusa' }
+]
+
+function setAreaStatus(areaId: string, status: AreaStatus) {
+  if (!editMode.value) return
+  connection.send({ type: 'master:area', areaId, status })
 }
 
 // Aggiungi area al click sullo sfondo (in edit mode, solo su zona vuota)
@@ -850,6 +884,24 @@ function onSvgBgClick(e: MouseEvent) {
                   fill="white"
                   style="pointer-events: none; user-select: none"
                 >×</text>
+              </g>
+              <!-- v2d-edit: 4 pulsanti status zona (intact/infested/ruined/closed)
+                   in alto a sinistra. Bordo bianco evidenzia lo status corrente. -->
+              <g
+                v-for="(s, idx) in STATUS_OPTIONS"
+                :key="`st-${a.id}-${s.value}`"
+                style="cursor: pointer"
+                @click.stop="setAreaStatus(a.id, s.value)"
+              >
+                <title>{{ s.label }}</title>
+                <circle
+                  :cx="a.svg.x + 12 + idx * 16"
+                  :cy="a.svg.y + 12"
+                  r="6"
+                  :fill="s.color"
+                  :stroke="(stateById.get(a.id)?.status ?? 'intact') === s.value ? 'white' : 'transparent'"
+                  stroke-width="2"
+                />
               </g>
             </g>
           </g>
