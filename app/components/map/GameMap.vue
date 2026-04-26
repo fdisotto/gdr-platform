@@ -815,10 +815,11 @@ function onSvgBgClick(e: MouseEvent) {
     <MapLegend />
     <MapPlayersBox />
 
-    <!-- v2d-edit: toggle "Modifica mappa" (master only, solo se mapId valido). -->
+    <!-- v2d-edit: toggle "Modifica mappa" (master only, solo se mapId valido).
+         Top-left per non collidere con MapPlayersBox (top-right). -->
     <div
       v-if="isMaster && props.mapId"
-      class="absolute top-3 right-3 z-10"
+      class="absolute top-3 left-3 z-10"
     >
       <button
         type="button"
@@ -832,7 +833,7 @@ function onSvgBgClick(e: MouseEvent) {
       </button>
       <p
         v-if="editMode"
-        class="mt-1 text-xs font-mono-z text-right"
+        class="mt-1 text-xs font-mono-z"
         style="color: var(--z-text-md); max-width: 220px"
       >
         drag = sposta · doppio-click = rinomina · × = rimuovi · click vuoto = aggiungi
