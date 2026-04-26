@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { makeKeyed } from '~/stores/factory'
-import type { PartyMapPublic, TransitionPublic } from '~~/shared/protocol/ws'
+import type { PartyMapPublic, TransitionPublic, AreaOverridePublic } from '~~/shared/protocol/ws'
 
 export interface MeSnapshot {
   id: string
@@ -44,6 +44,8 @@ function partyStoreFactory() {
   const maps = ref<PartyMapPublic[]>([])
   const transitions = ref<TransitionPublic[]>([])
   const currentMapId = ref<string | null>(null)
+  // v2d-edit: override master sulle aree per ogni mappa.
+  const areaOverrides = ref<AreaOverridePublic[]>([])
 
   function hydrate(payload: {
     me: MeSnapshot
@@ -53,6 +55,7 @@ function partyStoreFactory() {
     maps?: PartyMapPublic[]
     transitions?: TransitionPublic[]
     currentMapId?: string | null
+    areaOverrides?: AreaOverridePublic[]
   }) {
     me.value = payload.me
     party.value = payload.party
@@ -61,6 +64,7 @@ function partyStoreFactory() {
     maps.value = payload.maps ?? []
     transitions.value = payload.transitions ?? []
     currentMapId.value = payload.currentMapId ?? payload.me.currentMapId ?? null
+    areaOverrides.value = payload.areaOverrides ?? []
   }
 
   function reset() {
@@ -71,12 +75,33 @@ function partyStoreFactory() {
     maps.value = []
     transitions.value = []
     currentMapId.value = null
+    areaOverrides.value = []
+  }
+
+  function applyOverride(o: AreaOverridePublic) {
+    const idx = areaOverrides.value.findIndex(
+      x => x.mapId === o.mapId && x.areaId === o.areaId
+    )
+    if (idx === -1) areaOverrides.value = [...areaOverrides.value, o]
+    else {
+      const copy = [...areaOverrides.value]
+      copy[idx] = o
+      areaOverrides.value = copy
+    }
+  }
+
+  function removeOverride(mapId: string, areaId: string) {
+    areaOverrides.value = areaOverrides.value.filter(
+      x => !(x.mapId === mapId && x.areaId === areaId)
+    )
   }
 
   return {
     me, party, players, areasState,
     maps, transitions, currentMapId,
-    hydrate, reset
+    areaOverrides,
+    hydrate, reset,
+    applyOverride, removeOverride
   }
 }
 

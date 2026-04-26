@@ -34,6 +34,9 @@ const props = defineProps<{
   // v2d T28: transitions outgoing dalla mappa attiva. Quando il player clicca
   // un'area target di una transition, send move:request con toMapId+toAreaId.
   transitions?: TransitionOutgoing[]
+  // v2d-edit: mapId della mappa attiva (necessario per gli eventi
+  // master:area-* che richiedono target mapId). null = mappa legacy.
+  mapId?: string | null
 }>()
 
 const areas = computed<readonly Area[]>(() => {
@@ -423,6 +426,169 @@ function onTransitionClick(toMapId: string, toAreaId: string) {
   if (!partyStore.me) return
   connection.send({ type: 'move:request', toAreaId, toMapId })
 }
+
+// ── v2d-edit: modalità "Modifica mappa" (master) ────────────────────────────
+// Drag area per spostarla, doppio click per rinominare, X per rimuovere,
+// click sullo sfondo per aggiungere una nuova area custom.
+const editMode = ref(false)
+function toggleEdit() {
+  if (!isMaster.value) return
+  editMode.value = !editMode.value
+  // Esce dal menu/edit input se si chiude la modalità
+  if (!editMode.value) {
+    renamingAreaId.value = null
+    renameDraft.value = ''
+  }
+}
+
+// Conversione coord schermo → coord logiche (1000x700) tenendo conto di
+// fit-to-container (contentTransform) + zoom/pan utente (userTransform).
+function screenToLogical(clientX: number, clientY: number): { x: number, y: number } | null {
+  if (!containerEl.value) return null
+  const rect = containerEl.value.getBoundingClientRect()
+  const vx = clientX - rect.left
+  const vy = clientY - rect.top
+  // Inverti userTransform: vx = panX + zoom * vx', → vx' = (vx - panX) / zoom
+  const ux = (vx - panX.value) / zoom.value
+  const uy = (vy - panY.value) / zoom.value
+  // Inverti contentTransform: ux = tx + s * lx → lx = (ux - tx) / s
+  const s = contentScale.value
+  const tx = (containerW.value - LOGICAL_W * s) / 2
+  const ty = (containerH.value - LOGICAL_H * s) / 2
+  return { x: (ux - tx) / s, y: (uy - ty) / s }
+}
+
+// Drag area
+const draggingAreaId = ref<string | null>(null)
+const dragOrigin = ref<{ logicalX: number, logicalY: number, areaX: number, areaY: number } | null>(null)
+
+function startAreaDrag(e: PointerEvent, areaId: string) {
+  if (!editMode.value || !props.mapId) return
+  const a = areas.value.find(x => x.id === areaId)
+  if (!a) return
+  const lp = screenToLogical(e.clientX, e.clientY)
+  if (!lp) return
+  draggingAreaId.value = areaId
+  dragOrigin.value = { logicalX: lp.x, logicalY: lp.y, areaX: a.svg.x, areaY: a.svg.y }
+  ;(e.target as Element | null)?.setPointerCapture?.(e.pointerId)
+  e.stopPropagation()
+}
+
+function moveAreaDrag(e: PointerEvent) {
+  if (!draggingAreaId.value || !dragOrigin.value) return
+  const lp = screenToLogical(e.clientX, e.clientY)
+  if (!lp) return
+  const dx = lp.x - dragOrigin.value.logicalX
+  const dy = lp.y - dragOrigin.value.logicalY
+  // Aggiornamento ottimistico locale: il broadcast del server applicherà
+  // il delta finale a tutti. Per ora muoviamo solo lo SVG visualmente
+  // tramite override transform sul gruppo dell'area (vedi template).
+  liveDragOffset.value = { id: draggingAreaId.value, dx, dy }
+}
+
+const liveDragOffset = ref<{ id: string, dx: number, dy: number } | null>(null)
+
+function endAreaDrag(e: PointerEvent) {
+  if (!draggingAreaId.value || !dragOrigin.value || !props.mapId) {
+    draggingAreaId.value = null
+    dragOrigin.value = null
+    liveDragOffset.value = null
+    return
+  }
+  const lp = screenToLogical(e.clientX, e.clientY)
+  if (!lp) {
+    draggingAreaId.value = null
+    dragOrigin.value = null
+    liveDragOffset.value = null
+    return
+  }
+  const dx = lp.x - dragOrigin.value.logicalX
+  const dy = lp.y - dragOrigin.value.logicalY
+  const newX = Math.max(0, Math.min(LOGICAL_W, dragOrigin.value.areaX + dx))
+  const newY = Math.max(0, Math.min(LOGICAL_H, dragOrigin.value.areaY + dy))
+  if (Math.hypot(dx, dy) > 4) {
+    connection.send({
+      type: 'master:area-move',
+      mapId: props.mapId,
+      areaId: draggingAreaId.value,
+      x: newX,
+      y: newY
+    })
+  }
+  draggingAreaId.value = null
+  dragOrigin.value = null
+  liveDragOffset.value = null
+  ;(e.target as Element | null)?.releasePointerCapture?.(e.pointerId)
+}
+
+// Rinomina inline
+const renamingAreaId = ref<string | null>(null)
+const renameDraft = ref('')
+function startRename(areaId: string) {
+  if (!editMode.value || !props.mapId) return
+  const a = areas.value.find(x => x.id === areaId)
+  if (!a) return
+  renamingAreaId.value = areaId
+  renameDraft.value = a.name
+}
+function commitRename() {
+  if (!renamingAreaId.value || !props.mapId) return
+  const name = renameDraft.value.trim()
+  if (name) {
+    connection.send({
+      type: 'master:area-rename',
+      mapId: props.mapId,
+      areaId: renamingAreaId.value,
+      name
+    })
+  }
+  renamingAreaId.value = null
+  renameDraft.value = ''
+}
+function cancelRename() {
+  renamingAreaId.value = null
+  renameDraft.value = ''
+}
+
+// Rimuovi area
+function removeArea(areaId: string) {
+  if (!editMode.value || !props.mapId) return
+  if (!confirm('Rimuovere questa area dalla mappa?')) return
+  connection.send({
+    type: 'master:area-remove',
+    mapId: props.mapId,
+    areaId
+  })
+}
+
+// Aggiungi area al click sullo sfondo (in edit mode, solo su zona vuota)
+function addAreaAtPoint(clientX: number, clientY: number) {
+  if (!editMode.value || !props.mapId) return
+  const lp = screenToLogical(clientX, clientY)
+  if (!lp) return
+  const name = prompt('Nome della nuova area:', 'Nuova area')
+  if (!name || !name.trim()) return
+  // Centro l'area sulla coord cliccata
+  const W = 120
+  const H = 90
+  connection.send({
+    type: 'master:area-add',
+    mapId: props.mapId,
+    name: name.trim().slice(0, 64),
+    x: Math.max(0, lp.x - W / 2),
+    y: Math.max(0, lp.y - H / 2),
+    w: W,
+    h: H
+  })
+}
+
+function onSvgBgClick(e: MouseEvent) {
+  if (!editMode.value) return
+  // Solo se il click è sullo SVG-background, non su un'area child.
+  // Il check è basato sul currentTarget vs target: se uguali, è il bg.
+  if (e.currentTarget !== e.target) return
+  addAreaAtPoint(e.clientX, e.clientY)
+}
 </script>
 
 <template>
@@ -521,12 +687,15 @@ function onTransitionClick(toMapId: string, toAreaId: string) {
         :width="containerW"
         :height="containerH"
         fill="url(#map-bg)"
+        :style="editMode ? 'cursor: crosshair' : ''"
+        @click="onSvgBgClick"
       />
       <rect
         :width="containerW"
         :height="containerH"
         filter="url(#map-grain)"
         opacity="0.3"
+        style="pointer-events: none"
       />
 
       <!-- User zoom/pan applicato sopra al fit-to-container -->
@@ -546,17 +715,62 @@ function onTransitionClick(toMapId: string, toAreaId: string) {
             @transition-click="onTransitionClick"
           />
 
-          <MapArea
+          <g
             v-for="a in areas"
-            :key="a.id"
-            :area="a"
-            :state="stateById.get(a.id) ?? null"
-            :is-current="currentAreaId === a.id"
-            :is-adjacent="adjacentSet.has(a.id)"
-            :is-master="isMaster"
-            :player-count="(playersByArea.get(a.id)?.length ?? 0)"
-            @click="onAreaClick(a.id as AreaId)"
-          />
+            :key="`area-wrap-${a.id}`"
+            :transform="liveDragOffset && liveDragOffset.id === a.id ? `translate(${liveDragOffset.dx}, ${liveDragOffset.dy})` : ''"
+          >
+            <MapArea
+              :area="a"
+              :state="stateById.get(a.id) ?? null"
+              :is-current="currentAreaId === a.id"
+              :is-adjacent="adjacentSet.has(a.id)"
+              :is-master="isMaster"
+              :player-count="(playersByArea.get(a.id)?.length ?? 0)"
+              @click="!editMode && onAreaClick(a.id as AreaId)"
+            />
+            <!-- v2d-edit: overlay edit master. Drag, doppio-click rinomina,
+                 X rimuove. Posizionato sopra MapArea per intercettare i pointer. -->
+            <g v-if="editMode">
+              <rect
+                :x="a.svg.x"
+                :y="a.svg.y"
+                :width="a.svg.w"
+                :height="a.svg.h"
+                fill="transparent"
+                stroke="var(--z-rust-300)"
+                stroke-width="2"
+                stroke-dasharray="6 4"
+                style="cursor: move"
+                @pointerdown="(e: PointerEvent) => startAreaDrag(e, a.id)"
+                @pointermove="moveAreaDrag"
+                @pointerup="endAreaDrag"
+                @dblclick.stop="startRename(a.id)"
+              />
+              <g
+                style="cursor: pointer"
+                @click.stop="removeArea(a.id)"
+              >
+                <circle
+                  :cx="a.svg.x + a.svg.w - 12"
+                  :cy="a.svg.y + 12"
+                  r="11"
+                  fill="var(--z-blood-700)"
+                  stroke="var(--z-blood-300)"
+                  stroke-width="1.5"
+                />
+                <text
+                  :x="a.svg.x + a.svg.w - 12"
+                  :y="a.svg.y + 16"
+                  text-anchor="middle"
+                  font-size="14"
+                  font-weight="bold"
+                  fill="white"
+                  style="pointer-events: none; user-select: none"
+                >×</text>
+              </g>
+            </g>
+          </g>
 
           <template
             v-for="a in areas"
@@ -600,6 +814,70 @@ function onTransitionClick(toMapId: string, toAreaId: string) {
     </svg>
     <MapLegend />
     <MapPlayersBox />
+
+    <!-- v2d-edit: toggle "Modifica mappa" (master only, solo se mapId valido). -->
+    <div
+      v-if="isMaster && props.mapId"
+      class="absolute top-3 right-3 z-10"
+    >
+      <button
+        type="button"
+        class="px-3 py-1.5 rounded text-xs font-mono-z"
+        :style="editMode
+          ? 'background: var(--z-rust-700); color: var(--z-rust-300); border: 1px solid var(--z-rust-300)'
+          : 'background: var(--z-bg-800); color: var(--z-text-md); border: 1px solid var(--z-border)'"
+        @click="toggleEdit"
+      >
+        {{ editMode ? '✎ Modifica ON' : '✎ Modifica mappa' }}
+      </button>
+      <p
+        v-if="editMode"
+        class="mt-1 text-xs font-mono-z text-right"
+        style="color: var(--z-text-md); max-width: 220px"
+      >
+        drag = sposta · doppio-click = rinomina · × = rimuovi · click vuoto = aggiungi
+      </p>
+    </div>
+
+    <!-- v2d-edit: input inline rinomina (overlay assoluto). -->
+    <div
+      v-if="renamingAreaId"
+      class="absolute top-1/2 left-1/2 z-20 -translate-x-1/2 -translate-y-1/2 p-3 rounded shadow-lg"
+      style="background: var(--z-bg-800); border: 1px solid var(--z-border); min-width: 260px"
+    >
+      <p
+        class="text-xs uppercase tracking-wide mb-2"
+        style="color: var(--z-text-md)"
+      >
+        Rinomina area
+      </p>
+      <input
+        v-model="renameDraft"
+        type="text"
+        maxlength="64"
+        class="w-full px-2 py-1.5 rounded text-sm font-mono-z"
+        style="background: var(--z-bg-900); border: 1px solid var(--z-border); color: var(--z-text-hi); outline: none"
+        autofocus
+        @keyup.enter="commitRename"
+        @keyup.escape="cancelRename"
+      >
+      <div class="mt-2 flex gap-1.5 justify-end">
+        <UButton
+          size="xs"
+          variant="ghost"
+          @click="cancelRename"
+        >
+          Annulla
+        </UButton>
+        <UButton
+          size="xs"
+          color="primary"
+          @click="commitRename"
+        >
+          Salva
+        </UButton>
+      </div>
+    </div>
 
     <!-- Controlli zoom & pan manuali -->
     <div

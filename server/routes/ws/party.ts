@@ -1,4 +1,7 @@
-import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent, MasterDeleteMessageEvent, MasterPurgeMessageEvent, MasterEditMessageEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, MasterFetchActionsEvent, MasterFetchBansEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type MessageRemovedEvent, type PlayerMutedEvent, type KickedEvent, type WeatherUpdatedEvent, type MasterActionsSnapshotEvent, type MasterBansSnapshotEvent, type TransitionPublic, type PartyMapPublic } from '~~/shared/protocol/ws'
+import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent, MasterDeleteMessageEvent, MasterPurgeMessageEvent, MasterEditMessageEvent,
+  MasterAreaRenameEvent, MasterAreaMoveEvent, MasterAreaAddEvent, MasterAreaRemoveEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, MasterFetchActionsEvent, MasterFetchBansEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type MessageRemovedEvent,
+  type AreaOverrideUpdatedEvent, type AreaOverrideRemovedEvent, type AreaOverridePublic,
+  type PlayerMutedEvent, type KickedEvent, type WeatherUpdatedEvent, type MasterActionsSnapshotEvent, type MasterBansSnapshotEvent, type TransitionPublic, type PartyMapPublic } from '~~/shared/protocol/ws'
 import { useDb } from '~~/server/utils/db'
 import { findPlayerByUserInParty, listOnlinePlayers, touchPlayer, updatePlayerArea, setMute, kickPlayer, findPlayerById, type PlayerRow } from '~~/server/services/players'
 import { findSession, extendSession, revokeSession } from '~~/server/services/sessions'
@@ -15,6 +18,7 @@ import { upsertPosition, deletePositionsForPlayer } from '~~/server/services/pla
 import { pickFanoutRecipients } from '~~/server/ws/fanout'
 import { isAreaId, areAdjacent } from '~~/shared/map/areas'
 import { isAreaClosed } from '~~/server/services/area-access'
+import { upsertOverride, deleteOverride, listOverridesForParty } from '~~/server/services/area-overrides'
 import { listPartyMaps, findPartyMap } from '~~/server/services/party-maps'
 import { listTransitionsForParty, findTransition } from '~~/server/services/map-transitions'
 import { findMapType, parseDefaultParams } from '~~/server/services/map-types'
@@ -158,6 +162,22 @@ export default defineWebSocketHandler({
     }
     if (parsed.type === 'master:edit-message') {
       await handleMasterEditMessage(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:area-rename') {
+      await handleMasterAreaRename(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:area-move') {
+      await handleMasterAreaMove(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:area-add') {
+      await handleMasterAreaAdd(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:area-remove') {
+      await handleMasterAreaRemove(peer, parsed)
       return
     }
     if (parsed.type === 'master:mute') {
@@ -948,6 +968,127 @@ async function handleMasterDeleteMessage(peer: Peer, raw: unknown) {
   }
 }
 
+// v2d-edit: helpers per la customizzazione master della GeneratedMap.
+function broadcastOverrideUpdate(partySeed: string, override: AreaOverridePublic): void {
+  const event: AreaOverrideUpdatedEvent = { type: 'area-override:updated', override }
+  const payload = JSON.stringify(event)
+  for (const c of registry.listParty(partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
+}
+
+function broadcastOverrideRemoved(partySeed: string, mapId: string, areaId: string): void {
+  const event: AreaOverrideRemovedEvent = { type: 'area-override:removed', mapId, areaId }
+  const payload = JSON.stringify(event)
+  for (const c of registry.listParty(partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
+}
+
+function rowToOverridePublic(r: { mapId: string, areaId: string, customName: string | null, x: number | null, y: number | null, w: number | null, h: number | null, removed: boolean, customAdded: boolean }): AreaOverridePublic {
+  return {
+    mapId: r.mapId, areaId: r.areaId,
+    customName: r.customName,
+    x: r.x, y: r.y, w: r.w, h: r.h,
+    removed: r.removed, customAdded: r.customAdded
+  }
+}
+
+async function handleMasterAreaRename(peer: Peer, raw: unknown) {
+  const res = MasterAreaRenameEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  const row = upsertOverride(ctx.db, {
+    partySeed: ctx.conn.partySeed,
+    mapId: res.data.mapId,
+    areaId: res.data.areaId,
+    customName: res.data.name
+  })
+  logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'area-rename', target: res.data.areaId, payload: { mapId: res.data.mapId, name: res.data.name } })
+  broadcastOverrideUpdate(ctx.conn.partySeed, rowToOverridePublic(row))
+}
+
+async function handleMasterAreaMove(peer: Peer, raw: unknown) {
+  const res = MasterAreaMoveEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  const row = upsertOverride(ctx.db, {
+    partySeed: ctx.conn.partySeed,
+    mapId: res.data.mapId,
+    areaId: res.data.areaId,
+    x: res.data.x,
+    y: res.data.y,
+    w: res.data.w ?? null,
+    h: res.data.h ?? null
+  })
+  logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'area-move', target: res.data.areaId, payload: { mapId: res.data.mapId, x: res.data.x, y: res.data.y } })
+  broadcastOverrideUpdate(ctx.conn.partySeed, rowToOverridePublic(row))
+}
+
+async function handleMasterAreaAdd(peer: Peer, raw: unknown) {
+  const res = MasterAreaAddEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  const areaId = `custom_${generateUuid().slice(0, 8)}`
+  const row = upsertOverride(ctx.db, {
+    partySeed: ctx.conn.partySeed,
+    mapId: res.data.mapId,
+    areaId,
+    customName: res.data.name,
+    x: res.data.x,
+    y: res.data.y,
+    w: res.data.w,
+    h: res.data.h,
+    customAdded: true
+  })
+  logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'area-add', target: areaId, payload: { mapId: res.data.mapId, name: res.data.name } })
+  broadcastOverrideUpdate(ctx.conn.partySeed, rowToOverridePublic(row))
+}
+
+async function handleMasterAreaRemove(peer: Peer, raw: unknown) {
+  const res = MasterAreaRemoveEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  const areaId = res.data.areaId
+  if (areaId.startsWith('custom_')) {
+    // Hard delete dell'override custom: l'area sparisce davvero dato che
+    // non esiste nel generator base.
+    deleteOverride(ctx.db, ctx.conn.partySeed, res.data.mapId, areaId)
+    broadcastOverrideRemoved(ctx.conn.partySeed, res.data.mapId, areaId)
+  } else {
+    // Soft hide su area generata: il generator continua a produrla, il
+    // client la filtra fuori in base a removed=true.
+    const row = upsertOverride(ctx.db, {
+      partySeed: ctx.conn.partySeed,
+      mapId: res.data.mapId,
+      areaId,
+      removed: true
+    })
+    broadcastOverrideUpdate(ctx.conn.partySeed, rowToOverridePublic(row))
+  }
+  logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'area-remove', target: areaId, payload: { mapId: res.data.mapId } })
+}
+
 async function handleMasterPurgeMessage(peer: Peer, raw: unknown) {
   const res = MasterPurgeMessageEvent.safeParse(raw)
   if (!res.success) {
@@ -1468,6 +1609,7 @@ function composeStateInit(
     weatherOverrides: weatherOverridesList,
     maps: mapsPublic,
     transitions: transitionsPublic,
+    areaOverrides: listOverridesForParty(db, seed).map(rowToOverridePublic),
     serverTime: Date.now()
   }
 }

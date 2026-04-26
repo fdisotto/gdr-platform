@@ -43,6 +43,13 @@
       "when": 1777118295594,
       "tag": "0005_brown_killmonger",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1777192826882,
+      "tag": "0006_keen_elektra",
+      "breakpoints": true
     }
   ]
 }

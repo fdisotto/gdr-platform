@@ -365,3 +365,33 @@ export const mapTransitions = sqliteTable('map_transitions', {
   index('map_transitions_from_idx').on(t.fromMapId, t.fromAreaId),
   index('map_transitions_party_idx').on(t.partySeed)
 ])
+
+// v2d-edit: il master può customizzare la GeneratedMap della propria party
+// senza alterare il generator code. Ogni override è un delta keyed
+// (partySeed, mapId, areaId): rinomina, sposta/ridimensiona, marca come
+// rimossa, oppure marca come aggiunta manualmente (areaId nuovo, slug
+// `custom_<uuid>`). Il client applica i delta sulla GeneratedMap calcolata
+// localmente prima di renderizzare.
+export const areaOverrides = sqliteTable('area_overrides', {
+  partySeed: text('party_seed').notNull().references(() => parties.seed, { onDelete: 'cascade' }),
+  mapId: text('map_id').notNull().references(() => partyMaps.id, { onDelete: 'cascade' }),
+  areaId: text('area_id').notNull(),
+  customName: text('custom_name'),
+  // Posizione + dimensioni override (null = usa quella del generator). Per
+  // aree customAdded, questi sono autoritativi (il generator non le ha).
+  x: real('x'),
+  y: real('y'),
+  w: real('w'),
+  h: real('h'),
+  // Soft-remove: nasconde un'area generata senza cancellarla davvero (il
+  // generator continua a produrla, ma client la filtra fuori).
+  removed: integer('removed', { mode: 'boolean' }).notNull().default(false),
+  // Aree create dal master (non presenti nella GeneratedMap base): id slug
+  // `custom_<uuid>`, shape autoritativa via x/y/w/h.
+  customAdded: integer('custom_added', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull()
+}, t => [
+  primaryKey({ columns: [t.partySeed, t.mapId, t.areaId] }),
+  index('area_overrides_map_idx').on(t.partySeed, t.mapId)
+])

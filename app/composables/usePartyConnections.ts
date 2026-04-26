@@ -197,6 +197,7 @@ function makeConnection(seed: string): PartyConnection {
           // v2d: state-init multi-mappa.
           maps?: Array<{ id: string, mapTypeId: string, mapSeed: string, name: string, isSpawn: boolean, createdAt: number, params?: Record<string, unknown> }>
           transitions?: Array<{ id: string, fromMapId: string, fromAreaId: string, toMapId: string, toAreaId: string, label: string | null }>
+          areaOverrides?: import('~~/shared/protocol/ws').AreaOverridePublic[]
           serverTime: number
         }
         partyStore.hydrate({
@@ -206,7 +207,8 @@ function makeConnection(seed: string): PartyConnection {
           areasState: init.areasState,
           maps: init.maps ?? [],
           transitions: init.transitions ?? [],
-          currentMapId: init.me.currentMapId ?? null
+          currentMapId: init.me.currentMapId ?? null,
+          areaOverrides: init.areaOverrides ?? []
         })
         chatStore.hydrate(init.messagesByArea ?? {})
         chatStore.hydrateDms(init.dms ?? [], init.me.id)
@@ -258,6 +260,16 @@ function makeConnection(seed: string): PartyConnection {
       case 'message:removed': {
         const { messageId } = data as { messageId: string }
         chatStore.remove(messageId)
+        break
+      }
+      case 'area-override:updated': {
+        const { override } = data as { override: import('~~/shared/protocol/ws').AreaOverridePublic }
+        partyStore.applyOverride(override)
+        break
+      }
+      case 'area-override:removed': {
+        const { mapId, areaId } = data as { mapId: string, areaId: string }
+        partyStore.removeOverride(mapId, areaId)
         break
       }
       case 'time:tick': {

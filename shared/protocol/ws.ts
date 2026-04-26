@@ -116,6 +116,22 @@ export const TransitionPublicSchema = z.object({
 })
 export type TransitionPublic = z.infer<typeof TransitionPublicSchema>
 
+// v2d-edit: shape pubblica di un override area (riga area_overrides). Il
+// client applica i delta sulla GeneratedMap calcolata localmente prima di
+// renderizzare.
+export const AreaOverridePublicSchema = z.object({
+  mapId: z.string(),
+  areaId: z.string(),
+  customName: z.string().nullable(),
+  x: z.number().nullable(),
+  y: z.number().nullable(),
+  w: z.number().nullable(),
+  h: z.number().nullable(),
+  removed: z.boolean(),
+  customAdded: z.boolean()
+})
+export type AreaOverridePublic = z.infer<typeof AreaOverridePublicSchema>
+
 export const PlayerPositionSchema = z.object({
   playerId: z.string(),
   // v2d: posizione scoped per mappa. Nullable per legacy.
@@ -158,6 +174,8 @@ export const StateInitEvent = z.object({
   // Required come array, T15 li popolerà lato server. Default semantico: [].
   maps: z.array(PartyMapPublicSchema),
   transitions: z.array(TransitionPublicSchema),
+  // v2d-edit: override master delle aree per ogni mappa della party.
+  areaOverrides: z.array(AreaOverridePublicSchema).default([]),
   serverTime: z.number()
 })
 export type StateInitEvent = z.infer<typeof StateInitEvent>
@@ -412,6 +430,57 @@ export const MessageRemovedEvent = z.object({
 })
 export type MessageRemovedEvent = z.infer<typeof MessageRemovedEvent>
 
+export const MasterAreaRenameEvent = z.object({
+  type: z.literal('master:area-rename'),
+  mapId: z.string(),
+  areaId: z.string(),
+  name: z.string().min(1).max(64)
+})
+export type MasterAreaRenameEvent = z.infer<typeof MasterAreaRenameEvent>
+
+export const MasterAreaMoveEvent = z.object({
+  type: z.literal('master:area-move'),
+  mapId: z.string(),
+  areaId: z.string(),
+  x: z.number(),
+  y: z.number(),
+  w: z.number().min(20).max(400).optional(),
+  h: z.number().min(20).max(400).optional()
+})
+export type MasterAreaMoveEvent = z.infer<typeof MasterAreaMoveEvent>
+
+export const MasterAreaAddEvent = z.object({
+  type: z.literal('master:area-add'),
+  mapId: z.string(),
+  name: z.string().min(1).max(64),
+  x: z.number(),
+  y: z.number(),
+  w: z.number().min(20).max(400).default(120),
+  h: z.number().min(20).max(400).default(90)
+})
+export type MasterAreaAddEvent = z.infer<typeof MasterAreaAddEvent>
+
+export const MasterAreaRemoveEvent = z.object({
+  type: z.literal('master:area-remove'),
+  mapId: z.string(),
+  areaId: z.string()
+})
+export type MasterAreaRemoveEvent = z.infer<typeof MasterAreaRemoveEvent>
+
+// Broadcast a tutti i player della party dopo qualsiasi area-edit.
+export const AreaOverrideUpdatedEvent = z.object({
+  type: z.literal('area-override:updated'),
+  override: AreaOverridePublicSchema
+})
+export type AreaOverrideUpdatedEvent = z.infer<typeof AreaOverrideUpdatedEvent>
+
+export const AreaOverrideRemovedEvent = z.object({
+  type: z.literal('area-override:removed'),
+  mapId: z.string(),
+  areaId: z.string()
+})
+export type AreaOverrideRemovedEvent = z.infer<typeof AreaOverrideRemovedEvent>
+
 export const MasterEditMessageEvent = z.object({
   type: z.literal('master:edit-message'),
   messageId: z.string(),
@@ -558,7 +627,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   ZombieMovedEvent, ZombiesBatchSpawnedEvent,
   VoiceSignalEvent,
   MessageUpdateEvent, MessageRemovedEvent, PlayerMutedEvent, KickedEvent,
-  MasterActionsSnapshotEvent, MasterBansSnapshotEvent
+  MasterActionsSnapshotEvent, MasterBansSnapshotEvent,
+  AreaOverrideUpdatedEvent, AreaOverrideRemovedEvent
 ])
 export type ServerEvent = z.infer<typeof ServerEvent>
 
@@ -573,6 +643,8 @@ export const ClientEvent = z.discriminatedUnion('type', [
   MasterKickEvent, MasterBanEvent, MasterUnbanEvent,
   MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent,
   MasterWeatherOverrideEvent, MasterMovePlayerEvent,
-  MasterFetchActionsEvent, MasterFetchBansEvent
+  MasterFetchActionsEvent, MasterFetchBansEvent,
+  MasterAreaRenameEvent, MasterAreaMoveEvent,
+  MasterAreaAddEvent, MasterAreaRemoveEvent
 ])
 export type ClientEvent = z.infer<typeof ClientEvent>
