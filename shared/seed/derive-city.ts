@@ -13,15 +13,18 @@ export interface CityState {
   areas: Record<AreaId, AreaInitialState>
 }
 
+// Nomi città reali italiane (mix di metropoli e capoluoghi). Combinati
+// con un suffisso post-apocalittico danno l'effetto "città reale dopo
+// l'evento" senza inventare toponimi.
 const CITY_NAMES = [
-  'Valmorta', 'Nuova Dolore', 'San Tetro', 'Corpolario', 'Grigiovento',
-  'Polvergrigia', 'Cenerfossa', 'Mortebassa', 'Rocca Muta', 'Fondoscuro',
-  'Ossalba', 'Ferrofreddo', 'Bramavia', 'Pievescordata', 'Cinabria',
-  'Tenebroso', 'Ferroruggine', 'Ultimocampo', 'Sanguegiallo', 'Sepolcra',
-  'Strangiovine', 'Fossalaica', 'Muralastra', 'Campovuoto', 'Terramenta',
-  'Sottovento', 'Velarosa', 'Duecolline', 'Crepalta', 'Piombella',
-  'Nebbiaviva', 'Cerognate', 'Ferratora', 'Amaralba', 'Ossiduro',
-  'Stradacorta', 'Valgravida', 'Rivasinistra', 'Pioggiasecca', 'Nerapietra'
+  'Milano', 'Roma', 'Napoli', 'Torino', 'Bologna',
+  'Firenze', 'Genova', 'Venezia', 'Verona', 'Padova',
+  'Trieste', 'Bari', 'Palermo', 'Catania', 'Cagliari',
+  'Brescia', 'Bergamo', 'Modena', 'Parma', 'Reggio Emilia',
+  'Pavia', 'Como', 'Lecco', 'Treviso', 'Vicenza',
+  'Pisa', 'Livorno', 'Lucca', 'Siena', 'Perugia',
+  'Ancona', 'Pescara', 'Foggia', 'Lecce', 'Salerno',
+  'Cosenza', 'Reggio Calabria', 'Messina', 'Trapani', 'Sassari'
 ]
 
 const CITY_SUFFIXES = ['— Quarantena', '— Zona 3', '— Settore C', '— Focolaio 7', '']

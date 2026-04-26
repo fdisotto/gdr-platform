@@ -17,6 +17,7 @@ import type {
   GeneratedMap,
   GeneratorFn
 } from './types'
+import { organicizeShape } from './shape-utils'
 
 const VIEWBOX_W = 1000
 const VIEWBOX_H = 700
@@ -42,29 +43,40 @@ const PIAZZA_H = 110
 const PIAZZA_X = Math.round((VIEWBOX_W - PIAZZA_W) / 2)
 const PIAZZA_Y = Math.round((VIEWBOX_H - PIAZZA_H) / 2)
 
-// Pool nomi edifici tematici (escluso "Piazza", riservato allo spawn).
+// Pool nomi edifici tematici, realistici per ambiente urbano italiano
+// (escluso "Piazza Duomo", riservato allo spawn).
 const BUILDING_NAMES = [
-  'Chiesa',
-  'Ospedale',
-  'Supermercato',
-  'Polizia',
-  'Scuola',
-  'Ponte',
-  'Fogne',
-  'Porto',
-  'Radio-Torre',
-  'Stazione Servizio',
-  'Rifugio',
-  'Caserma',
-  'Mercato'
+  'Cattedrale di San Marco',
+  'Ospedale San Raffaele',
+  'Supermercato Conad',
+  'Stazione Carabinieri',
+  'Liceo Classico Manzoni',
+  'Ponte Vecchio',
+  'Galleria Pluviale',
+  'Porto Vecchio',
+  'Antenna Mediaset',
+  'Stazione Esso',
+  'Rifugio Antiaereo',
+  'Caserma Garibaldi',
+  'Mercato Centrale',
+  'Banca Intesa',
+  'Cinema Odeon',
+  'Stazione Termini',
+  'Biblioteca Civica',
+  'Teatro Comunale'
 ] as const
 
-// Nomi extra che possono essere mescolati ai building (layout "open").
-const OPEN_NAME_POOL = ['Quartiere Residenziale', 'Giardino'] as const
+// Nomi extra mescolati ai building (layout "open"): zone urbane aperte.
+const OPEN_NAME_POOL = [
+  'Quartiere Trastevere',
+  'Giardini Pubblici',
+  'Lungofiume Tevere',
+  'Viale dei Pini',
+  'Parco delle Cascine'
+] as const
 
 // Nomi che producono un layout "open" anziché "building" (zone aperte).
-// Derivato dal pool open + i building con semantica aperta (Ponte/Porto).
-const OPEN_NAMES = new Set<string>([...OPEN_NAME_POOL, 'Ponte', 'Porto'])
+const OPEN_NAMES = new Set<string>([...OPEN_NAME_POOL, 'Ponte Vecchio', 'Porto Vecchio'])
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t
@@ -365,7 +377,7 @@ export const city: GeneratorFn = (seed: string, params: GenParams): GeneratedMap
 
   // Pesca i nomi: piazza prima, poi shuffle del pool building + open extras.
   const themePool = shuffle(rng, [...BUILDING_NAMES, ...OPEN_NAME_POOL])
-  const names = ['Piazza Centrale']
+  const names = ['Piazza Duomo']
   for (let i = 1; i < areaCount; i++) {
     names.push(themePool[(i - 1) % themePool.length]!)
   }
@@ -385,7 +397,7 @@ export const city: GeneratorFn = (seed: string, params: GenParams): GeneratedMap
       baseId = `${slugify(name)}_${i}_${suffix}`
     }
     usedIds.add(baseId)
-    const shape = shapes[i]!
+    const shape = organicizeShape(rng, shapes[i]!)
     areas.push(buildArea(baseId, name, shape, rng, i === 0))
   }
 

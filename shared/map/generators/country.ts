@@ -22,6 +22,7 @@ import type {
   GeneratedMap,
   GeneratorFn
 } from './types'
+import { organicizeShape } from './shape-utils'
 
 const VIEWBOX_W = 1000
 const VIEWBOX_H = 700
@@ -56,27 +57,31 @@ const RIVER_THRESHOLD = 0.5
 const DEFAULT_FOREST_RATIO = 0.4
 const DEFAULT_RIVER_CHANCE = 0.6
 
-// Pool nomi a tema country (escluso lo spawn name riservato).
+// Pool nomi a tema rurale italiano (escluso lo spawn name riservato).
 const BUILDING_NAMES = [
-  'Stalla',
-  'Silo',
-  'Fienile',
-  'Pozzo',
-  'Cantina',
-  'Mulino'
+  'Stalla del Conte',
+  'Silo Brianzolo',
+  'Fienile dei Nonni',
+  'Pozzo San Rocco',
+  'Cantina Sociale',
+  'Mulino Bianco',
+  'Cascina Lombarda',
+  'Granaio Comunale'
 ] as const
 
 const OPEN_NAMES_POOL = [
-  'Sentiero',
-  'Recinto',
-  'Vigneto'
+  'Sentiero della Valle',
+  'Recinto delle Pecore',
+  'Vigneto del Chianti',
+  'Frutteto Vecchio',
+  'Pascolo Alto'
 ] as const
 
-const FOREST_NAME = 'Bosco'
-const RIVER_NAME = 'Fiume'
-const BRIDGE_NAME = 'Ponte'
-const SPAWN_NAME = 'Casolare'
-const ALT_SPAWN_NAME = 'Fattoria'
+const FOREST_NAME = 'Bosco di Vallombrosa'
+const RIVER_NAME = 'Fiume Po'
+const BRIDGE_NAME = 'Ponte sul Tagliamento'
+const SPAWN_NAME = 'Casolare San Pietro'
+const ALT_SPAWN_NAME = 'Fattoria Bianchi'
 
 // Nomi che producono layout "open" (zone all'aperto).
 const OPEN_NAMES = new Set<string>([
@@ -481,7 +486,7 @@ export const country: GeneratorFn = (
       baseId = `${slugify(name)}_${i}_${suffix}`
     }
     usedIds.add(baseId)
-    const shape = shapes[i]!
+    const shape = organicizeShape(rng, shapes[i]!)
     areas.push(buildArea(baseId, name, shape, rng, i === 0))
   }
 

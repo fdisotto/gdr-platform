@@ -135,7 +135,7 @@ describe('country generator — spawn / edge', () => {
     for (const seed of ['sp1', 'sp2', 'sp3', 'sp4', 'sp5']) {
       const map = country(seed, { density: 0.5 })
       const spawn = map.areas.find(a => a.spawn)!
-      expect(['Casolare', 'Fattoria']).toContain(spawn.name)
+      expect(['Casolare San Pietro', 'Fattoria Bianchi']).toContain(spawn.name)
     }
   })
 
@@ -195,7 +195,7 @@ describe('country generator — riverChance', () => {
     for (const seed of ['r1', 'r2', 'r3', 'r4', 'r5']) {
       const map = country(seed, { density: 0.7, riverChance: 0.9, forestRatio: 0.2 })
       const hasRiverOrBridge = map.areas.some(
-        a => a.name === 'Fiume' || a.name === 'Ponte'
+        a => a.name === 'Fiume Po' || a.name === 'Ponte sul Tagliamento'
       )
       expect(hasRiverOrBridge).toBe(true)
     }
@@ -209,8 +209,8 @@ describe('country generator — riverChance', () => {
     })
     // Con riverChance 0 e forestRatio 0 il pool si riempie solo da
     // BUILDING_NAMES + OPEN_NAMES_POOL, che non contengono né Fiume né Ponte.
-    const hasRiver = map.areas.some(a => a.name === 'Fiume')
-    const hasBridge = map.areas.some(a => a.name === 'Ponte')
+    const hasRiver = map.areas.some(a => a.name === 'Fiume Po')
+    const hasBridge = map.areas.some(a => a.name === 'Ponte sul Tagliamento')
     expect(hasRiver).toBe(false)
     expect(hasBridge).toBe(false)
   })
@@ -220,7 +220,7 @@ describe('country generator — forestRatio', () => {
   it('forestRatio > 0.5 produce ≥ 1 area Bosco', () => {
     for (const seed of ['f1', 'f2', 'f3', 'f4', 'f5']) {
       const map = country(seed, { density: 0.7, forestRatio: 0.8, riverChance: 0.0 })
-      const forestCount = map.areas.filter(a => a.name === 'Bosco').length
+      const forestCount = map.areas.filter(a => a.name === 'Bosco di Vallombrosa').length
       expect(forestCount).toBeGreaterThanOrEqual(1)
     }
   })
@@ -232,8 +232,8 @@ describe('country generator — forestRatio', () => {
     for (const seed of seeds) {
       const low = country(seed, { density: 1.0, forestRatio: 0.1, riverChance: 0.0 })
       const high = country(seed, { density: 1.0, forestRatio: 0.9, riverChance: 0.0 })
-      lowTotal += low.areas.filter(a => a.name === 'Bosco').length
-      highTotal += high.areas.filter(a => a.name === 'Bosco').length
+      lowTotal += low.areas.filter(a => a.name === 'Bosco di Vallombrosa').length
+      highTotal += high.areas.filter(a => a.name === 'Bosco di Vallombrosa').length
     }
     expect(highTotal).toBeGreaterThan(lowTotal)
   })

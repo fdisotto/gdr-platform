@@ -24,6 +24,7 @@ import type {
   GeneratedMap,
   GeneratorFn
 } from './types'
+import { organicizeShape } from './shape-utils'
 
 const VIEWBOX_W = 1000
 const VIEWBOX_H = 700
@@ -55,42 +56,48 @@ const SPAWN_Y = Math.round((VIEWBOX_H - SPAWN_H) / 2)
 const DEFAULT_RUIN_RATIO = 0.5
 const DEFAULT_CRATER_COUNT = 2
 
-// Nomi spawn (entrambi layout open).
-const SPAWN_NAME = 'Accampamento'
-const ALT_SPAWN_NAME = 'Avamposto'
+// Nomi spawn realistici post-disastro (entrambi layout open).
+const SPAWN_NAME = 'Accampamento di Pavia'
+const ALT_SPAWN_NAME = 'Avamposto Apuano'
 
-// Crateri: nome principale + variante "radioattiva".
-const CRATER_NAME = 'Cratere'
-const CRATER_RAD_NAME = 'Cratere Radiazioni'
+// Crateri: ispirati a luoghi reali italiani.
+const CRATER_NAME = 'Cratere di Cassino'
+const CRATER_RAD_NAME = 'Cratere Radioattivo del Garda'
 
 // Aree con nome che inizia per "Cratere" (per filtri test/registry).
 const CRATER_NAMES = [CRATER_NAME, CRATER_RAD_NAME] as const
 
-const RUIN_NAME = 'Rovine'
+const RUIN_NAME = 'Rovine di Pompei'
 
 // Pool nomi "open" generici (non spawn, non rovine, non crateri).
 const OPEN_NAMES_POOL = [
-  'Dune',
-  'Discarica',
-  'Carcassa',
-  'Trincea'
+  'Dune del Tirreno',
+  'Discarica di Caivano',
+  'Carcassa Autostrada A1',
+  'Trincea del Carso',
+  'Stradario Crollato',
+  'Pianura Bruciata'
 ] as const
 
 // Pool nomi "building" (chiusi). Includono lo spawn alt come building?
 // No: l'Avamposto è gestito come spawn alt e non finisce nel pool building.
 const BUILDING_NAMES_POOL = [
-  'Bunker',
-  'Posto di Blocco'
+  'Bunker della Linea Gotica',
+  'Posto di Blocco Brennero',
+  'Hangar di Aviano',
+  'Caserma Diroccata'
 ] as const
 
 // Pool nomi "crossing".
-const CROSSING_NAME = 'Ponte Sgretolato'
+const CROSSING_NAME = 'Ponte Sgretolato sul Po'
 
 // Layout 'building' per Bunker/Avamposto/Posto di Blocco.
 const BUILDING_LAYOUT_NAMES = new Set<string>([
-  'Bunker',
+  'Bunker della Linea Gotica',
   ALT_SPAWN_NAME,
-  'Posto di Blocco'
+  'Posto di Blocco Brennero',
+  'Hangar di Aviano',
+  'Caserma Diroccata'
 ])
 
 // Layout 'crossing' per Ponte Sgretolato.
@@ -504,7 +511,7 @@ export const wasteland: GeneratorFn = (
       baseId = `${slugify(name)}_${i}_${suffix}`
     }
     usedIds.add(baseId)
-    const shape = shapes[i]!
+    const shape = organicizeShape(rng, shapes[i]!)
     areas.push(buildArea(baseId, name, shape, rng, i === 0))
   }
 

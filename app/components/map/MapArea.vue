@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { Area } from '~~/shared/map/areas'
 
 interface Props {
@@ -14,6 +15,9 @@ interface Props {
 }
 const props = defineProps<Props>()
 defineEmits<{ (e: 'click'): void }>()
+
+const isPolygon = computed(() => props.area.svg.shape === 'polygon' && !!props.area.svg.points)
+const polyPoints = computed(() => props.area.svg.points ?? '')
 
 function strokeColor(): string {
   if (props.isCurrent) return 'var(--z-green-100)'
@@ -56,7 +60,18 @@ function cursorStyle(): string {
     :style="cursorStyle()"
     @click="$emit('click')"
   >
+    <!-- v2d-shape: poligono organico (preferito) o rect legacy/custom area. -->
+    <polygon
+      v-if="isPolygon"
+      :points="polyPoints"
+      fill="url(#area-bg)"
+      :stroke="strokeColor()"
+      :stroke-width="strokeWidth()"
+      :opacity="opacity()"
+      stroke-linejoin="round"
+    />
     <rect
+      v-else
       :width="area.svg.w"
       :height="area.svg.h"
       rx="8"
@@ -66,8 +81,15 @@ function cursorStyle(): string {
       :stroke-width="strokeWidth()"
       :opacity="opacity()"
     />
+    <polygon
+      v-if="isPolygon && status() === 'infested'"
+      :points="polyPoints"
+      fill="url(#area-infested)"
+      opacity="0.6"
+      pointer-events="none"
+    />
     <rect
-      v-if="status() === 'infested'"
+      v-else-if="status() === 'infested'"
       :width="area.svg.w"
       :height="area.svg.h"
       rx="8"
@@ -76,8 +98,15 @@ function cursorStyle(): string {
       opacity="0.6"
       pointer-events="none"
     />
+    <polygon
+      v-if="isPolygon && status() === 'ruined'"
+      :points="polyPoints"
+      fill="url(#area-ruined)"
+      opacity="0.35"
+      pointer-events="none"
+    />
     <rect
-      v-if="status() === 'ruined'"
+      v-else-if="status() === 'ruined'"
       :width="area.svg.w"
       :height="area.svg.h"
       rx="8"

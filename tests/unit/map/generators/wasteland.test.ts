@@ -113,11 +113,16 @@ describe('wasteland generator — struttura aree', () => {
   })
 
   it('id deriva da slugify(name) (non literal hard-coded)', () => {
-    // Spawn "Accampamento" o "Avamposto": slug deve essere uguale al
-    // toLowerCase del name (privo di accenti, qui assenti).
+    // Lo slug è toLowerCase + non-alfanumerici → underscore.
     const map = wasteland('seed-slug', { density: 0.5 })
     const spawn = map.areas.find(a => a.spawn)!
-    expect(spawn.id).toBe(spawn.name.toLowerCase())
+    const expectedSpawnSlug = spawn.name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+    expect(spawn.id).toBe(expectedSpawnSlug)
 
     // Per le aree non-spawn la chiave include `_${i}`. Verifica che il
     // prefisso sia lo slug del name.
@@ -159,7 +164,7 @@ describe('wasteland generator — struttura aree', () => {
     // Forza density alta + ruinRatio basso + craterCount basso → pool si
     // riempie di building/open/crossing con maggior probabilità di toccarli.
     const map = wasteland('seed-bld', { density: 1.0, ruinRatio: 0.0, craterCount: 0 })
-    const buildingNames = new Set(['Bunker', 'Avamposto', 'Posto di Blocco'])
+    const buildingNames = new Set(['Bunker della Linea Gotica', 'Avamposto Apuano', 'Posto di Blocco Brennero', 'Hangar di Aviano', 'Caserma Diroccata'])
     for (const a of map.areas) {
       if (a.spawn) continue // Avamposto come spawn è 'open' per design
       if (buildingNames.has(a.name)) {
@@ -174,7 +179,7 @@ describe('wasteland generator — struttura aree', () => {
     for (const seed of ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8']) {
       const map = wasteland(seed, { density: 1.0, ruinRatio: 0.0, craterCount: 0 })
       for (const a of map.areas) {
-        if (a.name === 'Ponte Sgretolato') {
+        if (a.name === 'Ponte Sgretolato sul Po') {
           expect(a.detail.layout).toBe('crossing')
           foundAtLeastOne = true
         }
@@ -206,7 +211,7 @@ describe('wasteland generator — spawn / edge', () => {
     for (const seed of ['sp1', 'sp2', 'sp3', 'sp4', 'sp5', 'sp6']) {
       const map = wasteland(seed, { density: 0.5 })
       const spawn = map.areas.find(a => a.spawn)!
-      expect(['Accampamento', 'Avamposto']).toContain(spawn.name)
+      expect(['Accampamento di Pavia', 'Avamposto Apuano']).toContain(spawn.name)
       expect(spawn.detail.layout).toBe('open')
     }
   })
@@ -270,7 +275,7 @@ describe('wasteland generator — ruinRatio', () => {
         ruinRatio: 0.8,
         craterCount: 1
       })
-      const ruinCount = map.areas.filter(a => a.name === 'Rovine').length
+      const ruinCount = map.areas.filter(a => a.name === 'Rovine di Pompei').length
       expect(ruinCount).toBeGreaterThanOrEqual(1)
     }
   })
@@ -284,7 +289,7 @@ describe('wasteland generator — ruinRatio', () => {
       ruinRatio: 0.0,
       craterCount: 0
     })
-    const ruinCount = map.areas.filter(a => a.name === 'Rovine').length
+    const ruinCount = map.areas.filter(a => a.name === 'Rovine di Pompei').length
     expect(ruinCount).toBe(0)
   })
 
@@ -303,8 +308,8 @@ describe('wasteland generator — ruinRatio', () => {
         ruinRatio: 0.9,
         craterCount: 0
       })
-      lowTotal += low.areas.filter(a => a.name === 'Rovine').length
-      highTotal += high.areas.filter(a => a.name === 'Rovine').length
+      lowTotal += low.areas.filter(a => a.name === 'Rovine di Pompei').length
+      highTotal += high.areas.filter(a => a.name === 'Rovine di Pompei').length
     }
     expect(highTotal).toBeGreaterThan(lowTotal)
   })
