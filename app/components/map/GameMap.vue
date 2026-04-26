@@ -935,23 +935,6 @@ function onSvgBgClick(e: MouseEvent) {
             :logical-h="LOGICAL_H"
             @transition-click="onTransitionClick"
           />
-          <!-- v2d-edit: hit-area cliccabile per ogni strada quando il
-               master è in edit mode. Click → conferma rimozione strada. -->
-          <g v-if="editMode">
-            <line
-              v-for="[a, b] in adjacencyPairs"
-              :key="`hit-${a}-${b}`"
-              :x1="(effectiveAreas.find(x => x.id === a)?.svg.x ?? 0) + (effectiveAreas.find(x => x.id === a)?.svg.w ?? 0) / 2"
-              :y1="(effectiveAreas.find(x => x.id === a)?.svg.y ?? 0) + (effectiveAreas.find(x => x.id === a)?.svg.h ?? 0) / 2"
-              :x2="(effectiveAreas.find(x => x.id === b)?.svg.x ?? 0) + (effectiveAreas.find(x => x.id === b)?.svg.w ?? 0) / 2"
-              :y2="(effectiveAreas.find(x => x.id === b)?.svg.y ?? 0) + (effectiveAreas.find(x => x.id === b)?.svg.h ?? 0) / 2"
-              stroke="var(--z-blood-300)"
-              stroke-width="14"
-              stroke-opacity="0"
-              style="cursor: pointer"
-              @click.stop="onRoadClick(a, b)"
-            />
-          </g>
 
           <!-- v2d-shape-B: layer marker — solo se Voronoi attivo (per il
                legacy MVP il rect 'all' include già marker+label). -->
@@ -1059,6 +1042,26 @@ function onSvgBgClick(e: MouseEvent) {
                 />
               </g>
             </g>
+          </g>
+
+          <!-- v2d-edit: hit-area cliccabile per ogni strada in edit mode.
+               Renderizzata SOPRA l'edit overlay (i polygon Voronoi che
+               coprono l'intera cella) così il click sulla linea finisce
+               qui (rimozione strada) e non sul polygon (selezione area). -->
+          <g v-if="editMode">
+            <line
+              v-for="[a, b] in adjacencyPairs"
+              :key="`hit-${a}-${b}`"
+              :x1="(effectiveAreas.find(x => x.id === a)?.svg.x ?? 0) + (effectiveAreas.find(x => x.id === a)?.svg.w ?? 0) / 2"
+              :y1="(effectiveAreas.find(x => x.id === a)?.svg.y ?? 0) + (effectiveAreas.find(x => x.id === a)?.svg.h ?? 0) / 2"
+              :x2="(effectiveAreas.find(x => x.id === b)?.svg.x ?? 0) + (effectiveAreas.find(x => x.id === b)?.svg.w ?? 0) / 2"
+              :y2="(effectiveAreas.find(x => x.id === b)?.svg.y ?? 0) + (effectiveAreas.find(x => x.id === b)?.svg.h ?? 0) / 2"
+              stroke="var(--z-blood-300)"
+              stroke-width="18"
+              stroke-opacity="0"
+              style="cursor: pointer"
+              @click.stop="onRoadClick(a, b)"
+            />
           </g>
 
           <template
