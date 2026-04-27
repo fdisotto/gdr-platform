@@ -1124,14 +1124,6 @@ function onSvgClickCapture(e: MouseEvent) {
             :road-kinds="roadKindsByPair"
             :broken-pairs="props.brokenPairs"
           />
-          <MapTransitionDoors
-            :areas="effectiveAreas"
-            :transitions="props.transitions ?? []"
-            :logical-w="LOGICAL_W"
-            :logical-h="LOGICAL_H"
-            @transition-click="onTransitionClick"
-          />
-
           <!-- v2d-fog: copertura nera SOPRA strade/decor/porte per le
                zone 'unknown'. Le strade che partono da zone visibili
                verso una unknown vengono coperte all'ingresso → effetto
@@ -1346,6 +1338,18 @@ function onSvgClickCapture(e: MouseEvent) {
             :height="LOGICAL_H"
             fill="url(#map-vignette)"
             pointer-events="none"
+          />
+
+          <!-- v2d-T28: porte di transizione cross-map renderizzate
+               SOPRA la vignette così non vengono mai oscurate dal
+               fade dei bordi (la porta termina sul bordo del viewBox,
+               proprio dove la vignette è opaca). Restano cliccabili. -->
+          <MapTransitionDoors
+            :areas="effectiveAreas"
+            :transitions="props.transitions ?? []"
+            :logical-w="LOGICAL_W"
+            :logical-h="LOGICAL_H"
+            @transition-click="onTransitionClick"
           />
         </g>
       </g>
