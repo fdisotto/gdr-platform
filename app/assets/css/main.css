@@ -49,3 +49,15 @@ body {
 .font-mono-z {
   font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+
+/* Tailwind v4 / Nuxt UI rimuovono il pointer cursor di default su
+   button e role=button → la cliccabilità non si riconosce a colpo
+   d'occhio. Reimponiamo il pointer per gli elementi interattivi che
+   non sono disabilitati. Su <a href> il default browser è già ok. */
+button:not(:disabled),
+[role="button"]:not(:disabled),
+[role="link"]:not(:disabled),
+summary,
+label[for] {
+  cursor: pointer;
+}
