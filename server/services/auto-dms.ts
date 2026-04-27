@@ -1,7 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm'
 import type { Db } from '~~/server/db/client'
 import { autoDms } from '~~/server/db/schema'
-import { generateUuid } from '~~/server/utils/random'
+import { generateUuid } from '~~/server/utils/crypto'
 
 export interface AutoDmRow {
   id: string
