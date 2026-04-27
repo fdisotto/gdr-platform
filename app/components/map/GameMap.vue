@@ -1400,16 +1400,146 @@ function onSvgClickCapture(e: MouseEvent) {
         </button>
         <div
           v-if="masterPanelOpen"
-          class="px-3 pb-2 space-y-3"
+          class="px-3 pb-3 space-y-3"
           style="border-top: 1px solid var(--z-border)"
         >
-          <!-- ── Sezione Città ─────────────────────────────────── -->
-          <section class="pt-2 space-y-1">
+          <!-- ── 1) Mappa: azione primaria (in alto) ──────────── -->
+          <section
+            v-if="props.mapId"
+            class="pt-3 space-y-1.5"
+          >
             <h3
-              class="text-[10px] uppercase tracking-wide"
+              class="text-[10px] uppercase tracking-wider"
               style="color: var(--z-text-md)"
             >
-              🏙 Città
+              🗺 Mappa
+            </h3>
+            <button
+              type="button"
+              class="w-full px-2 py-1.5 rounded flex items-center justify-between"
+              :style="editMode
+                ? 'background: var(--z-rust-700); color: var(--z-rust-300); border: 1px solid var(--z-rust-300)'
+                : 'background: var(--z-bg-900); color: var(--z-text-md); border: 1px solid var(--z-border)'"
+              @click="toggleEdit"
+            >
+              <span>Modifica mappa</span>
+              <span style="font-weight: 600">{{ editMode ? 'ON' : 'OFF' }}</span>
+            </button>
+            <div
+              v-if="editMode"
+              class="space-y-2.5 pt-1"
+              style="color: var(--z-text-md)"
+            >
+              <!-- Sotto-sezione: Aree -->
+              <div class="space-y-1">
+                <h4
+                  class="text-[10px] uppercase tracking-wide"
+                  style="color: var(--z-text-lo)"
+                >
+                  Aree
+                </h4>
+                <button
+                  type="button"
+                  class="w-full px-2 py-1 rounded text-left"
+                  :style="addAreaPending
+                    ? 'background: var(--z-toxic-700, #4a5d1a); color: var(--z-toxic-300, #d4ea7a); border: 1px solid var(--z-toxic-300, #b3d33a)'
+                    : 'background: var(--z-bg-900); color: var(--z-text-hi); border: 1px solid var(--z-border)'"
+                  @click="addAreaPending = !addAreaPending"
+                >
+                  {{ addAreaPending ? '× annulla — clicca un punto' : '+ nuova area' }}
+                </button>
+                <p
+                  class="text-[11px] leading-relaxed"
+                  style="color: var(--z-text-lo)"
+                >
+                  drag = sposta · dbl-click = rinomina · × = rimuovi
+                </p>
+              </div>
+
+              <!-- Sotto-sezione: Strade -->
+              <div
+                class="space-y-1 pt-2"
+                style="border-top: 1px dashed var(--z-border)"
+              >
+                <h4
+                  class="text-[10px] uppercase tracking-wide"
+                  style="color: var(--z-text-lo)"
+                >
+                  Strade
+                </h4>
+                <div class="flex items-center gap-1.5">
+                  <span class="shrink-0">tipo:</span>
+                  <select
+                    v-model="roadKindForNew"
+                    class="flex-1 px-1.5 py-0.5 rounded"
+                    style="background: var(--z-bg-900); border: 1px solid var(--z-border); color: var(--z-text-hi)"
+                  >
+                    <option value="auto">
+                      auto ({{ props.mapTypeId ?? 'mvp' }})
+                    </option>
+                    <option
+                      v-for="opt in ROAD_KIND_OPTIONS"
+                      :key="opt.value"
+                      :value="opt.value"
+                    >
+                      {{ opt.label }}
+                    </option>
+                  </select>
+                </div>
+                <p
+                  class="text-[11px] leading-relaxed"
+                  style="color: var(--z-text-lo)"
+                >
+                  click area + area = aggiungi/togli<br>
+                  click strada = rimuovi/rompi/ripara<br>
+                  shift+click = toggle rotta
+                </p>
+                <p
+                  v-if="roadFromAreaId"
+                  class="text-[11px]"
+                  style="color: var(--z-toxic-500, #b3d33a)"
+                >
+                  ↪ origine selezionata, clicca un'altra area
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <!-- ── 2) Visibilità ─────────────────────────────────── -->
+          <section
+            class="space-y-1.5 pt-3"
+            style="border-top: 1px solid var(--z-border)"
+          >
+            <h3
+              class="text-[10px] uppercase tracking-wider"
+              style="color: var(--z-text-md)"
+            >
+              👁 Visibilità
+            </h3>
+            <button
+              type="button"
+              class="w-full px-2 py-1.5 rounded flex items-center justify-between"
+              :style="fogEnabledForParty
+                ? 'background: var(--z-bg-900); color: var(--z-text-md); border: 1px solid var(--z-border)'
+                : 'background: var(--z-green-700); color: var(--z-green-100); border: 1px solid var(--z-green-300)'"
+              :title="fogEnabledForParty ? 'Fog of war attiva — i player vedono solo zone esplorate. Clicca per disattivare.' : 'Fog of war disattivata — tutti vedono la mappa intera.'"
+              @click="toggleFog"
+            >
+              <span>Fog of war</span>
+              <span style="font-weight: 600">{{ fogEnabledForParty ? 'ON' : 'OFF' }}</span>
+            </button>
+          </section>
+
+          <!-- ── 3) Party ──────────────────────────────────────── -->
+          <section
+            class="space-y-1.5 pt-3"
+            style="border-top: 1px solid var(--z-border)"
+          >
+            <h3
+              class="text-[10px] uppercase tracking-wider"
+              style="color: var(--z-text-md)"
+            >
+              🏙 Party
             </h3>
             <div
               v-if="!renamingCity"
@@ -1459,103 +1589,6 @@ function onSvgClickCapture(e: MouseEvent) {
               >
                 ×
               </button>
-            </div>
-          </section>
-
-          <!-- ── Sezione Visibilità ────────────────────────────── -->
-          <section
-            class="space-y-1 pt-2"
-            style="border-top: 1px solid var(--z-border)"
-          >
-            <h3
-              class="text-[10px] uppercase tracking-wide"
-              style="color: var(--z-text-md)"
-            >
-              👁 Visibilità
-            </h3>
-            <button
-              type="button"
-              class="w-full px-2 py-1 rounded flex items-center justify-between"
-              :style="fogEnabledForParty
-                ? 'background: var(--z-bg-900); color: var(--z-text-md); border: 1px solid var(--z-border)'
-                : 'background: var(--z-green-700); color: var(--z-green-100); border: 1px solid var(--z-green-300)'"
-              :title="fogEnabledForParty ? 'Fog of war attiva — i player vedono solo zone esplorate. Clicca per disattivare.' : 'Fog of war disattivata — tutti vedono la mappa intera.'"
-              @click="toggleFog"
-            >
-              <span>Fog of war</span>
-              <span style="font-weight: 600">{{ fogEnabledForParty ? 'ON' : 'OFF' }}</span>
-            </button>
-          </section>
-
-          <!-- ── Sezione Mappa ─────────────────────────────────── -->
-          <section
-            v-if="props.mapId"
-            class="space-y-1 pt-2"
-            style="border-top: 1px solid var(--z-border)"
-          >
-            <h3
-              class="text-[10px] uppercase tracking-wide"
-              style="color: var(--z-text-md)"
-            >
-              🗺 Mappa
-            </h3>
-            <button
-              type="button"
-              class="w-full px-2 py-1 rounded flex items-center justify-between"
-              :style="editMode
-                ? 'background: var(--z-rust-700); color: var(--z-rust-300); border: 1px solid var(--z-rust-300)'
-                : 'background: var(--z-bg-900); color: var(--z-text-md); border: 1px solid var(--z-border)'"
-              @click="toggleEdit"
-            >
-              <span>Modifica mappa</span>
-              <span style="font-weight: 600">{{ editMode ? 'ON' : 'OFF' }}</span>
-            </button>
-            <div
-              v-if="editMode"
-              class="space-y-1 pt-1"
-              style="color: var(--z-text-md)"
-            >
-              <p class="leading-relaxed">
-                drag = sposta · dbl-click = rinomina · × = rimuovi<br>
-                click area + click area = strada<br>
-                click strada = menu (rimuovi/rompi/ripara)<br>
-                shift+click strada = toggle rotta
-              </p>
-              <button
-                type="button"
-                class="w-full px-2 py-1 rounded"
-                :style="addAreaPending
-                  ? 'background: var(--z-toxic-700, #4a5d1a); color: var(--z-toxic-300, #d4ea7a); border: 1px solid var(--z-toxic-300, #b3d33a)'
-                  : 'background: var(--z-bg-900); color: var(--z-text-hi); border: 1px solid var(--z-border)'"
-                @click="addAreaPending = !addAreaPending"
-              >
-                {{ addAreaPending ? '× annulla — clicca un punto' : '+ nuova area' }}
-              </button>
-              <div class="flex items-center gap-1.5">
-                <span>tipo strada:</span>
-                <select
-                  v-model="roadKindForNew"
-                  class="flex-1 px-1.5 py-0.5 rounded"
-                  style="background: var(--z-bg-900); border: 1px solid var(--z-border); color: var(--z-text-hi)"
-                >
-                  <option value="auto">
-                    auto ({{ props.mapTypeId ?? 'mvp' }})
-                  </option>
-                  <option
-                    v-for="opt in ROAD_KIND_OPTIONS"
-                    :key="opt.value"
-                    :value="opt.value"
-                  >
-                    {{ opt.label }}
-                  </option>
-                </select>
-              </div>
-              <p
-                v-if="roadFromAreaId"
-                style="color: var(--z-toxic-500, #b3d33a)"
-              >
-                ↪ origine selezionata, clicca un'altra area
-              </p>
             </div>
           </section>
         </div>

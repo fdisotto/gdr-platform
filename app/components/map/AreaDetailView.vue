@@ -9,14 +9,17 @@ import { useChatStore } from '~/stores/chat'
 import { usePartyConnections } from '~/composables/usePartyConnections'
 import { usePartySeed } from '~/composables/usePartySeed'
 import { useAreaWeather } from '~/composables/useAreaWeather'
+import { usePartyMaps } from '~/composables/usePartyMaps'
+import { useGeneratedMap } from '~/composables/useGeneratedMap'
 import MapWeatherOverlay from '~/components/map/MapWeatherOverlay.vue'
 import type { Zombie } from '~~/shared/protocol/ws'
 import type { GeneratedArea } from '~~/shared/map/generators/types'
+import { applyAreaOverrides, buildEffectiveAdjacency } from '~~/shared/map/effective-map'
 
-// v2d T22: detail view SVG canonical. Quando una `generatedArea` viene
-// passata (chiamato dal router multi-mappa), preferisce nome/decor da quella
-// struttura; il layout interno (1600xH) e gli zombi/avatar continuano a
-// funzionare invariati.
+// v2d T22: detail view SVG canonical. La GeneratedArea viene risolta
+// dalla mappa attiva del party (no prop esterna): seed + currentMapId
+// → useGeneratedMap → applica areaOverrides → cerca per viewedAreaId.
+// Fallback alle AREAS legacy MVP per party pre-multi-mappa.
 const props = defineProps<{
   generatedArea?: GeneratedArea | null
 }>()
@@ -28,6 +31,28 @@ const viewStore = useViewStore(seed)
 const playerPositionsStore = usePlayerPositionsStore(seed)
 const chatStore = useChatStore(seed)
 const connection = usePartyConnections().open(seed)
+const { activeMap } = usePartyMaps(seed)
+
+// Risolve la GeneratedArea per il viewedAreaId dalla mappa attiva del
+// party. Self-contained: AreaDetailView non viene più montata con prop
+// esterna `generatedArea`, ne deriva una qui da viewStore + activeMap.
+const mapTypeId = computed<string | null>(() => activeMap.value?.mapTypeId ?? null)
+const mapSeed = computed<string | null>(() => activeMap.value?.mapSeed ?? null)
+const mapParams = computed<Record<string, unknown>>(() => activeMap.value?.params ?? {})
+const baseGeneratedMap = useGeneratedMap(mapTypeId, mapSeed, mapParams)
+const resolvedArea = computed<GeneratedArea | null>(() => {
+  const id = viewStore.viewedAreaId
+  if (!id) return null
+  if (props.generatedArea && props.generatedArea.id === id) return props.generatedArea
+  const base = baseGeneratedMap.value
+  if (!base) return null
+  const mapId = activeMap.value?.id ?? null
+  const overrides = mapId
+    ? party.areaOverrides.filter(o => o.mapId === mapId)
+    : []
+  const patched = applyAreaOverrides(base.areas, overrides)
+  return patched.find(a => a.id === id) ?? null
+})
 
 // ViewBox dinamico: width fisso, height calcolata dal rapporto del
 // contenitore reale. Così l'svg riempie tutto lo spazio disponibile senza
@@ -66,18 +91,19 @@ onBeforeUnmount(() => {
 const area = computed(() => {
   const id = viewStore.viewedAreaId
   if (!id) return null
-  // v2d T22: se ci passano una GeneratedArea già risolta, usa il nome da lì
-  // (le aree generate hanno id stringa qualunque). Fallback su AREAS legacy.
-  if (props.generatedArea && props.generatedArea.id === id) {
+  // v2d: usa la GeneratedArea risolta dalla mappa attiva (con override
+  // applicati). Per party legacy (no multi-mappa) fallback su AREAS.
+  const ga = resolvedArea.value
+  if (ga) {
     return {
       id,
-      name: props.generatedArea.name,
+      name: ga.name,
       svg: {
-        x: props.generatedArea.shape.x,
-        y: props.generatedArea.shape.y,
-        w: props.generatedArea.shape.w,
-        h: props.generatedArea.shape.h,
-        shape: props.generatedArea.shape.kind
+        x: ga.shape.x,
+        y: ga.shape.y,
+        w: ga.shape.w,
+        h: ga.shape.h,
+        shape: ga.shape.kind
       }
     }
   }
@@ -91,13 +117,25 @@ const state = computed(() => {
 
 const isMaster = computed(() => party.me?.role === 'master')
 
+// Adjacency effettiva (by-proximity post-drag + override) per la mappa
+// attiva. Per party legacy (no multi-mappa) fallback su ADJACENCY MVP.
+const effectiveAdjacency = computed<Record<string, string[]>>(() => {
+  const base = baseGeneratedMap.value
+  const mapId = activeMap.value?.id ?? null
+  if (!base || !mapId) return ADJACENCY as Record<string, string[]>
+  const areaOv = party.areaOverrides.filter(o => o.mapId === mapId)
+  const adjOv = party.adjacencyOverrides.filter(o => o.mapId === mapId)
+  const patched = applyAreaOverrides(base.areas, areaOv)
+  return buildEffectiveAdjacency(patched, adjOv).visibleAdj
+})
+
 const canMoveHere = computed(() => {
   if (!area.value) return false
   if (isMaster.value) return true
-  const myArea = party.me?.currentAreaId as AreaId | undefined
+  const myArea = party.me?.currentAreaId
   if (!myArea) return false
   if (myArea === area.value.id) return false
-  return (ADJACENCY[myArea] ?? []).includes(area.value.id)
+  return (effectiveAdjacency.value[myArea] ?? []).includes(area.value.id)
 })
 
 const alreadyHere = computed(() => party.me?.currentAreaId === area.value?.id)
