@@ -227,8 +227,12 @@ const containerEl = ref<HTMLElement | null>(null)
 const containerW = ref<number>(LOGICAL_W)
 const containerH = ref<number>(LOGICAL_H)
 const viewBox = computed(() => `0 0 ${containerW.value} ${containerH.value}`)
+// 'cover' invece di 'meet': la mappa riempie completamente il viewport
+// (niente piu' bande/quadratone con bg radial intorno). Su aspect ratio
+// estremi il contenuto eccede di un lato; il SVG clippa, e l'utente
+// puo' comunque pannare/zoomare per vedere tutto.
 const contentScale = computed(() =>
-  Math.min(containerW.value / LOGICAL_W, containerH.value / LOGICAL_H)
+  Math.max(containerW.value / LOGICAL_W, containerH.value / LOGICAL_H)
 )
 const contentTransform = computed(() => {
   const s = contentScale.value
