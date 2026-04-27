@@ -995,46 +995,40 @@ function onSvgClickCapture(e: MouseEvent) {
           />
           <feColorMatrix values="0 0 0 0 0.15 0 0 0 0 0.15 0 0 0 0 0.15 0 0 0 0.35 0" />
         </filter>
-        <!-- v2d-shape-B: maschera radiale per sfumare i bordi del
-             rettangolo logico 1000x700. Bianco al centro = visibile,
-             nero ai bordi = trasparente → niente più "quadrato" netto
-             del viewport: le celle voronoi più esterne fondono nel bg. -->
+        <!-- v2d-shape-B: vignette per sfumare i bordi del rettangolo
+             logico 1000x700. Trasparente al centro, opaco color bg ai
+             bordi: copre dolcemente il bordo netto delle celle voronoi
+             dando un effetto fade naturale. cx/cy/r in userSpaceOnUse
+             così è preservata la forma anche se l'aspect ratio del
+             container cambia. -->
         <radialGradient
-          id="map-edge-fade"
-          cx="50%"
-          cy="50%"
-          r="65%"
+          id="map-vignette"
+          gradientUnits="userSpaceOnUse"
+          :cx="LOGICAL_W / 2"
+          :cy="LOGICAL_H / 2"
+          :r="Math.max(LOGICAL_W, LOGICAL_H) * 0.62"
         >
           <stop
             offset="0%"
-            stop-color="white"
-            stop-opacity="1"
+            stop-color="#0b0d0c"
+            stop-opacity="0"
           />
           <stop
-            offset="78%"
-            stop-color="white"
-            stop-opacity="1"
+            offset="55%"
+            stop-color="#0b0d0c"
+            stop-opacity="0"
+          />
+          <stop
+            offset="85%"
+            stop-color="#0b0d0c"
+            stop-opacity="0.6"
           />
           <stop
             offset="100%"
-            stop-color="white"
-            stop-opacity="0"
+            stop-color="#0b0d0c"
+            stop-opacity="1"
           />
         </radialGradient>
-        <mask
-          id="map-edge-mask"
-          maskUnits="userSpaceOnUse"
-          x="0"
-          y="0"
-          :width="LOGICAL_W"
-          :height="LOGICAL_H"
-        >
-          <rect
-            :width="LOGICAL_W"
-            :height="LOGICAL_H"
-            fill="url(#map-edge-fade)"
-          />
-        </mask>
       </defs>
       <!-- Bg + grain riempiono l'intero viewBox dinamico: no più letterbox -->
       <rect
@@ -1053,10 +1047,7 @@ function onSvgClickCapture(e: MouseEvent) {
       <!-- User zoom/pan applicato sopra al fit-to-container -->
       <g :transform="userTransform">
         <!-- Contenuto logico 1000x700 scalato uniformemente e centrato -->
-        <g
-          :transform="contentTransform"
-          mask="url(#map-edge-mask)"
-        >
+        <g :transform="contentTransform">
           <!-- v2d-shape-B: layer base — poligoni Voronoi (o rect MVP) come
                sfondo cliccabile, sotto strade/decor/avatar/marker. -->
           <g
@@ -1315,6 +1306,16 @@ function onSvgClickCapture(e: MouseEvent) {
           </template>
 
           <MapWeatherOverlay :weather="weather" />
+
+          <!-- v2d-shape-B: vignette overlay sopra tutto il contenuto
+               logico per sfumare i bordi nel bg radial. pointer-events
+               none così non blocca i click sulle celle/strade/avatar. -->
+          <rect
+            :width="LOGICAL_W"
+            :height="LOGICAL_H"
+            fill="url(#map-vignette)"
+            pointer-events="none"
+          />
         </g>
       </g>
     </svg>

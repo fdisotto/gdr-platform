@@ -117,10 +117,21 @@ function makeConnection(seed: string): PartyConnection {
     })
 
     sock.addEventListener('message', (ev) => {
+      let data: Record<string, unknown> | null = null
       try {
-        const data = JSON.parse(ev.data as string) as Record<string, unknown>
+        data = JSON.parse(ev.data as string) as Record<string, unknown>
+      } catch (e) {
+        console.warn('[ws] payload non parsabile', e, ev.data)
+        return
+      }
+      try {
         handleEvent(data)
-      } catch { /* ignore malformed */ }
+      } catch (e) {
+        // Prima silenziato: un'eccezione qui faceva sparire il messaggio
+        // senza lasciar traccia (es. un evento server con shape inattesa
+        // non veniva applicato e i client mostravano stato stale).
+        console.warn('[ws] errore nel dispatch evento', data?.type, e)
+      }
     })
 
     sock.addEventListener('close', (ev) => {
