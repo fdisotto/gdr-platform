@@ -5,7 +5,6 @@ import { useGeneratedMap } from '~/composables/useGeneratedMap'
 import { usePartyMaps } from '~/composables/usePartyMaps'
 import { usePartySeed } from '~/composables/usePartySeed'
 import { usePartyStore } from '~/stores/party'
-import { useVoronoiPolygons } from '~/composables/useVoronoiPolygons'
 import type { PartyMapPublic } from '~~/shared/protocol/ws'
 import type { GeneratedMap, GeneratedArea } from '~~/shared/map/generators/types'
 
@@ -131,17 +130,6 @@ const generatedMap = computed<GeneratedMap | null>(() => {
     background: base.background
   }
 })
-
-// v2d-shape-B: Voronoi tessellation client-side. Le aree con shape attuale
-// (post override drag/move) sono i seed; il poligono Voronoi di ognuna
-// riempie la sua "regione" del viewBox 1000x700, condividendo confini con
-// le aree vicine. Ricalcolo deriva live dai centroidi → segue il drag.
-const voronoiAreas = computed(() => {
-  const gm = generatedMap.value
-  if (!gm) return []
-  return gm.areas.map(a => ({ id: a.id, shape: a.shape }))
-})
-const voronoiByArea = useVoronoiPolygons(voronoiAreas, 1000, 700)
 </script>
 
 <template>
@@ -160,6 +148,5 @@ const voronoiByArea = useVoronoiPolygons(voronoiAreas, 1000, 700)
     :map-id="map?.id ?? null"
     :map-type-id="map?.mapTypeId ?? null"
     :map-name="map?.name ?? null"
-    :voronoi-by-area="voronoiByArea"
   />
 </template>

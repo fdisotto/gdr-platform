@@ -8,7 +8,8 @@ import type { GeneratedMap } from '~~/shared/map/generators/types'
 
 // Stub composables di rete + route per isolare il rendering del solo
 // componente. Il test verifica che `:generated-map` pilota i v-for sopra
-// `MapArea` (numero di stub == numero di aree della GeneratedMap).
+// `MapArea`. Con Voronoi attivo (generatedMap presente) le aree vengono
+// renderizzate su 2 layer (base + marker), quindi N aree → 2N MapArea.
 vi.mock('~/composables/usePartySeed', () => ({
   usePartySeed: () => 'test-seed'
 }))
@@ -70,7 +71,7 @@ function fakeGeneratedMap(): GeneratedMap {
 describe('GameMap con generatedMap', () => {
   beforeEach(() => setActivePinia(createPinia()))
 
-  it('renderizza N MapArea pari al numero di aree del GeneratedMap', () => {
+  it('renderizza 2N MapArea (base + marker layer) per le aree Voronoi del GeneratedMap', () => {
     const wrapper = mount(GameMap, {
       props: { generatedMap: fakeGeneratedMap() },
       global: {
@@ -89,7 +90,7 @@ describe('GameMap con generatedMap', () => {
         }
       }
     })
-    expect(wrapper.findAll('.ma-stub').length).toBe(3)
+    expect(wrapper.findAll('.ma-stub').length).toBe(6)
   })
 
   it('senza generatedMap renderizza le 14 aree legacy', () => {

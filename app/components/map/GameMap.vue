@@ -15,6 +15,7 @@ import MapPlayersBox from '~/components/map/MapPlayersBox.vue'
 import MapRoads from '~/components/map/MapRoads.vue'
 import MapDecor from '~/components/map/MapDecor.vue'
 import MapTransitionDoors from '~/components/map/MapTransitionDoors.vue'
+import { useVoronoiPolygons } from '~/composables/useVoronoiPolygons'
 
 // T20: GameMap consuma un GeneratedMap deterministico quando passato
 // (path multi-mappa post-T20). In assenza, usa la mappa hardcoded legacy
@@ -42,9 +43,6 @@ const props = defineProps<{
   mapTypeId?: string | null
   // v2d-world: nome della mappa attiva, mostrato nel banner in alto.
   mapName?: string | null
-  // v2d-shape-B: Voronoi polygons pre-calcolati lato MapViewSvg, mappati
-  // per areaId. Quando presenti l'area si renderizza come Voronoi cell.
-  voronoiByArea?: Map<string, string>
 }>()
 
 const areas = computed<readonly Area[]>(() => {
@@ -202,6 +200,21 @@ if (typeof document !== 'undefined') {
 // e leggibilità del testo.
 const LOGICAL_W = 1000
 const LOGICAL_H = 700
+
+// v2d-shape-B: tessellation Voronoi derivata dalle effectiveAreas, così
+// durante il drag il poligono della cella segue il puntatore in tempo
+// reale insieme a strade/decor. Calcolata solo per le mappe v2d
+// (generatedMap presente); per la legacy resta vuota → fallback ai rect.
+const voronoiAreasInput = computed(() => {
+  if (!props.generatedMap) return []
+  return effectiveAreas.value.map(a => ({
+    id: a.id,
+    shape: { x: a.svg.x, y: a.svg.y, w: a.svg.w, h: a.svg.h }
+  }))
+})
+const voronoiByArea = useVoronoiPolygons(voronoiAreasInput, LOGICAL_W, LOGICAL_H)
+const hasVoronoi = computed(() => voronoiByArea.value.size > 0)
+
 const containerEl = ref<HTMLElement | null>(null)
 const containerW = ref<number>(LOGICAL_W)
 const containerH = ref<number>(LOGICAL_H)
@@ -914,8 +927,8 @@ function onSvgBgClick(e: MouseEvent) {
               :is-adjacent="adjacentSet.has(a.id)"
               :is-master="isMaster"
               :player-count="(playersByArea.get(a.id)?.length ?? 0)"
-              :voronoi-points="props.voronoiByArea?.get(a.id) ?? null"
-              :layer="props.voronoiByArea && props.voronoiByArea.size > 0 ? 'base' : 'all'"
+              :voronoi-points="voronoiByArea.get(a.id) ?? null"
+              :layer="hasVoronoi ? 'base' : 'all'"
               :fog="isFog(a.id)"
               @click="!editMode && onAreaClick(a.id as AreaId)"
             />
@@ -938,7 +951,7 @@ function onSvgBgClick(e: MouseEvent) {
 
           <!-- v2d-shape-B: layer marker — solo se Voronoi attivo (per il
                legacy MVP il rect 'all' include già marker+label). -->
-          <template v-if="props.voronoiByArea && props.voronoiByArea.size > 0">
+          <template v-if="hasVoronoi">
             <g
               v-for="a in effectiveAreas"
               :key="`area-marker-${a.id}`"
@@ -950,7 +963,7 @@ function onSvgBgClick(e: MouseEvent) {
                 :is-adjacent="adjacentSet.has(a.id)"
                 :is-master="isMaster"
                 :player-count="(playersByArea.get(a.id)?.length ?? 0)"
-                :voronoi-points="props.voronoiByArea?.get(a.id) ?? null"
+                :voronoi-points="voronoiByArea.get(a.id) ?? null"
                 layer="marker"
                 :fog="isFog(a.id)"
               />
@@ -970,8 +983,8 @@ function onSvgBgClick(e: MouseEvent) {
                  dentro la cell), altrimenti il rect bbox legacy. -->
             <g v-if="editMode">
               <polygon
-                v-if="props.voronoiByArea?.get(a.id)"
-                :points="props.voronoiByArea.get(a.id)!"
+                v-if="voronoiByArea.get(a.id)"
+                :points="voronoiByArea.get(a.id)!"
                 fill="transparent"
                 :stroke="roadFromAreaId === a.id ? 'var(--z-toxic-500, #b3d33a)' : 'var(--z-rust-300)'"
                 :stroke-width="roadFromAreaId === a.id ? 3 : 2"
@@ -1075,7 +1088,7 @@ function onSvgBgClick(e: MouseEvent) {
               :area="a"
               :index="i"
               :is-self="party.me?.id === p.id"
-              :centered="!!(props.voronoiByArea && props.voronoiByArea.size > 0)"
+              :centered="hasVoronoi"
               @click="(ev) => onAvatarClick(ev, p)"
             />
             <!-- Pill "+N" quando ci sono più player di quanti ne stiano -->
