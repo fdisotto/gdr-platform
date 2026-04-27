@@ -995,6 +995,46 @@ function onSvgClickCapture(e: MouseEvent) {
           />
           <feColorMatrix values="0 0 0 0 0.15 0 0 0 0 0.15 0 0 0 0 0.15 0 0 0 0.35 0" />
         </filter>
+        <!-- v2d-shape-B: maschera radiale per sfumare i bordi del
+             rettangolo logico 1000x700. Bianco al centro = visibile,
+             nero ai bordi = trasparente → niente più "quadrato" netto
+             del viewport: le celle voronoi più esterne fondono nel bg. -->
+        <radialGradient
+          id="map-edge-fade"
+          cx="50%"
+          cy="50%"
+          r="65%"
+        >
+          <stop
+            offset="0%"
+            stop-color="white"
+            stop-opacity="1"
+          />
+          <stop
+            offset="78%"
+            stop-color="white"
+            stop-opacity="1"
+          />
+          <stop
+            offset="100%"
+            stop-color="white"
+            stop-opacity="0"
+          />
+        </radialGradient>
+        <mask
+          id="map-edge-mask"
+          maskUnits="userSpaceOnUse"
+          x="0"
+          y="0"
+          :width="LOGICAL_W"
+          :height="LOGICAL_H"
+        >
+          <rect
+            :width="LOGICAL_W"
+            :height="LOGICAL_H"
+            fill="url(#map-edge-fade)"
+          />
+        </mask>
       </defs>
       <!-- Bg + grain riempiono l'intero viewBox dinamico: no più letterbox -->
       <rect
@@ -1013,7 +1053,10 @@ function onSvgClickCapture(e: MouseEvent) {
       <!-- User zoom/pan applicato sopra al fit-to-container -->
       <g :transform="userTransform">
         <!-- Contenuto logico 1000x700 scalato uniformemente e centrato -->
-        <g :transform="contentTransform">
+        <g
+          :transform="contentTransform"
+          mask="url(#map-edge-mask)"
+        >
           <!-- v2d-shape-B: layer base — poligoni Voronoi (o rect MVP) come
                sfondo cliccabile, sotto strade/decor/avatar/marker. -->
           <g
