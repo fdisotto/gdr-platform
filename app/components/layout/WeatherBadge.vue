@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed, ref, onBeforeUnmount } from 'vue'
 import type { AreaId } from '~~/shared/map/areas'
-import { AREA_IDS } from '~~/shared/map/areas'
 import { useAreaWeather } from '~/composables/useAreaWeather'
 import { usePartyStore } from '~/stores/party'
 import { usePartyConnections } from '~/composables/usePartyConnections'
 import { usePartySeed } from '~/composables/usePartySeed'
+import { useActiveMapAreas } from '~/composables/useActiveMapAreas'
 
 const seed = usePartySeed()
 const party = usePartyStore(seed)
 const connection = usePartyConnections().open(seed)
+const activeMapAreas = useActiveMapAreas(seed)
 
 const areaIdRef = () => (party.me?.currentAreaId as AreaId | undefined) ?? null
 const { weather } = useAreaWeather(areaIdRef)
@@ -155,11 +156,11 @@ if (typeof window !== 'undefined') {
             * globale (tutte le aree)
           </option>
           <option
-            v-for="a in AREA_IDS"
-            :key="a"
-            :value="a"
+            v-for="a in activeMapAreas"
+            :key="a.id"
+            :value="a.id"
           >
-            {{ a }}
+            {{ a.name }}
           </option>
         </select>
       </div>

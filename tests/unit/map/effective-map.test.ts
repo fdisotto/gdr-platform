@@ -98,7 +98,7 @@ describe('buildEffectiveAdjacency', () => {
     expect(visibleAdj.a).not.toContain('b')
   })
 
-  it("'add' forza una coppia anche se distante", () => {
+  it('\'add\' forza una coppia anche se distante', () => {
     const areas = [makeArea('a', 0, 0), makeArea('b', 600, 0)]
     const { visibleAdj } = buildEffectiveAdjacency(areas, [{
       mapId: 'm1', areaA: 'a', areaB: 'b', kind: 'add', roadKind: null
@@ -107,7 +107,7 @@ describe('buildEffectiveAdjacency', () => {
     expect(visibleAdj.b).toContain('a')
   })
 
-  it("'remove' sopprime una coppia by-proximity", () => {
+  it('\'remove\' sopprime una coppia by-proximity', () => {
     const areas = [makeArea('a', 0, 0), makeArea('b', 100, 0)]
     const { visibleAdj } = buildEffectiveAdjacency(areas, [{
       mapId: 'm1', areaA: 'a', areaB: 'b', kind: 'remove', roadKind: null
@@ -116,7 +116,7 @@ describe('buildEffectiveAdjacency', () => {
     expect(visibleAdj.b).not.toContain('a')
   })
 
-  it("'broken' lascia la coppia visibile ma la marca in brokenPairs", () => {
+  it('\'broken\' lascia la coppia visibile ma la marca in brokenPairs', () => {
     const areas = [makeArea('a', 0, 0), makeArea('b', 100, 0)]
     const { visibleAdj, brokenPairs } = buildEffectiveAdjacency(areas, [{
       mapId: 'm1', areaA: 'a', areaB: 'b', kind: 'broken', roadKind: null

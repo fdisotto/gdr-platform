@@ -2,13 +2,18 @@
 import { computed, ref } from 'vue'
 import { usePartyStore } from '~/stores/party'
 import { usePartySeed } from '~/composables/usePartySeed'
-import { AREAS } from '~~/shared/map/areas'
+import { useActiveMapAreas } from '~/composables/useActiveMapAreas'
 
 const seed = usePartySeed()
 const party = usePartyStore(seed)
 const open = ref(false)
+const activeMapAreas = useActiveMapAreas(seed)
 
-const areaNameById = new Map(AREAS.map(a => [a.id as string, a.name]))
+// Mappa id→name basata sulle aree della mappa attiva (con override
+// applicati). Usata per visualizzare il nome leggibile accanto al
+// player nella lista "Connessi". Se l'id non esiste nella mappa
+// (player ancora in transito o su mappa diversa) fallback all'id raw.
+const areaNameById = computed(() => new Map(activeMapAreas.value.map(a => [a.id, a.name])))
 
 const sortedPlayers = computed(() => {
   return [...party.players].sort((a, b) => {
