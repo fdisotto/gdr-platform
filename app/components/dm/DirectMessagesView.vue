@@ -62,11 +62,15 @@ function formatDate(ms: number): string {
 // ── Composer "nuova missiva" ────────────────────────────────────────────
 // Modal con destinatario + oggetto + corpo. Il thread si crea
 // implicitamente al primo messaggio (server lo memorizza con subject).
+// Master ha anche l'opzione 'invia a tutti' che invia broadcast a
+// ogni player non-master del party.
 const showNew = ref(false)
 const newToId = ref('')
 const newSubject = ref('')
 const newFirstBody = ref('')
 const newError = ref<string | null>(null)
+const newToAll = ref(false)
+const isMaster = computed(() => partyStore.me?.role === 'master')
 
 // Combobox cercabile per il destinatario.
 const newToQuery = ref('')
@@ -95,6 +99,7 @@ function openNew(prefillToId?: string) {
   newSubject.value = ''
   newFirstBody.value = ''
   newError.value = null
+  newToAll.value = false
   showNew.value = true
 }
 function cancelNew() {
@@ -103,16 +108,22 @@ function cancelNew() {
 function submitNew() {
   const subj = newSubject.value.trim().slice(0, 64)
   const body = newFirstBody.value.trim()
-  if (!newToId.value) {
-    newError.value = 'Scegli un destinatario.'
-    return
-  }
   if (!subj) {
     newError.value = 'L\'oggetto della missiva e\' obbligatorio.'
     return
   }
   if (!body) {
     newError.value = 'Scrivi il corpo della missiva.'
+    return
+  }
+  if (newToAll.value && isMaster.value) {
+    connection.send({ type: 'master:broadcast-dm', subject: subj, body })
+    feedback.pushToast({ level: 'info', title: 'Missiva inviata a tutti' })
+    showNew.value = false
+    return
+  }
+  if (!newToId.value) {
+    newError.value = 'Scegli un destinatario.'
     return
   }
   connection.send({
@@ -438,7 +449,24 @@ function send() {
         >
           ✉ Nuova missiva
         </h3>
-        <div class="relative">
+        <!-- Master only: invia broadcast a tutti i player non-master -->
+        <label
+          v-if="isMaster"
+          class="flex items-center gap-2 text-xs px-3 py-2 rounded"
+          :style="newToAll
+            ? 'background: var(--z-blood-700); color: var(--z-blood-300); border: 1px solid var(--z-blood-300)'
+            : 'background: var(--z-bg-900); color: var(--z-text-md); border: 1px solid var(--z-border)'"
+        >
+          <input
+            v-model="newToAll"
+            type="checkbox"
+          >
+          <span>📢 Invia a tutti i player del party</span>
+        </label>
+        <div
+          v-if="!newToAll"
+          class="relative"
+        >
           <label
             class="block text-xs uppercase tracking-wide mb-1"
             style="color: var(--z-text-md)"

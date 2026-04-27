@@ -1,6 +1,6 @@
 import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent, MasterDeleteMessageEvent, MasterPurgeMessageEvent, MasterRestoreMessageEvent, MasterEditMessageEvent,
   MasterAreaRenameEvent, MasterAreaMoveEvent, MasterAreaAddEvent, MasterAreaRemoveEvent,
-  MasterRoadAddEvent, MasterRoadRemoveEvent, MasterRoadResetEvent, MasterRoadBreakEvent, MasterFogEvent, MasterSetCityNameEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, MasterFetchActionsEvent, MasterFetchBansEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type MessageRemovedEvent,
+  MasterRoadAddEvent, MasterRoadRemoveEvent, MasterRoadResetEvent, MasterRoadBreakEvent, MasterFogEvent, MasterSetCityNameEvent, MasterBroadcastDmEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, MasterFetchActionsEvent, MasterFetchBansEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type MessageRemovedEvent,
   type AreaOverrideUpdatedEvent, type AreaOverrideRemovedEvent, type AreaOverridePublic,
   type AdjacencyOverrideUpdatedEvent, type AdjacencyOverrideRemovedEvent, type AdjacencyOverridePublic,
   type AreaDiscoveredEvent,
@@ -212,6 +212,10 @@ export default defineWebSocketHandler({
     }
     if (parsed.type === 'master:set-city-name') {
       await handleMasterSetCityName(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:broadcast-dm') {
+      await handleMasterBroadcastDm(peer, parsed)
       return
     }
     if (parsed.type === 'master:mute') {
@@ -1402,6 +1406,59 @@ async function handleMasterSetCityName(peer: Peer, raw: unknown) {
       c.ws.send(payload)
     } catch { /* skip */ }
   }
+}
+
+async function handleMasterBroadcastDm(peer: Peer, raw: unknown) {
+  const res = MasterBroadcastDmEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  const subject = res.data.subject.trim().slice(0, 64)
+  const body = res.data.body.trim()
+  if (!subject || !body) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'empty_subject_or_body' })
+    return
+  }
+  // Per ogni player non-master della party (anche offline) crea un
+  // record DM con (master → player). Il fanout invia il message:new
+  // al peer connesso (se online) e il master vede il proprio thread
+  // duplicato nella sidebar (uno per peer).
+  const partyPlayers = listOnlinePlayers(ctx.db, ctx.conn.partySeed)
+  let count = 0
+  for (const target of partyPlayers) {
+    if (target.id === ctx.me.id) continue
+    if (target.role === 'master') continue
+    const stored = insertMessage(ctx.db, {
+      partySeed: ctx.conn.partySeed,
+      kind: 'dm',
+      authorPlayerId: ctx.me.id,
+      authorDisplay: ctx.me.nickname,
+      areaId: null,
+      targetPlayerId: target.id,
+      body,
+      subject
+    })
+    const event: MessageNewEvent = { type: 'message:new', message: stored }
+    const payload = JSON.stringify(event)
+    // Mittente (master) sempre, destinatario se connesso
+    for (const c of registry.listParty(ctx.conn.partySeed)) {
+      if (c.playerId !== ctx.me.id && c.playerId !== target.id) continue
+      try {
+        c.ws.send(payload)
+      } catch { /* skip */ }
+    }
+    count++
+  }
+  logMasterAction(ctx.db, {
+    partySeed: ctx.conn.partySeed,
+    masterId: ctx.me.id,
+    action: 'broadcast-dm',
+    target: ctx.conn.partySeed,
+    payload: { subject, recipients: count }
+  })
 }
 
 async function handleMasterPurgeMessage(peer: Peer, raw: unknown) {

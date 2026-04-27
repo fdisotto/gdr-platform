@@ -572,6 +572,17 @@ export const MasterRoadBreakEvent = z.object({
 })
 export type MasterRoadBreakEvent = z.infer<typeof MasterRoadBreakEvent>
 
+// v2d-dm-broadcast: il master invia una missiva a TUTTI i player
+// non-master della party. body+subject identici per ognuno; il
+// server crea N record DM separati (uno per peer) cosi' ogni player
+// vede il thread nella propria inbox.
+export const MasterBroadcastDmEvent = z.object({
+  type: z.literal('master:broadcast-dm'),
+  subject: z.string().min(1).max(64),
+  body: z.string().min(1).max(2000)
+})
+export type MasterBroadcastDmEvent = z.infer<typeof MasterBroadcastDmEvent>
+
 // v2d-fog: il master attiva/disattiva la fog of war party-wide. Quando
 // false, i giocatori vedono tutta la mappa indipendentemente dalle
 // aree visitate. Cambio persistito sulla riga parties.fogEnabled e
@@ -804,6 +815,7 @@ export const ClientEvent = z.discriminatedUnion('type', [
   MasterRoadAddEvent, MasterRoadRemoveEvent, MasterRoadResetEvent,
   MasterRoadBreakEvent,
   MasterFogEvent,
-  MasterSetCityNameEvent
+  MasterSetCityNameEvent,
+  MasterBroadcastDmEvent
 ])
 export type ClientEvent = z.infer<typeof ClientEvent>
