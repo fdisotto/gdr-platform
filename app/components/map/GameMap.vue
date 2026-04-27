@@ -227,12 +227,13 @@ const containerEl = ref<HTMLElement | null>(null)
 const containerW = ref<number>(LOGICAL_W)
 const containerH = ref<number>(LOGICAL_H)
 const viewBox = computed(() => `0 0 ${containerW.value} ${containerH.value}`)
-// 'cover' invece di 'meet': la mappa riempie completamente il viewport
-// (niente piu' bande/quadratone con bg radial intorno). Su aspect ratio
-// estremi il contenuto eccede di un lato; il SVG clippa, e l'utente
-// puo' comunque pannare/zoomare per vedere tutto.
+// 'meet' (Math.min): il LOGICAL 1000x700 si rimpicciolisce per stare
+// dentro il container preservando aspect. lascia letterbox sui lati
+// del LOGICAL ma il bg del SVG e' uniforme #0b0d0c uguale al body
+// → letterbox invisibile, niente "quadratone". e con zoom < 1 si
+// vede comunque tutto il LOGICAL senza tagli.
 const contentScale = computed(() =>
-  Math.max(containerW.value / LOGICAL_W, containerH.value / LOGICAL_H)
+  Math.min(containerW.value / LOGICAL_W, containerH.value / LOGICAL_H)
 )
 // Larghezza del fade ai bordi: piccola (~2% del lato corto, clamp
 // 14-36 px) e con stop gradient concentrati vicino al bordo →
