@@ -1695,12 +1695,16 @@ async function handleMasterHiddenRoll(peer: Peer, raw: unknown) {
   }
   const rng = mulberry32(seedFromString(`${ctx.conn.partySeed}|${ctx.me.id}|${Date.now()}|hidden`))
   const rolled = rollDice(parsedRoll.expr, rng)
+  // Hidden roll: stesso scope di un say privato per il master. areaId
+  // valorizzato (quella corrente del master) cosi' lo store client
+  // (che scarta i message senza areaId) lo riceve come messaggio in
+  // quel feed. Il fanout invia solo al master, niente broadcast.
   const stored = insertMessage(ctx.db, {
     partySeed: ctx.conn.partySeed,
     kind: 'roll',
     authorPlayerId: ctx.me.id,
     authorDisplay: ctx.me.nickname,
-    areaId: null,
+    areaId: ctx.conn.areaId,
     body: res.data.expr,
     rollPayload: JSON.stringify({ expr: res.data.expr, ...rolled })
   })
