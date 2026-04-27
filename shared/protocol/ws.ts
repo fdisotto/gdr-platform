@@ -35,7 +35,11 @@ export const ChatSendEvent = z.object({
   rollExpr: z.string().optional(),
   // v2d-dm-thread: oggetto della missiva. Obbligatorio per kind='dm'
   // (validato server-side in handleChatSend).
-  subject: z.string().min(1).max(64).optional()
+  subject: z.string().min(1).max(64).optional(),
+  // v2d-dm-thread2: identificativo del thread per kind='dm'. Se assente
+  // su una nuova missiva, il server ne genera uno nuovo. Le risposte nel
+  // composer del thread aperto lo passano per continuare lo stesso thread.
+  threadId: z.string().min(1).max(64).optional()
 })
 export type ChatSendEvent = z.infer<typeof ChatSendEvent>
 
@@ -50,6 +54,7 @@ export const MessageRowSchema = z.object({
   body: z.string(),
   rollPayload: z.string().nullable(),
   subject: z.string().nullable().optional(),
+  threadId: z.string().nullable().optional(),
   createdAt: z.number(),
   deletedAt: z.number().nullable(),
   deletedBy: z.string().nullable(),
@@ -304,7 +309,7 @@ export type WeatherUpdatedEvent = z.infer<typeof WeatherUpdatedEvent>
 export const HistoryFetchEvent = z.object({
   type: z.literal('chat:history-before'),
   areaId: z.string().optional(),
-  threadKey: z.string().optional(),
+  threadId: z.string().optional(),
   before: z.number(),
   limit: z.number().int().min(1).max(200)
 })
@@ -313,7 +318,7 @@ export type HistoryFetchEvent = z.infer<typeof HistoryFetchEvent>
 export const HistoryBatchEvent = z.object({
   type: z.literal('chat:history-batch'),
   areaId: z.string().optional(),
-  threadKey: z.string().optional(),
+  threadId: z.string().optional(),
   messages: z.array(MessageRowSchema),
   hasMore: z.boolean()
 })

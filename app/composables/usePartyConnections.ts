@@ -376,11 +376,11 @@ function makeConnection(seed: string): PartyConnection {
         break
       }
       case 'chat:history-batch': {
-        const payload = data as { areaId?: string, threadKey?: string, messages: ChatMessage[], hasMore: boolean }
+        const payload = data as { areaId?: string, threadId?: string, messages: ChatMessage[], hasMore: boolean }
         if (payload.areaId) {
           chatStore.prependArea(payload.areaId, payload.messages, payload.hasMore)
-        } else if (payload.threadKey) {
-          chatStore.prependThread(payload.threadKey, payload.messages, payload.hasMore)
+        } else if (payload.threadId) {
+          chatStore.prependThread(payload.threadId, payload.messages, payload.hasMore)
         }
         break
       }

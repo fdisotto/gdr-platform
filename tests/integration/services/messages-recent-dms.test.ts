@@ -43,9 +43,12 @@ describe('listRecentDmsForPlayer', () => {
   })
 
   it('limita agli ultimi N', async () => {
+    // Sleep ogni messaggio: senza, più messaggi finiscono nello stesso ms e
+    // l'ordine fra di loro non è garantito (col nuovo index thread_id il
+    // piano di esecuzione di SQLite può variare).
     for (let i = 0; i < 60; i++) {
       insertMessage(db, { partySeed: seed, kind: 'dm', authorPlayerId: annaId, authorDisplay: 'Anna', areaId: null, targetPlayerId: masterId, body: `m${i}` })
-      if (i % 10 === 0) await new Promise<void>(r => setTimeout(r, 2))
+      await new Promise<void>(r => setTimeout(r, 1))
     }
     const result = listRecentDmsForPlayer(db, seed, annaId, 50)
     expect(result).toHaveLength(50)

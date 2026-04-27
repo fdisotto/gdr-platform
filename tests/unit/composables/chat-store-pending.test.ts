@@ -71,6 +71,7 @@ describe('chat store — pending reconciliation', () => {
   it('appendPendingDm e appendDm riconciliano il thread', () => {
     const s = useChatStore('test-seed')
     const selfId = 'me'
+    const threadId = 'thread-uuid-1'
     const pending = mkMsg({
       id: 'pending-dm-1',
       pending: true,
@@ -78,6 +79,7 @@ describe('chat store — pending reconciliation', () => {
       areaId: null,
       authorPlayerId: selfId,
       targetPlayerId: 'other',
+      threadId,
       body: 'missiva',
       createdAt: 2000
     })
@@ -87,13 +89,13 @@ describe('chat store — pending reconciliation', () => {
       areaId: null,
       authorPlayerId: selfId,
       targetPlayerId: 'other',
+      threadId,
       body: 'missiva',
       createdAt: 2050
     })
     s.appendPendingDm(pending, selfId)
     s.appendDm(echo, selfId)
-    const key = s.threadKey(selfId, 'other')
-    const list = s.forThread(key)
+    const list = s.forThread(threadId)
     expect(list).toHaveLength(1)
     expect(list[0]!.id).toBe('server-dm-1')
     expect(list[0]!.pending).toBeUndefined()

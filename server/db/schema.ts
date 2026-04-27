@@ -95,16 +95,22 @@ export const messages = sqliteTable('messages', {
   body: text('body').notNull(),
   rollPayload: text('roll_payload'),
   // v2d-dm-thread: oggetto del thread DM (NULL per messaggi non-DM
-  // o per i thread legacy senza soggetto). I DM dello stesso peer con
-  // subject diversi sono thread separati.
+  // o per i thread legacy senza soggetto). Solo descrittivo: l'identità
+  // del thread è `threadId`.
   subject: text('subject'),
+  // v2d-dm-thread2: identificativo univoco del thread DM. Ogni "Nuova
+  // missiva" genera un threadId nuovo (anche con stesso oggetto verso
+  // stesso peer → thread separato). Le risposte nel thread aperto
+  // riusano il threadId. NULL per messaggi non-DM.
+  threadId: text('thread_id'),
   createdAt: integer('created_at').notNull(),
   deletedAt: integer('deleted_at'),
   deletedBy: text('deleted_by'),
   editedAt: integer('edited_at')
 }, t => [
   index('messages_area_time_idx').on(t.partySeed, t.areaId, t.createdAt),
-  index('messages_target_time_idx').on(t.partySeed, t.targetPlayerId, t.createdAt)
+  index('messages_target_time_idx').on(t.partySeed, t.targetPlayerId, t.createdAt),
+  index('messages_thread_time_idx').on(t.partySeed, t.threadId, t.createdAt)
 ])
 
 export const areaAccessBans = sqliteTable('area_access_bans', {

@@ -15,6 +15,7 @@ export interface MessageRow {
   body: string
   rollPayload: string | null
   subject: string | null
+  threadId: string | null
   createdAt: number
   deletedAt: number | null
   deletedBy: string | null
@@ -36,11 +37,20 @@ export interface InsertMessageInput {
   rollPayload?: string | null
   // v2d-dm-thread: oggetto del thread DM. Solo per kind='dm'.
   subject?: string | null
+  // v2d-dm-thread2: thread univoco. Per kind='dm', se omesso ne viene
+  // generato uno nuovo (= ogni messaggio crea un nuovo thread, comportamento
+  // coerente con la regola "ogni nuova missiva = nuovo thread"). I caller
+  // che vogliono continuare un thread esistente (reply nel composer) DEVONO
+  // passare il threadId del thread aperto.
+  threadId?: string | null
 }
 
 export function insertMessage(db: Db, input: InsertMessageInput): MessageRow {
   const id = generateUuid()
   const now = Date.now()
+  const threadId = input.kind === 'dm'
+    ? (input.threadId ?? generateUuid())
+    : null
   const row: MessageRow = {
     id,
     partySeed: input.partySeed,
@@ -53,6 +63,7 @@ export function insertMessage(db: Db, input: InsertMessageInput): MessageRow {
     body: input.body,
     rollPayload: input.rollPayload ?? null,
     subject: input.subject ?? null,
+    threadId,
     createdAt: now,
     deletedAt: null,
     deletedBy: null,
@@ -126,12 +137,15 @@ export function listAreaMessagesBefore(db: Db, seed: string, areaId: string, bef
 }
 
 export function listRecentDmsForPlayer(db: Db, seed: string, playerId: string, limit: number): MessageRow[] {
+  // ORDER BY a livello SQL: con il nuovo index thread_id il SELECT senza
+  // ORDER BY non garantisce più l'ordine di inserzione. asc(createdAt) con
+  // tie-break implicito su rowid riallinea cronologicamente.
   const rows = db.select().from(messages)
     .where(and(eq(messages.partySeed, seed), eq(messages.kind, 'dm')))
+    .orderBy(asc(messages.createdAt))
     .all() as MessageRow[]
   return rows
     .filter(m => m.authorPlayerId === playerId || m.targetPlayerId === playerId)
-    .sort((a, b) => a.createdAt - b.createdAt)
     .slice(-limit)
 }
 
@@ -150,6 +164,40 @@ export function listThreadMessagesBefore(db: Db, seed: string, playerIdA: string
         || (a === playerIdB && b === playerIdA)
       )
     })
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, limit)
+    .reverse()
+}
+
+// v2d-dm-thread2: trova un messaggio rappresentativo di un thread DM,
+// usato per validare che il caller appartenga al thread quando manda
+// una reply. Ritorna il primo messaggio del thread (qualsiasi).
+export function findThreadMessage(db: Db, seed: string, threadId: string): MessageRow | null {
+  const rows = db.select().from(messages)
+    .where(and(
+      eq(messages.partySeed, seed),
+      eq(messages.kind, 'dm'),
+      eq(messages.threadId, threadId)
+    ))
+    .limit(1)
+    .all() as MessageRow[]
+  return rows[0] ?? null
+}
+
+// v2d-dm-thread2: query per thread univoco. Usata da chat:history-before
+// quando il client ha già il threadId del thread aperto.
+export function listThreadMessagesByIdBefore(
+  db: Db, seed: string, threadId: string, beforeMs: number, limit: number
+): MessageRow[] {
+  const rows = db.select().from(messages)
+    .where(and(
+      eq(messages.partySeed, seed),
+      eq(messages.kind, 'dm'),
+      eq(messages.threadId, threadId)
+    ))
+    .all() as MessageRow[]
+  return rows
+    .filter(m => m.createdAt < beforeMs)
     .sort((a, b) => b.createdAt - a.createdAt)
     .slice(0, limit)
     .reverse()

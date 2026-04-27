@@ -13,6 +13,8 @@ export interface ChatMessage {
   rollPayload: string | null
   // v2d-dm-thread: oggetto del thread DM (solo kind='dm').
   subject?: string | null
+  // v2d-dm-thread2: identificatore univoco del thread (solo kind='dm').
+  threadId?: string | null
   createdAt: number
   deletedAt: number | null
   deletedBy: string | null
@@ -134,11 +136,10 @@ function chatStoreFactory() {
     messagesByArea.value[area] = [...list, msg]
   }
 
-  function appendPendingDm(msg: ChatMessage, selfId: string) {
+  function appendPendingDm(msg: ChatMessage, _selfId: string) {
     if (msg.kind !== 'dm') return
-    const otherId = msg.authorPlayerId === selfId ? msg.targetPlayerId : msg.authorPlayerId
-    if (!otherId) return
-    const key = threadKey(selfId, otherId, msg.subject ?? null)
+    const key = msg.threadId
+    if (!key) return
     const existing = dmsByThread.value[key] ?? []
     dmsByThread.value[key] = [...existing, msg]
   }
@@ -177,27 +178,17 @@ function chatStoreFactory() {
     return messagesByArea.value[areaId] ?? []
   }
 
-  // v2d-dm-thread: la key del thread DM include il subject. Cosi' due
-  // missive verso lo stesso peer ma con oggetti diversi sono thread
-  // separati. Il separator '|' (no '::') divide ids+subject. Per i
-  // messaggi legacy senza subject (campo nullable) usiamo subject ''.
-  function threadKey(aId: string, bId: string, subject: string | null = null): string {
-    const subj = (subject ?? '').slice(0, 64)
-    return [aId, bId].sort().join('::') + '|' + subj
-  }
-  function parseThreadKey(key: string): { peers: [string, string], subject: string } {
-    const [peers, subject = ''] = key.split('|')
-    const [a, b] = (peers ?? '').split('::') as [string, string]
-    return { peers: [a, b], subject }
-  }
+  // v2d-dm-thread2: la chiave del thread DM è il `threadId` univoco
+  // assegnato dal server al primo messaggio. Ogni nuova missiva (anche
+  // verso lo stesso peer e con stesso oggetto) ha un threadId distinto:
+  // diversi thread non si fondono mai. Il client genera l'UUID lato
+  // composer per la "Nuova missiva"; le reply nel thread aperto riusano
+  // il threadId del thread.
 
-  function appendDm(msg: ChatMessage, selfId: string) {
+  function appendDm(msg: ChatMessage, _selfId: string) {
     if (msg.kind !== 'dm') return
-    const otherId = msg.authorPlayerId === selfId
-      ? msg.targetPlayerId
-      : msg.authorPlayerId
-    if (!otherId) return
-    const key = threadKey(selfId, otherId, msg.subject ?? null)
+    const key = msg.threadId
+    if (!key) return
     const existing = dmsByThread.value[key] ?? []
     const matched = matchPendingIndex(existing, msg)
     if (matched >= 0) {
@@ -218,9 +209,16 @@ function chatStoreFactory() {
     const byId = new Map(knownPlayers.map(p => [p.id, p.nickname]))
     const result: Array<{ key: string, otherId: string, otherNickname: string, subject: string, lastMessage: ChatMessage | null }> = []
     for (const [key, msgs] of Object.entries(dmsByThread.value)) {
-      const { peers: [a, b], subject } = parseThreadKey(key)
-      const otherId = a === selfId ? b : a
+      // Il "peer" del thread è dedotto dal primo messaggio: chiunque non sia
+      // io fra author/target. Tutti i messaggi del thread hanno la stessa
+      // coppia di partecipanti per costruzione.
+      const sample = msgs[0] ?? null
+      const otherId = sample
+        ? (sample.authorPlayerId === selfId ? sample.targetPlayerId : sample.authorPlayerId)
+        : null
+      if (!otherId) continue
       const otherNickname = byId.get(otherId) ?? otherId.slice(0, 6)
+      const subject = sample?.subject ?? ''
       const lastMessage = msgs[msgs.length - 1] ?? null
       result.push({ key, otherId, otherNickname, subject, lastMessage })
     }
@@ -258,23 +256,19 @@ function chatStoreFactory() {
     return threadHasMore.value[key] ?? false
   }
 
-  function hydrateDms(dms: ChatMessage[], selfId: string) {
+  function hydrateDms(dms: ChatMessage[], _selfId: string) {
     const grouped: Record<string, ChatMessage[]> = {}
     for (const m of dms) {
       if (m.kind !== 'dm') continue
-      const otherId = m.authorPlayerId === selfId ? m.targetPlayerId : m.authorPlayerId
-      if (!otherId) continue
-      const key = threadKey(selfId, otherId, m.subject ?? null)
+      const key = m.threadId
+      if (!key) continue
       grouped[key] = grouped[key] ?? []
       grouped[key].push(m)
     }
-    // Sort ogni thread
     for (const key of Object.keys(grouped)) {
       grouped[key]!.sort((a, b) => a.createdAt - b.createdAt)
     }
     dmsByThread.value = grouped
-    // Inizializza hasMore per ogni thread basandosi sulla dimensione del
-    // batch ricevuto (stessa logica di hydrate per le aree).
     const nextHasMore: Record<string, boolean> = {}
     for (const [key, msgs] of Object.entries(grouped)) {
       nextHasMore[key] = msgs.length >= INITIAL_AREA_PAGE_SIZE
@@ -298,7 +292,7 @@ function chatStoreFactory() {
     lastSpeakerPlayerId, lastSpokeAt,
     hydrate, hydrateDms, append, update, remove, forArea, forThread,
     appendDm, appendPending, appendPendingDm,
-    listDmThreads, threadKey,
+    listDmThreads,
     setAreaMessages,
     prependArea, prependThread,
     areaHasMoreFor, threadHasMoreFor,

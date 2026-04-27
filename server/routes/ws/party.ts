@@ -14,7 +14,7 @@ import { logMasterAction, listMasterActions } from '~~/server/services/master-ac
 import { setOverride, clearOverride, listOverrides } from '~~/server/services/weather-overrides'
 import { partyMustExist, setPartyFogEnabled, setPartyCityName } from '~~/server/services/parties'
 import { listAreasState, updateAreaState, findAreaState } from '~~/server/services/areas'
-import { listAreaMessages, insertMessage, listAreaMessagesBefore, listThreadMessagesBefore, listRecentDmsForPlayer, softDeleteMessage, restoreMessage, hardDeleteMessage, editMessage, findMessage, type MessageRow } from '~~/server/services/messages'
+import { listAreaMessages, insertMessage, listAreaMessagesBefore, listThreadMessagesByIdBefore, findThreadMessage as findExistingThread, listRecentDmsForPlayer, softDeleteMessage, restoreMessage, hardDeleteMessage, editMessage, findMessage, type MessageRow } from '~~/server/services/messages'
 import { registry, sendJson, chatRateLimiter, listPartyZombies, addZombie, removeZombie, moveZombie, addZombies, listPlayerPositions, setPlayerPosition, resetPlayerPosition, ensurePartyHydrated } from '~~/server/ws/state'
 import { insertZombie, insertZombies, deleteZombie, updateZombiePosition } from '~~/server/services/zombies'
 import { upsertPosition, deletePositionsForPlayer } from '~~/server/services/player-positions'
@@ -332,6 +332,7 @@ async function handleChatSend(peer: Peer, raw: unknown) {
   let rollPayload: string | null = null
 
   let subject: string | null = null
+  let threadId: string | null = null
   if (kind === 'dm') {
     const targetIdentifier = res.data.targetPlayerId ?? ''
     const target = partyPlayers.find(p => p.id === targetIdentifier || p.nickname.toLowerCase() === targetIdentifier.toLowerCase())
@@ -346,6 +347,26 @@ async function handleChatSend(peer: Peer, raw: unknown) {
       return
     }
     subject = subjRaw.slice(0, 64)
+    // v2d-dm-thread2: se il client manda threadId è una reply nel thread
+    // aperto e usiamo quello; se lo omette è una nuova missiva e
+    // insertMessage genera un threadId fresco. Per le reply validiamo che
+    // il threadId esista già su un messaggio fra questi due peer (così
+    // un client malevolo non può iniettare in un thread di altri).
+    const reqThreadId = res.data.threadId?.trim()
+    if (reqThreadId) {
+      const existing = findExistingThread(db, conn.partySeed, reqThreadId)
+      if (!existing) {
+        sendJson(peer, { type: 'error', code: 'not_found', detail: 'thread_not_found' })
+        return
+      }
+      const me2 = conn.playerId
+      const peers = new Set([existing.authorPlayerId, existing.targetPlayerId])
+      if (!peers.has(me2) || !peers.has(target.id)) {
+        sendJson(peer, { type: 'error', code: 'forbidden', detail: 'thread_not_yours' })
+        return
+      }
+      threadId = reqThreadId
+    }
     targetPlayerId = target.id
     storedAreaId = null
   } else if (kind === 'whisper') {
@@ -395,7 +416,8 @@ async function handleChatSend(peer: Peer, raw: unknown) {
     targetPlayerId,
     body,
     rollPayload,
-    subject
+    subject,
+    threadId
   })
 
   const broadcast: MessageNewEvent = { type: 'message:new', message: stored }
@@ -737,26 +759,29 @@ async function handleHistoryFetch(peer: Peer, raw: unknown) {
     return
   }
 
-  if (res.data.threadKey) {
-    const parts = res.data.threadKey.split('::')
-    if (parts.length !== 2) {
-      sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'bad_thread_key' })
+  if (res.data.threadId) {
+    const threadId = res.data.threadId
+    // Validazione di appartenenza: il conn deve essere una delle due parti
+    // del thread (autore o target di un messaggio del thread). Master
+    // bypassa per audit.
+    const sample = findExistingThread(db, conn.partySeed, threadId)
+    if (!sample) {
+      sendJson(peer, { type: 'error', code: 'not_found', detail: 'thread_not_found' })
       return
     }
-    const [a, b] = parts as [string, string]
-    // Restrizione: il conn deve essere una delle due parti (salvo master che può osservare)
     const partyPlayers = listOnlinePlayers(db, conn.partySeed)
     const me = partyPlayers.find(p => p.id === conn.playerId)
     const isMaster = me?.role === 'master'
-    if (!isMaster && conn.playerId !== a && conn.playerId !== b) {
+    const peers = new Set([sample.authorPlayerId, sample.targetPlayerId])
+    if (!isMaster && !peers.has(conn.playerId)) {
       sendJson(peer, { type: 'error', code: 'forbidden', detail: 'not_a_thread_party' })
       return
     }
-    const messagesBatch = listThreadMessagesBefore(db, conn.partySeed, a, b, res.data.before, limit)
+    const messagesBatch = listThreadMessagesByIdBefore(db, conn.partySeed, threadId, res.data.before, limit)
     const hasMore = messagesBatch.length === limit
     const event: HistoryBatchEvent = {
       type: 'chat:history-batch',
-      threadKey: res.data.threadKey,
+      threadId,
       messages: messagesBatch,
       hasMore
     }

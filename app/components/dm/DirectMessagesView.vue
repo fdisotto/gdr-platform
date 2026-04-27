@@ -129,19 +129,19 @@ function submitNew() {
     newError.value = 'Scegli un destinatario.'
     return
   }
+  // v2d-dm-thread2: ogni nuova missiva è un thread separato, anche con
+  // stesso oggetto verso lo stesso peer. Generiamo qui il threadId UUID
+  // così il client può pre-aprire il thread corretto in attesa dell'echo.
+  const threadId = crypto.randomUUID()
   connection.send({
     type: 'chat:send',
     kind: 'dm',
     body,
     targetPlayerId: newToId.value,
-    subject: subj
+    subject: subj,
+    threadId
   })
-  // Salta sul thread appena creato (anche se l'echo del server arrivera'
-  // a stretto giro): la threadKey e' deterministica dai dati locali.
-  if (partyStore.me) {
-    const key = chatStore.threadKey(partyStore.me.id, newToId.value, subj)
-    viewStore.openThread(key)
-  }
+  viewStore.openThread(threadId)
   feedback.pushToast({ level: 'info', title: 'Missiva inviata' })
   showNew.value = false
 }
@@ -164,7 +164,7 @@ function loadMoreHistory() {
   loadingMore.value = true
   connection.send({
     type: 'chat:history-before',
-    threadKey: selectedKey.value,
+    threadId: selectedKey.value,
     before,
     limit: HISTORY_PAGE_SIZE
   })
@@ -182,12 +182,14 @@ function send() {
     sendError.value = 'Nessun thread selezionato.'
     return
   }
+  // Reply nel thread aperto: il key del thread è il threadId server-side.
   connection.send({
     type: 'chat:send',
     kind: 'dm',
     body,
     targetPlayerId: t.otherId,
-    subject: t.subject
+    subject: t.subject,
+    threadId: t.key
   })
   newBody.value = ''
   sendError.value = null

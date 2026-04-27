@@ -483,5 +483,10 @@ CREATE INDEX \`area_visits_map_idx\` ON \`area_visits\` (\`party_seed\`,\`map_id
 );
 --> statement-breakpoint
 CREATE INDEX \`auto_dms_party_idx\` ON \`auto_dms\` (\`party_seed\`);`
+  },
+  {
+    hash: '0013_special_lorna_dane',
+    sql: `ALTER TABLE \`messages\` ADD \`thread_id\` text;--> statement-breakpoint
+CREATE INDEX \`messages_thread_time_idx\` ON \`messages\` (\`party_seed\`,\`thread_id\`,\`created_at\`);`
   }
 ]
