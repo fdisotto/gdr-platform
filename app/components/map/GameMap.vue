@@ -828,7 +828,7 @@ function onSvgClickCapture(e: MouseEvent) {
 <template>
   <section
     ref="containerEl"
-    class="w-full relative flex-1 min-h-0"
+    class="w-full relative flex-1 min-h-0 select-none"
     style="background: var(--z-bg-900)"
   >
     <svg

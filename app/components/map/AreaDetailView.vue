@@ -713,7 +713,7 @@ const decorElements = computed<Decor[]>(() => {
   <section
     v-if="area"
     ref="containerEl"
-    class="w-full relative flex-1 min-h-0 flex flex-col"
+    class="w-full relative flex-1 min-h-0 flex flex-col select-none"
     style="background: var(--z-bg-900)"
   >
     <header

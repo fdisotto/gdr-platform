@@ -177,7 +177,7 @@ function selectTile(idx: number) {
 
 <template>
   <section
-    class="w-full flex-1 min-h-0 overflow-auto"
+    class="w-full flex-1 min-h-0 overflow-auto select-none"
     style="background: var(--z-bg-900)"
   >
     <header
