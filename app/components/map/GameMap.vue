@@ -205,6 +205,8 @@ const LOGICAL_H = 700
 // durante il drag il poligono della cella segue il puntatore in tempo
 // reale insieme a strade/decor. Calcolata solo per le mappe v2d
 // (generatedMap presente); per la legacy resta vuota → fallback ai rect.
+// `meshPath` è il path SVG dei bordi condivisi disegnati una sola volta:
+// le celle Voronoi non hanno stroke, il bordo lo dà il mesh.
 const voronoiAreasInput = computed(() => {
   if (!props.generatedMap) return []
   return effectiveAreas.value.map(a => ({
@@ -212,7 +214,9 @@ const voronoiAreasInput = computed(() => {
     shape: { x: a.svg.x, y: a.svg.y, w: a.svg.w, h: a.svg.h }
   }))
 })
-const voronoiByArea = useVoronoiPolygons(voronoiAreasInput, LOGICAL_W, LOGICAL_H)
+const voronoiData = useVoronoiPolygons(voronoiAreasInput, LOGICAL_W, LOGICAL_H)
+const voronoiByArea = computed(() => voronoiData.value.byArea)
+const voronoiMeshPath = computed(() => voronoiData.value.meshPath)
 const hasVoronoi = computed(() => voronoiByArea.value.size > 0)
 
 const containerEl = ref<HTMLElement | null>(null)
@@ -934,6 +938,23 @@ function onSvgBgClick(e: MouseEvent) {
             />
           </g>
 
+          <!-- v2d-shape-B: mesh dei bordi condivisi disegnato una sola
+               volta per evitare il "doppio bordo" (ogni cella tracciava
+               lo stesso edge della cella vicina). Le celle in MapArea
+               sono renderizzate senza stroke base. In edit mode il mesh
+               diventa dashed rust per dare feedback "stai modificando". -->
+          <path
+            v-if="hasVoronoi"
+            :d="voronoiMeshPath"
+            fill="none"
+            :stroke="editMode ? 'var(--z-rust-300)' : 'var(--z-green-700)'"
+            :stroke-width="editMode ? 1.2 : 1"
+            :stroke-dasharray="editMode ? '6 4' : ''"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-opacity="0.9"
+            pointer-events="none"
+          />
           <MapDecor :areas="effectiveAreas" />
           <MapRoads
             :areas="effectiveAreas"
@@ -986,11 +1007,10 @@ function onSvgBgClick(e: MouseEvent) {
                 v-if="voronoiByArea.get(a.id)"
                 :points="voronoiByArea.get(a.id)!"
                 fill="transparent"
-                :stroke="roadFromAreaId === a.id ? 'var(--z-toxic-500, #b3d33a)' : 'var(--z-rust-300)'"
-                :stroke-width="roadFromAreaId === a.id ? 3 : 2"
-                stroke-dasharray="6 4"
-                style="cursor: move"
+                :stroke="roadFromAreaId === a.id ? 'var(--z-toxic-500, #b3d33a)' : 'transparent'"
+                :stroke-width="roadFromAreaId === a.id ? 3 : 0"
                 stroke-linejoin="round"
+                style="cursor: move"
                 @pointerdown="(e: PointerEvent) => startAreaDrag(e, a.id)"
                 @pointermove="moveAreaDrag"
                 @pointerup="endAreaDrag"

@@ -92,12 +92,21 @@ function subdivideEdge(
   return canonicalPts.slice().reverse()
 }
 
+export interface VoronoiData {
+  byArea: Map<string, string>
+  // Path SVG ("M x,y L x,y ...") che disegna ogni edge condiviso interno
+  // UNA sola volta. Le celle Voronoi sono renderizzate senza stroke; il
+  // bordo lo dà questo mesh, evitando il "doppio bordo" visibile prima
+  // (ogni cella tracciava lo stesso edge della cella vicina).
+  meshPath: string
+}
+
 export function useVoronoiPolygons(
   areas: ComputedRef<readonly AreaLike[]>,
   viewBoxW: number,
   viewBoxH: number
-): ComputedRef<Map<string, string>> {
-  return computed(() => {
+): ComputedRef<VoronoiData> {
+  return computed<VoronoiData>(() => {
     const out = new Map<string, string>()
     const list = areas.value
     if (list.length < 2) {
@@ -106,7 +115,7 @@ export function useVoronoiPolygons(
         const pts = `0,0 ${viewBoxW},0 ${viewBoxW},${viewBoxH} 0,${viewBoxH}`
         out.set(a.id, pts)
       }
-      return out
+      return { byArea: out, meshPath: '' }
     }
     const points: number[] = []
     for (const a of list) {
@@ -115,6 +124,8 @@ export function useVoronoiPolygons(
     }
     const delaunay = new Delaunay(Float64Array.from(points))
     const voronoi = delaunay.voronoi([0, 0, viewBoxW, viewBoxH])
+    const seenEdges = new Set<string>()
+    const meshSegments: string[] = []
     for (let i = 0; i < list.length; i++) {
       const cell = voronoi.cellPolygon(i)
       if (!cell) continue
@@ -127,10 +138,25 @@ export function useVoronoiPolygons(
         expanded.push(v)
         const inter = subdivideEdge(v, next, viewBoxW, viewBoxH)
         for (const p of inter) expanded.push(p)
+        // Mesh: aggiungi l'edge solo se interno (almeno un endpoint NON
+        // sul viewBox border) e non già visto da una cella precedente.
+        const onBorder1 = isOnBorder(v[0], v[1], viewBoxW, viewBoxH)
+        const onBorder2 = isOnBorder(next[0], next[1], viewBoxW, viewBoxH)
+        if (onBorder1 && onBorder2) continue
+        const a = v[0] < next[0] || (v[0] === next[0] && v[1] < next[1]) ? v : next
+        const b = a === v ? next : v
+        const key = `${a[0].toFixed(2)},${a[1].toFixed(2)}_${b[0].toFixed(2)},${b[1].toFixed(2)}`
+        if (seenEdges.has(key)) continue
+        seenEdges.add(key)
+        const meshInter = subdivideEdge(a, b, viewBoxW, viewBoxH)
+        let seg = `M ${a[0].toFixed(1)},${a[1].toFixed(1)}`
+        for (const p of meshInter) seg += ` L ${p[0].toFixed(1)},${p[1].toFixed(1)}`
+        seg += ` L ${b[0].toFixed(1)},${b[1].toFixed(1)}`
+        meshSegments.push(seg)
       }
       const pts = expanded.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
       out.set(list[i]!.id, pts)
     }
-    return out
+    return { byArea: out, meshPath: meshSegments.join(' ') }
   })
 }

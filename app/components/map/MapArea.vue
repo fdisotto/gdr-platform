@@ -40,6 +40,10 @@ function strokeColor(): string {
   if (props.fog) return '#1f1f1f'
   if (props.isCurrent) return 'var(--z-green-100)'
   if (props.isAdjacent) return 'var(--z-green-300)'
+  // v2d-shape-B: per le celle Voronoi neutre niente stroke — i bordi
+  // condivisi sono disegnati una sola volta dal mesh path globale in
+  // GameMap. Per legacy/organic manteniamo il bordo per cella.
+  if (isVoronoi.value) return 'transparent'
   return 'var(--z-green-700)'
 }
 function baseFillUrl(): string {
