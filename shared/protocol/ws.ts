@@ -141,11 +141,18 @@ export type AreaOverridePublic = z.infer<typeof AreaOverridePublicSchema>
 export const RoadKindSchema = z.enum(['urban', 'path', 'wasteland', 'highway', 'bridge'])
 export type RoadKind = z.infer<typeof RoadKindSchema>
 
+// kind:
+// - 'add'    → forza adiacenza fra due aree non vicine (strada custom)
+// - 'remove' → sopprime un'adiacenza che la prossimità auto avrebbe creato
+// - 'broken' → la strada esiste ed è visibile, ma è interrotta: i player
+//   non possono attraversarla finché il master non la "ripara"
+//   (riportando l'override a 'add' o cancellandolo). Implica che la
+//   strada appaia come 'add' lato visibilità.
 export const AdjacencyOverridePublicSchema = z.object({
   mapId: z.string(),
   areaA: z.string(),
   areaB: z.string(),
-  kind: z.enum(['add', 'remove']),
+  kind: z.enum(['add', 'remove', 'broken']),
   roadKind: RoadKindSchema.nullable()
 })
 export type AdjacencyOverridePublic = z.infer<typeof AdjacencyOverridePublicSchema>
@@ -538,6 +545,19 @@ export const MasterRoadResetEvent = z.object({
 })
 export type MasterRoadResetEvent = z.infer<typeof MasterRoadResetEvent>
 
+// v2d-edit: rompe / ripara una strada esistente. broken=true forza
+// l'override a kind='broken'; broken=false la riporta a 'add' (strada
+// custom) se prima esisteva un override, altrimenti cancella l'override
+// e ricade sul comportamento auto by-proximity.
+export const MasterRoadBreakEvent = z.object({
+  type: z.literal('master:road-break'),
+  mapId: z.string(),
+  areaA: z.string(),
+  areaB: z.string(),
+  broken: z.boolean()
+})
+export type MasterRoadBreakEvent = z.infer<typeof MasterRoadBreakEvent>
+
 // v2d-fog: il master attiva/disattiva la fog of war party-wide. Quando
 // false, i giocatori vedono tutta la mappa indipendentemente dalle
 // aree visitate. Cambio persistito sulla riga parties.fogEnabled e
@@ -752,6 +772,7 @@ export const ClientEvent = z.discriminatedUnion('type', [
   MasterAreaRenameEvent, MasterAreaMoveEvent,
   MasterAreaAddEvent, MasterAreaRemoveEvent,
   MasterRoadAddEvent, MasterRoadRemoveEvent, MasterRoadResetEvent,
+  MasterRoadBreakEvent,
   MasterFogEvent
 ])
 export type ClientEvent = z.infer<typeof ClientEvent>

@@ -15,6 +15,10 @@ const props = defineProps<{
   pairs?: ReadonlyArray<readonly [string, string]>
   mapTypeId?: string | null
   roadKinds?: Map<string, RoadKind>
+  // v2d-edit: coppie "a::b" (a<b) la cui strada è marcata broken dal
+  // master: vengono renderizzate con stile distinto (linea spezzata
+  // rossa) sopra la strada base.
+  brokenPairs?: Set<string>
 }>()
 
 const defaultRoadKind = computed<RoadKind>(() => {
@@ -55,6 +59,9 @@ interface Road {
 function pairKey(a: string, b: string): string {
   return a < b ? `${a}::${b}` : `${b}::${a}`
 }
+// Esposto al template per il filtro broken-overlay (le funzioni nello
+// `<script setup>` sono già accessibili come props.* nello scope template,
+// ma teniamo l'export-name esplicito per chiarezza).
 
 const roads = computed<Road[]>(() => {
   return effectivePairs.value.map(([a, b]) => {
@@ -310,6 +317,64 @@ function roadsOfKind(k: RoadKind): Road[] {
         stroke-linecap="butt"
         opacity="0.6"
       />
+    </template>
+
+    <!-- v2d-edit: overlay "strada interrotta". Renderizzato sopra a
+         qualsiasi stile base: tratto rosso interrotto + glifo X al
+         centro per segnalare che il passaggio non è praticabile. -->
+    <template
+      v-for="r in roads.filter(rr => props.brokenPairs?.has(pairKey(rr.id.split('::')[0]!, rr.id.split('::')[1]!)))"
+      :key="`brk-${r.id}`"
+    >
+      <line
+        :x1="r.x1"
+        :y1="r.y1"
+        :x2="r.x2"
+        :y2="r.y2"
+        stroke="#0b0d0c"
+        stroke-width="14"
+        stroke-linecap="butt"
+        opacity="0.85"
+      />
+      <line
+        :x1="r.x1"
+        :y1="r.y1"
+        :x2="r.x2"
+        :y2="r.y2"
+        stroke="var(--z-blood-300, #c26f8e)"
+        stroke-width="4"
+        stroke-dasharray="6 8"
+        stroke-linecap="round"
+        opacity="0.95"
+      />
+      <g
+        :transform="`translate(${(r.x1 + r.x2) / 2}, ${(r.y1 + r.y2) / 2})`"
+      >
+        <circle
+          r="11"
+          fill="#0b0d0c"
+          stroke="var(--z-blood-300, #c26f8e)"
+          stroke-width="2"
+        />
+        <line
+          x1="-5"
+          y1="-5"
+          x2="5"
+          y2="5"
+          stroke="var(--z-blood-300, #c26f8e)"
+          stroke-width="2.5"
+          stroke-linecap="round"
+        />
+        <line
+          x1="5"
+          y1="-5"
+          x2="-5"
+          y2="5"
+          stroke="var(--z-blood-300, #c26f8e)"
+          stroke-width="2.5"
+          stroke-linecap="round"
+        />
+      </g>
     </template>
   </g>
 </template>

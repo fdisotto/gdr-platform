@@ -426,7 +426,7 @@ export const areaAdjacencyOverrides = sqliteTable('area_adjacency_overrides', {
   mapId: text('map_id').notNull().references(() => partyMaps.id, { onDelete: 'cascade' }),
   areaA: text('area_a').notNull(),
   areaB: text('area_b').notNull(),
-  kind: text('kind', { enum: ['add', 'remove'] }).notNull(),
+  kind: text('kind', { enum: ['add', 'remove', 'broken'] }).notNull(),
   // v2d-roads: stile della strada quando kind='add'. NULL → usa lo stile
   // di default derivato dal mapTypeId. Tipi disponibili: 'urban' (asfalto),
   // 'path' (sentiero sterrato), 'wasteland' (strada crepata), 'highway'

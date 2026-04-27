@@ -43,6 +43,10 @@ const props = defineProps<{
   mapTypeId?: string | null
   // v2d-world: nome della mappa attiva, mostrato nel banner in alto.
   mapName?: string | null
+  // v2d-edit: coppie "a::b" (a < b) marcate come strada interrotta dal
+  // master. Le strade compaiono visivamente con stile rotto e i player
+  // non possono attraversarle finche il master le ripara.
+  brokenPairs?: Set<string>
 }>()
 
 const areas = computed<readonly Area[]>(() => {
@@ -516,6 +520,15 @@ function visiblePlayersFor(area: Area): { visible: typeof party.players, hidden:
 
 const { weather } = useAreaWeather(() => currentAreaId.value as AreaId | null)
 
+function pairKeyOf(a: string, b: string): string {
+  return a < b ? `${a}::${b}` : `${b}::${a}`
+}
+
+function isBrokenBetween(a: string, b: string): boolean {
+  if (!props.brokenPairs) return false
+  return props.brokenPairs.has(pairKeyOf(a, b))
+}
+
 function onAreaClick(areaId: AreaId) {
   if (!partyStore.me) return
   const myArea = partyStore.me.currentAreaId as AreaId
@@ -526,10 +539,12 @@ function onAreaClick(areaId: AreaId) {
     return
   }
   const isMasterRole = partyStore.me.role === 'master'
-  // Master può muoversi ovunque; user solo in area adiacente e non chiusa
+  // Master può muoversi ovunque; user solo in area adiacente, non chiusa
+  // e con la strada NON marcata "broken".
   if (!isMasterRole) {
     const adj = new Set<string>(adjacency.value[myArea] ?? [])
     if (!adj.has(areaId)) return // non raggiungibile, no-op
+    if (isBrokenBetween(myArea, areaId)) return // strada interrotta
     const targetState = stateById.value.get(areaId)
     if (targetState?.status === 'closed') return
   }
@@ -746,17 +761,37 @@ function onAreaEditClick(areaId: string, e: MouseEvent) {
   roadFromAreaId.value = null
 }
 
-// Click su una strada: in edit mode rimuove la connessione (o forza
-// l'override 'remove' se era automatica via prossimità).
-function onRoadClick(areaA: string, areaB: string) {
+// Click su una strada in edit mode: shift+click toggla rotta/intatta;
+// click normale apre un mini menu rimuovi/rompi/ripara. Per non
+// complicare l'UX con menu modali, usiamo il modificatore shift come
+// shortcut e il click semplice come rimuovi.
+function onRoadClick(areaA: string, areaB: string, e: MouseEvent) {
   if (!editMode.value || !props.mapId) return
-  if (!confirm('Rimuovere questa strada?')) return
-  connection.send({
-    type: 'master:road-remove',
-    mapId: props.mapId,
-    areaA,
-    areaB
-  })
+  const isBroken = isBrokenBetween(areaA, areaB)
+  if (e.shiftKey) {
+    // Shift+click: rompi se intatta, ripara se rotta.
+    connection.send({
+      type: 'master:road-break',
+      mapId: props.mapId,
+      areaA,
+      areaB,
+      broken: !isBroken
+    })
+    return
+  }
+  // Click semplice: prompt 3-vie. Se è già rotta, offri ripara/rimuovi.
+  const action = isBroken
+    ? prompt('strada interrotta — scrivi "ripara" per rimettere in funzione, "rimuovi" per cancellarla', 'ripara')
+    : prompt('strada — scrivi "rompi" per renderla interrotta, "rimuovi" per cancellarla', 'rompi')
+  if (!action) return
+  const a = action.trim().toLowerCase()
+  if (a === 'rimuovi') {
+    connection.send({ type: 'master:road-remove', mapId: props.mapId, areaA, areaB })
+  } else if (a === 'rompi' && !isBroken) {
+    connection.send({ type: 'master:road-break', mapId: props.mapId, areaA, areaB, broken: true })
+  } else if (a === 'ripara' && isBroken) {
+    connection.send({ type: 'master:road-break', mapId: props.mapId, areaA, areaB, broken: false })
+  }
 }
 
 // ── v2d-edit: status zona (intact / infested / ruined / closed) ────────────
@@ -1011,6 +1046,7 @@ function onSvgClickCapture(e: MouseEvent) {
             :pairs="adjacencyPairs"
             :map-type-id="props.mapTypeId ?? null"
             :road-kinds="roadKindsByPair"
+            :broken-pairs="props.brokenPairs"
           />
           <MapTransitionDoors
             :areas="effectiveAreas"
@@ -1183,7 +1219,7 @@ function onSvgClickCapture(e: MouseEvent) {
               stroke-width="18"
               stroke-opacity="0"
               style="cursor: pointer"
-              @click.stop="onRoadClick(a, b)"
+              @click.stop="(e: MouseEvent) => onRoadClick(a, b, e)"
             />
           </g>
 
@@ -1290,7 +1326,8 @@ function onSvgClickCapture(e: MouseEvent) {
         >
           <p>drag = sposta · doppio-click = rinomina · × = rimuovi</p>
           <p>click area + click area = aggiungi/rimuovi strada</p>
-          <p>click strada = rimuovi</p>
+          <p>click strada = menu (rimuovi/rompi/ripara)</p>
+          <p>shift+click strada = toggle rotta</p>
           <button
             type="button"
             class="mt-1 px-2 py-1 rounded text-xs font-mono-z block"

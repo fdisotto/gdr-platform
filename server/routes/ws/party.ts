@@ -1,6 +1,6 @@
 import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent, MasterDeleteMessageEvent, MasterPurgeMessageEvent, MasterEditMessageEvent,
   MasterAreaRenameEvent, MasterAreaMoveEvent, MasterAreaAddEvent, MasterAreaRemoveEvent,
-  MasterRoadAddEvent, MasterRoadRemoveEvent, MasterRoadResetEvent, MasterFogEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, MasterFetchActionsEvent, MasterFetchBansEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type MessageRemovedEvent,
+  MasterRoadAddEvent, MasterRoadRemoveEvent, MasterRoadResetEvent, MasterRoadBreakEvent, MasterFogEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, MasterFetchActionsEvent, MasterFetchBansEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type MessageRemovedEvent,
   type AreaOverrideUpdatedEvent, type AreaOverrideRemovedEvent, type AreaOverridePublic,
   type AdjacencyOverrideUpdatedEvent, type AdjacencyOverrideRemovedEvent, type AdjacencyOverridePublic,
   type AreaDiscoveredEvent,
@@ -21,8 +21,9 @@ import { upsertPosition, deletePositionsForPlayer } from '~~/server/services/pla
 import { pickFanoutRecipients } from '~~/server/ws/fanout'
 import { isAreaId, areAdjacent } from '~~/shared/map/areas'
 import { isAreaClosed } from '~~/server/services/area-access'
-import { upsertOverride, deleteOverride, listOverridesForParty } from '~~/server/services/area-overrides'
-import { upsertAdjacencyOverride, deleteAdjacencyOverride, listAdjacencyOverridesForParty, normalizePair, applyAdjacencyOverrides } from '~~/server/services/area-adjacency'
+import { upsertOverride, deleteOverride, listOverridesForParty, listOverridesForMap } from '~~/server/services/area-overrides'
+import { buildEffectiveAdjacency, applyAreaOverrides, pairKey as pairKeyFn } from '~~/shared/map/effective-map'
+import { upsertAdjacencyOverride, deleteAdjacencyOverride, listAdjacencyOverridesForParty, normalizePair } from '~~/server/services/area-adjacency'
 import { markVisited, listVisitedForParty } from '~~/server/services/area-visits'
 import { listPartyMaps, findPartyMap } from '~~/server/services/party-maps'
 import { listTransitionsForParty, findTransition } from '~~/server/services/map-transitions'
@@ -195,6 +196,10 @@ export default defineWebSocketHandler({
     }
     if (parsed.type === 'master:road-reset') {
       await handleMasterRoadReset(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:road-break') {
+      await handleMasterRoadBreak(peer, parsed)
       return
     }
     if (parsed.type === 'master:fog') {
@@ -453,15 +458,24 @@ async function handleMoveRequest(peer: Peer, raw: unknown) {
       }
 
       if (!isMaster) {
-        // Applica gli adjacency override del master alla adjacency base
-        // del generator: il client fa la stessa cosa per disegnare le
-        // strade, quindi il check di reachability deve combaciare.
-        const overrides = listAdjacencyOverridesForParty(db, conn.partySeed)
+        // Replica esatta della logica client: applica area overrides
+        // per ottenere posizioni patched, ricalcola adjacency by-proximity
+        // sulle nuove coord, e applica gli adjacency overrides
+        // ('add', 'remove', 'broken'). Stesso risultato di
+        // `MapViewSvg.generatedMap` → niente più "non raggiungibile" su
+        // una strada visivamente disegnata.
+        const areaOv = listOverridesForMap(db, conn.partySeed, currentMapId)
+        const adjOv = listAdjacencyOverridesForParty(db, conn.partySeed)
           .filter(o => o.mapId === currentMapId)
-        const effectiveAdj = applyAdjacencyOverrides(gm.adjacency, overrides)
-        const adj = effectiveAdj[fromAreaId] ?? []
+        const patchedAreas = applyAreaOverrides(gm.areas, areaOv)
+        const { visibleAdj, brokenPairs } = buildEffectiveAdjacency(patchedAreas, adjOv)
+        const adj = visibleAdj[fromAreaId] ?? []
         if (!adj.includes(toAreaId)) {
           sendJson(peer, { type: 'error', code: 'not_adjacent' })
+          return
+        }
+        if (brokenPairs.has(pairKeyFn(fromAreaId, toAreaId))) {
+          sendJson(peer, { type: 'error', code: 'road_broken' })
           return
         }
         // areasState filtrato per mapId: la riga è univoca per (party, area)
@@ -1237,6 +1251,43 @@ async function handleMasterRoadReset(peer: Peer, raw: unknown) {
   deleteAdjacencyOverride(ctx.db, ctx.conn.partySeed, res.data.mapId, res.data.areaA, res.data.areaB)
   logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'road-reset', target: `${res.data.areaA}::${res.data.areaB}`, payload: { mapId: res.data.mapId } })
   broadcastAdjacencyRemoved(ctx.conn.partySeed, res.data.mapId, res.data.areaA, res.data.areaB)
+}
+
+async function handleMasterRoadBreak(peer: Peer, raw: unknown) {
+  const res = MasterRoadBreakEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  if (res.data.areaA === res.data.areaB) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'self_loop' })
+    return
+  }
+  // 'broken' implica strada visibile: usa upsert con kind='broken'.
+  // Ripara → upsert con kind='add' (mantiene la strada visibile e
+  // attraversabile). Per cancellare proprio la strada esiste già il
+  // master:road-remove / master:road-reset.
+  const row = upsertAdjacencyOverride(ctx.db, {
+    partySeed: ctx.conn.partySeed,
+    mapId: res.data.mapId,
+    areaA: res.data.areaA,
+    areaB: res.data.areaB,
+    kind: res.data.broken ? 'broken' : 'add',
+    roadKind: null
+  })
+  logMasterAction(ctx.db, {
+    partySeed: ctx.conn.partySeed,
+    masterId: ctx.me.id,
+    action: res.data.broken ? 'road-break' : 'road-repair',
+    target: `${row.areaA}::${row.areaB}`,
+    payload: { mapId: res.data.mapId }
+  })
+  broadcastAdjacencyUpdate(ctx.conn.partySeed, {
+    mapId: row.mapId, areaA: row.areaA, areaB: row.areaB,
+    kind: row.kind, roadKind: row.roadKind
+  })
 }
 
 async function handleMasterFog(peer: Peer, raw: unknown) {

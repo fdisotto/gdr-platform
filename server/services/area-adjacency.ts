@@ -16,7 +16,7 @@ export interface AdjacencyOverrideRow {
   mapId: string
   areaA: string
   areaB: string
-  kind: 'add' | 'remove'
+  kind: 'add' | 'remove' | 'broken'
   roadKind: RoadKind | null
   createdAt: number
 }
@@ -36,7 +36,7 @@ export interface UpsertAdjacencyOverrideInput {
   mapId: string
   areaA: string
   areaB: string
-  kind: 'add' | 'remove'
+  kind: 'add' | 'remove' | 'broken'
   // Stile della strada (solo significativo per kind='add'). Null/undefined
   // → la strada usa lo stile di default del mapTypeId.
   roadKind?: RoadKind | null
@@ -88,14 +88,13 @@ export function upsertAdjacencyOverride(db: Db, input: UpsertAdjacencyOverrideIn
   }
 }
 
-// Applica una lista di override ('add' / 'remove') a un'adjacency base
-// e restituisce il grafo effettivo. Il client fa lo stesso lato view —
-// usato dal server in handleMoveRequest per validare il movimento in
-// modo coerente con quello che il giocatore vede sulla mappa (master
-// può aggiungere/togliere strade dall'edit mode).
+// Deprecato: la versione server-side per il check movimento ora vive
+// in `shared/map/effective-map.ts` (buildEffectiveAdjacency) che gestisce
+// anche il drift dovuto al drag delle aree e gli override 'broken'.
+// Lasciato qui per compat se invocato da test o altri call-site.
 export function applyAdjacencyOverrides(
   baseAdj: Record<string, readonly string[]>,
-  overrides: ReadonlyArray<{ areaA: string, areaB: string, kind: 'add' | 'remove' }>
+  overrides: ReadonlyArray<{ areaA: string, areaB: string, kind: 'add' | 'remove' | 'broken' }>
 ): Record<string, string[]> {
   const adj: Record<string, Set<string>> = {}
   for (const k of Object.keys(baseAdj)) {
@@ -104,7 +103,7 @@ export function applyAdjacencyOverrides(
   for (const o of overrides) {
     if (!adj[o.areaA]) adj[o.areaA] = new Set()
     if (!adj[o.areaB]) adj[o.areaB] = new Set()
-    if (o.kind === 'add') {
+    if (o.kind === 'add' || o.kind === 'broken') {
       adj[o.areaA]!.add(o.areaB)
       adj[o.areaB]!.add(o.areaA)
     } else {

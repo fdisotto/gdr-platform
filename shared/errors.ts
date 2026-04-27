@@ -41,7 +41,9 @@ export const ERROR_CODES = [
   'map_not_empty',
   'cannot_delete_spawn',
   'transition_invalid',
-  'not_a_transition'
+  'not_a_transition',
+  // v2d-edit: strada visibile ma marcata "broken" dal master
+  'road_broken'
 ] as const
 
 export type ErrorCode = typeof ERROR_CODES[number]
