@@ -1852,11 +1852,18 @@ function composeStateInit(
   player: ReturnType<typeof findPlayerByUserInParty> & object
 ): StateInitEvent {
   const party = partyMustExist(db, seed)
-  const players = listOnlinePlayers(db, seed).map(p => ({
-    id: p.id, nickname: p.nickname, role: p.role,
-    currentAreaId: p.currentAreaId,
-    currentMapId: p.currentMapId ?? null
-  }))
+  // listOnlinePlayers ritorna i MEMBRI della party (chi non ha leftAt
+  // o non e' kickato), non chi ha effettivamente la ws connessa.
+  // Filtro per quelli presenti nel registry → solo veri online,
+  // niente "fantasmi" rimasti dopo close ws senza leave esplicito.
+  const onlineIds = new Set(registry.listParty(seed).map(c => c.playerId))
+  const players = listOnlinePlayers(db, seed)
+    .filter(p => onlineIds.has(p.id))
+    .map(p => ({
+      id: p.id, nickname: p.nickname, role: p.role,
+      currentAreaId: p.currentAreaId,
+      currentMapId: p.currentMapId ?? null
+    }))
   const areasState = listAreasState(db, seed).map(a => ({
     ...a,
     mapId: (a as { mapId?: string | null }).mapId ?? null
