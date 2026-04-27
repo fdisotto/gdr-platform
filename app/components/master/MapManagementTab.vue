@@ -56,6 +56,36 @@ async function setSpawn(map: MapRow) {
   }
 }
 
+const renamingMapId = ref<string | null>(null)
+const renameDraft = ref('')
+function startRename(map: MapRow) {
+  renamingMapId.value = map.id
+  renameDraft.value = map.name
+}
+function cancelRename() {
+  renamingMapId.value = null
+  renameDraft.value = ''
+}
+async function commitRename() {
+  if (!renamingMapId.value) return
+  const name = renameDraft.value.trim().slice(0, 64)
+  if (!name) {
+    cancelRename()
+    return
+  }
+  try {
+    await $fetch(`/api/parties/${seed}/maps/${renamingMapId.value}/rename`, {
+      method: 'POST',
+      body: { name }
+    })
+    feedback.pushToast({ level: 'info', title: `Mappa rinominata: ${name}` })
+    cancelRename()
+    await refresh()
+  } catch (e) {
+    err.reportFromError(e)
+  }
+}
+
 async function deleteMap(map: MapRow) {
   if (!confirm(`Eliminare la mappa "${map.name}"?`)) return
   try {
@@ -133,29 +163,72 @@ function onCreated() {
           style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
         >
           <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2">
-              <span
-                class="text-sm font-mono-z truncate"
-                style="color: var(--z-text-hi)"
-              >
-                {{ m.name }}
-              </span>
-              <span
-                v-if="m.isSpawn"
-                class="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded"
-                style="background: var(--z-blood-700); color: var(--z-blood-300)"
-              >
-                spawn
-              </span>
-            </div>
-            <p
-              class="text-xs mt-0.5 font-mono-z"
-              style="color: var(--z-text-md)"
+            <div
+              v-if="renamingMapId === m.id"
+              class="flex items-center gap-1.5"
             >
-              {{ m.mapTypeId }} · {{ m.memberCount }} membri · {{ m.zombieCount }} zombi
-            </p>
+              <input
+                v-model="renameDraft"
+                type="text"
+                maxlength="64"
+                class="flex-1 px-2 py-1 rounded text-sm font-mono-z"
+                style="background: var(--z-bg-900); border: 1px solid var(--z-border); color: var(--z-text-hi)"
+                autofocus
+                @keyup.enter="commitRename"
+                @keyup.escape="cancelRename"
+              >
+              <UButton
+                size="xs"
+                color="primary"
+                @click="commitRename"
+              >
+                Salva
+              </UButton>
+              <UButton
+                size="xs"
+                variant="ghost"
+                color="neutral"
+                @click="cancelRename"
+              >
+                ×
+              </UButton>
+            </div>
+            <template v-else>
+              <div class="flex items-center gap-2">
+                <span
+                  class="text-sm font-mono-z truncate"
+                  style="color: var(--z-text-hi)"
+                >
+                  {{ m.name }}
+                </span>
+                <span
+                  v-if="m.isSpawn"
+                  class="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded"
+                  style="background: var(--z-blood-700); color: var(--z-blood-300)"
+                >
+                  spawn
+                </span>
+              </div>
+              <p
+                class="text-xs mt-0.5 font-mono-z"
+                style="color: var(--z-text-md)"
+              >
+                {{ m.mapTypeId }} · {{ m.memberCount }} membri · {{ m.zombieCount }} zombi
+              </p>
+            </template>
           </div>
-          <div class="flex gap-1.5 shrink-0">
+          <div
+            v-if="renamingMapId !== m.id"
+            class="flex gap-1.5 shrink-0"
+          >
+            <UButton
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              icon="i-lucide-pencil"
+              title="Rinomina mappa"
+              @click="startRename(m)"
+            />
             <UButton
               size="xs"
               variant="soft"

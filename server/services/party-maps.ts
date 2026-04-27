@@ -131,6 +131,21 @@ export function setSpawnMap(db: Db, partySeed: string, mapId: string): void {
     .run()
 }
 
+export function renamePartyMap(db: Db, partySeed: string, mapId: string, name: string): void {
+  const target = findPartyMap(db, mapId)
+  if (!target || target.partySeed !== partySeed) {
+    throw new DomainError('not_found', `map ${mapId}`)
+  }
+  const trimmed = name.trim()
+  if (!trimmed) {
+    throw new DomainError('invalid_payload', 'empty_name')
+  }
+  db.update(partyMaps)
+    .set({ name: trimmed.slice(0, 64) })
+    .where(eq(partyMaps.id, mapId))
+    .run()
+}
+
 export function deletePartyMap(db: Db, mapId: string): void {
   const target = findPartyMap(db, mapId)
   if (!target) {
