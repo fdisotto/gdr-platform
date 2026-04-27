@@ -291,6 +291,11 @@ function makeConnection(seed: string): PartyConnection {
         partyStore.markAreaDiscovered(mapId, areaId)
         break
       }
+      case 'party:fog-changed': {
+        const { enabled } = data as { enabled: boolean }
+        partyStore.setFogEnabled(enabled)
+        break
+      }
       case 'time:tick': {
         serverTime.sync((data as { serverTime: number }).serverTime)
         break

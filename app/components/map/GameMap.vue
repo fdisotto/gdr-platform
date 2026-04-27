@@ -399,6 +399,14 @@ const adjacentSet = computed(() => {
 
 const isMaster = computed(() => party.me?.role === 'master')
 
+// v2d-fog: stato del toggle fog visualizzato dal master. Default true
+// (server pre-fix non manda fogEnabled → trattalo come attivo).
+const fogEnabledForParty = computed(() => party.party?.fogEnabled !== false)
+function toggleFog() {
+  if (!isMaster.value) return
+  connection.send({ type: 'master:fog', enabled: !fogEnabledForParty.value })
+}
+
 // v2d-fog: insieme degli areaId visitati nella mappa attiva. Master
 // vede tutto (set vuoto interpretato come "fog disabilitato per il master").
 const visitedSetForMap = computed<Set<string>>(() => {
@@ -422,6 +430,9 @@ const visitedSetForMap = computed<Set<string>>(() => {
 function fogLevelFor(areaId: string): 'none' | 'adjacent' | 'unknown' {
   if (isMaster.value) return 'none'
   if (!props.mapId) return 'none'
+  // v2d-fog: master può disattivare la fog party-wide. fogEnabled
+  // mancante (server pre-fix) = trattato come true.
+  if (party.party?.fogEnabled === false) return 'none'
   if (visitedSetForMap.value.has(areaId)) return 'none'
   if (currentAreaId.value === areaId) return 'none'
   if (adjacentSet.value.has(areaId)) return 'adjacent'
@@ -1244,6 +1255,20 @@ function onSvgClickCapture(e: MouseEvent) {
         <span style="color: var(--z-text-md); border-left: 1px solid var(--z-border); padding-left: 8px; margin-left: 2px">
           🌐 Mondo
         </span>
+      </button>
+
+      <!-- v2d-fog: toggle fog of war party-wide (master only). -->
+      <button
+        v-if="isMaster"
+        type="button"
+        class="px-3 py-1.5 rounded text-xs font-mono-z"
+        :style="fogEnabledForParty
+          ? 'background: var(--z-bg-800); color: var(--z-text-md); border: 1px solid var(--z-border)'
+          : 'background: var(--z-green-700); color: var(--z-green-100); border: 1px solid var(--z-green-300)'"
+        :title="fogEnabledForParty ? 'Fog of war attiva — i player vedono solo zone esplorate. Clicca per disattivare.' : 'Fog of war disattivata — i player vedono tutta la mappa. Clicca per attivare.'"
+        @click="toggleFog"
+      >
+        {{ fogEnabledForParty ? '👁 Fog: ON' : '👁 Fog: OFF' }}
       </button>
 
       <!-- v2d-edit: toggle "Modifica mappa" (master only, solo se mapId valido). -->

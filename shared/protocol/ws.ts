@@ -79,7 +79,10 @@ const PartySnapshot = z.object({
   seed: z.string(),
   cityName: z.string(),
   createdAt: z.number(),
-  lastActivityAt: z.number()
+  lastActivityAt: z.number(),
+  // v2d-fog: master può disattivare la fog of war per la party. Default
+  // true; quando false, tutti i giocatori vedono tutta la mappa.
+  fogEnabled: z.boolean().default(true)
 })
 
 const AreaStateSnapshot = z.object({
@@ -535,6 +538,23 @@ export const MasterRoadResetEvent = z.object({
 })
 export type MasterRoadResetEvent = z.infer<typeof MasterRoadResetEvent>
 
+// v2d-fog: il master attiva/disattiva la fog of war party-wide. Quando
+// false, i giocatori vedono tutta la mappa indipendentemente dalle
+// aree visitate. Cambio persistito sulla riga parties.fogEnabled e
+// rebroadcast a tutta la party.
+export const MasterFogEvent = z.object({
+  type: z.literal('master:fog'),
+  enabled: z.boolean()
+})
+export type MasterFogEvent = z.infer<typeof MasterFogEvent>
+
+// Server → client: notifica del nuovo valore di fogEnabled per la party.
+export const PartyFogChangedEvent = z.object({
+  type: z.literal('party:fog-changed'),
+  enabled: z.boolean()
+})
+export type PartyFogChangedEvent = z.infer<typeof PartyFogChangedEvent>
+
 // Broadcast a tutti i player della party dopo qualsiasi area-edit.
 export const AreaOverrideUpdatedEvent = z.object({
   type: z.literal('area-override:updated'),
@@ -712,7 +732,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   MasterActionsSnapshotEvent, MasterBansSnapshotEvent,
   AreaOverrideUpdatedEvent, AreaOverrideRemovedEvent,
   AdjacencyOverrideUpdatedEvent, AdjacencyOverrideRemovedEvent,
-  AreaDiscoveredEvent
+  AreaDiscoveredEvent,
+  PartyFogChangedEvent
 ])
 export type ServerEvent = z.infer<typeof ServerEvent>
 
@@ -730,6 +751,7 @@ export const ClientEvent = z.discriminatedUnion('type', [
   MasterFetchActionsEvent, MasterFetchBansEvent,
   MasterAreaRenameEvent, MasterAreaMoveEvent,
   MasterAreaAddEvent, MasterAreaRemoveEvent,
-  MasterRoadAddEvent, MasterRoadRemoveEvent, MasterRoadResetEvent
+  MasterRoadAddEvent, MasterRoadRemoveEvent, MasterRoadResetEvent,
+  MasterFogEvent
 ])
 export type ClientEvent = z.infer<typeof ClientEvent>

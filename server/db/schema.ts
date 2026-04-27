@@ -12,7 +12,10 @@ export const parties = sqliteTable('parties', {
   // dal master (request). archivedAt != null marca party in sola lettura.
   visibility: text('visibility', { enum: ['public', 'private'] }).notNull().default('private'),
   joinPolicy: text('join_policy', { enum: ['auto', 'request'] }).notNull().default('request'),
-  archivedAt: integer('archived_at')
+  archivedAt: integer('archived_at'),
+  // v2d-fog: il master può disattivare la fog of war party-wide. Quando
+  // false, tutti i giocatori vedono tutta la mappa. Default true.
+  fogEnabled: integer('fog_enabled', { mode: 'boolean' }).notNull().default(true)
 })
 
 export const players = sqliteTable('players', {

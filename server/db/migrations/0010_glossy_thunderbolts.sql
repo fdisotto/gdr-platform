@@ -1,0 +1,1 @@
+ALTER TABLE `parties` ADD `fog_enabled` integer DEFAULT true NOT NULL;

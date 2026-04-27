@@ -156,6 +156,14 @@ export function restoreParty(db: Db, seed: string): void {
     .run()
 }
 
+// v2d-fog: master toggle fog of war party-wide.
+export function setPartyFogEnabled(db: Db, seed: string, enabled: boolean): void {
+  db.update(parties)
+    .set({ fogEnabled: enabled })
+    .where(eq(parties.seed, seed))
+    .run()
+}
+
 // v2c: hard delete della party. FK CASCADE su tutte le tabelle dipendenti
 // (players, messages, areas_state, area_access_bans, weather_overrides,
 // master_actions, bans, zombies, player_positions, party_invites,

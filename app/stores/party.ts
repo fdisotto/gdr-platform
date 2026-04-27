@@ -20,6 +20,9 @@ export interface PartySnapshot {
   cityName: string
   createdAt: number
   lastActivityAt: number
+  // v2d-fog: master toggle fog of war party-wide. Default true; backward
+  // compat con server pre-fix → trattalo come true se mancante.
+  fogEnabled?: boolean
 }
 
 export interface PlayerSnapshot {
@@ -132,6 +135,11 @@ function partyStoreFactory() {
     visitedAreas.value = [...visitedAreas.value, { mapId, areaId }]
   }
 
+  function setFogEnabled(enabled: boolean) {
+    if (!party.value) return
+    party.value = { ...party.value, fogEnabled: enabled }
+  }
+
   return {
     me, party, players, areasState,
     maps, transitions, currentMapId,
@@ -139,7 +147,7 @@ function partyStoreFactory() {
     hydrate, reset,
     applyOverride, removeOverride,
     applyAdjacencyOverride, removeAdjacencyOverride,
-    markAreaDiscovered
+    markAreaDiscovered, setFogEnabled
   }
 }
 

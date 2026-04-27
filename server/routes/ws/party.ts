@@ -1,6 +1,6 @@
 import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent, MasterDeleteMessageEvent, MasterPurgeMessageEvent, MasterEditMessageEvent,
   MasterAreaRenameEvent, MasterAreaMoveEvent, MasterAreaAddEvent, MasterAreaRemoveEvent,
-  MasterRoadAddEvent, MasterRoadRemoveEvent, MasterRoadResetEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, MasterFetchActionsEvent, MasterFetchBansEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type MessageRemovedEvent,
+  MasterRoadAddEvent, MasterRoadRemoveEvent, MasterRoadResetEvent, MasterFogEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, MasterFetchActionsEvent, MasterFetchBansEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type MessageRemovedEvent,
   type AreaOverrideUpdatedEvent, type AreaOverrideRemovedEvent, type AreaOverridePublic,
   type AdjacencyOverrideUpdatedEvent, type AdjacencyOverrideRemovedEvent, type AdjacencyOverridePublic,
   type AreaDiscoveredEvent,
@@ -12,7 +12,7 @@ import { findUserById } from '~~/server/services/users'
 import { addBan, removeBan, listBans } from '~~/server/services/bans'
 import { logMasterAction, listMasterActions } from '~~/server/services/master-actions'
 import { setOverride, clearOverride, listOverrides } from '~~/server/services/weather-overrides'
-import { partyMustExist } from '~~/server/services/parties'
+import { partyMustExist, setPartyFogEnabled } from '~~/server/services/parties'
 import { listAreasState, updateAreaState, findAreaState } from '~~/server/services/areas'
 import { listAreaMessages, insertMessage, listAreaMessagesBefore, listThreadMessagesBefore, listRecentDmsForPlayer, softDeleteMessage, hardDeleteMessage, editMessage, findMessage, type MessageRow } from '~~/server/services/messages'
 import { registry, sendJson, chatRateLimiter, listPartyZombies, addZombie, removeZombie, moveZombie, addZombies, listPlayerPositions, setPlayerPosition, resetPlayerPosition, ensurePartyHydrated } from '~~/server/ws/state'
@@ -195,6 +195,10 @@ export default defineWebSocketHandler({
     }
     if (parsed.type === 'master:road-reset') {
       await handleMasterRoadReset(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:fog') {
+      await handleMasterFog(peer, parsed)
       return
     }
     if (parsed.type === 'master:mute') {
@@ -1235,6 +1239,31 @@ async function handleMasterRoadReset(peer: Peer, raw: unknown) {
   broadcastAdjacencyRemoved(ctx.conn.partySeed, res.data.mapId, res.data.areaA, res.data.areaB)
 }
 
+async function handleMasterFog(peer: Peer, raw: unknown) {
+  const res = MasterFogEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  setPartyFogEnabled(ctx.db, ctx.conn.partySeed, res.data.enabled)
+  logMasterAction(ctx.db, {
+    partySeed: ctx.conn.partySeed,
+    masterId: ctx.me.id,
+    action: 'fog-toggle',
+    target: ctx.conn.partySeed,
+    payload: { enabled: res.data.enabled }
+  })
+  const event = { type: 'party:fog-changed' as const, enabled: res.data.enabled }
+  const payload = JSON.stringify(event)
+  for (const c of registry.listParty(ctx.conn.partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
+}
+
 async function handleMasterPurgeMessage(peer: Peer, raw: unknown) {
   const res = MasterPurgeMessageEvent.safeParse(raw)
   if (!res.success) {
@@ -1745,7 +1774,13 @@ function composeStateInit(
       currentAreaId: player.currentAreaId,
       currentMapId: player.currentMapId ?? null
     },
-    party: { seed: party.seed, cityName: party.cityName, createdAt: party.createdAt, lastActivityAt: party.lastActivityAt },
+    party: {
+      seed: party.seed,
+      cityName: party.cityName,
+      createdAt: party.createdAt,
+      lastActivityAt: party.lastActivityAt,
+      fogEnabled: party.fogEnabled ?? true
+    },
     players,
     areasState,
     messagesByArea: messagesByArea as never,
