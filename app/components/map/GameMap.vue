@@ -1030,18 +1030,15 @@ function onSvgClickCapture(e: MouseEvent) {
           />
           <feColorMatrix values="0 0 0 0 0.15 0 0 0 0 0.15 0 0 0 0 0.15 0 0 0 0.35 0" />
         </filter>
-        <!-- v2d-shape-B: vignette per sfumare i bordi del rettangolo
-             logico 1000x700. Trasparente al centro, opaco color bg ai
-             bordi: copre dolcemente il bordo netto delle celle voronoi
-             dando un effetto fade naturale. cx/cy/r in userSpaceOnUse
-             così è preservata la forma anche se l'aspect ratio del
-             container cambia. -->
+        <!-- v2d-shape-B: vignette agganciata alle dimensioni del CONTAINER
+             (non al LOGICAL 1000x700) così sfuma i bordi visibili del
+             SVG indipendentemente dal cover/meet del contenuto. -->
         <radialGradient
           id="map-vignette"
           gradientUnits="userSpaceOnUse"
-          :cx="LOGICAL_W / 2"
-          :cy="LOGICAL_H / 2"
-          :r="Math.max(LOGICAL_W, LOGICAL_H) * 0.62"
+          :cx="containerW / 2"
+          :cy="containerH / 2"
+          :r="Math.max(containerW, containerH) * 0.65"
         >
           <stop
             offset="0%"
@@ -1056,7 +1053,7 @@ function onSvgClickCapture(e: MouseEvent) {
           <stop
             offset="85%"
             stop-color="#0b0d0c"
-            stop-opacity="0.6"
+            stop-opacity="0.55"
           />
           <stop
             offset="100%"
@@ -1337,20 +1334,7 @@ function onSvgClickCapture(e: MouseEvent) {
 
           <MapWeatherOverlay :weather="weather" />
 
-          <!-- v2d-shape-B: vignette overlay sopra tutto il contenuto
-               logico per sfumare i bordi nel bg radial. pointer-events
-               none così non blocca i click sulle celle/strade/avatar. -->
-          <rect
-            :width="LOGICAL_W"
-            :height="LOGICAL_H"
-            fill="url(#map-vignette)"
-            pointer-events="none"
-          />
-
-          <!-- v2d-T28: porte di transizione cross-map renderizzate
-               SOPRA la vignette così non vengono mai oscurate dal
-               fade dei bordi (la porta termina sul bordo del viewBox,
-               proprio dove la vignette è opaca). Restano cliccabili. -->
+          <!-- v2d-T28: porte di transizione cross-map -->
           <MapTransitionDoors
             :areas="effectiveAreas"
             :transitions="props.transitions ?? []"
@@ -1360,6 +1344,16 @@ function onSvgClickCapture(e: MouseEvent) {
           />
         </g>
       </g>
+      <!-- v2d-shape-B: vignette agganciata al CONTAINER, non al LOGICAL.
+           Renderizzata dopo userTransform/contentTransform → sfuma i
+           bordi visibili dell'SVG indipendentemente dal cover/meet del
+           contenuto. pointer-events none per non bloccare click. -->
+      <rect
+        :width="containerW"
+        :height="containerH"
+        fill="url(#map-vignette)"
+        pointer-events="none"
+      />
     </svg>
     <MapLegend />
     <MapPlayersBox />
