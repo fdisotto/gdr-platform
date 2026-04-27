@@ -446,28 +446,27 @@ async function handleMoveRequest(peer: Peer, raw: unknown) {
     if (fromAreaId === toAreaId) return // no-op
 
     if (currentMapId !== null) {
-      // Path multi-mappa: usa GeneratedMap.adjacency.
+      // Path multi-mappa: replica esatta della logica client. Calcola
+      // patchedAreas (area overrides applicati: drag/rename/remove +
+      // custom-added) e adjacency by-proximity 280 con override
+      // 'add'/'remove'/'broken'. STESSO grafo del client → niente
+      // mismatch "strada visibile ma non raggiungibile" / "area
+      // custom unknown".
       const gm = generateMapForPartyMap(db, currentMapId)
       if (!gm) {
         sendJson(peer, { type: 'error', code: 'map_not_found' })
         return
       }
-      if (!gm.areas.some(a => a.id === toAreaId)) {
+      const areaOv = listOverridesForMap(db, conn.partySeed, currentMapId)
+      const adjOv = listAdjacencyOverridesForParty(db, conn.partySeed)
+        .filter(o => o.mapId === currentMapId)
+      const patchedAreas = applyAreaOverrides(gm.areas, areaOv)
+      if (!patchedAreas.some(a => a.id === toAreaId)) {
         sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'unknown_area' })
         return
       }
 
       if (!isMaster) {
-        // Replica esatta della logica client: applica area overrides
-        // per ottenere posizioni patched, ricalcola adjacency by-proximity
-        // sulle nuove coord, e applica gli adjacency overrides
-        // ('add', 'remove', 'broken'). Stesso risultato di
-        // `MapViewSvg.generatedMap` → niente più "non raggiungibile" su
-        // una strada visivamente disegnata.
-        const areaOv = listOverridesForMap(db, conn.partySeed, currentMapId)
-        const adjOv = listAdjacencyOverridesForParty(db, conn.partySeed)
-          .filter(o => o.mapId === currentMapId)
-        const patchedAreas = applyAreaOverrides(gm.areas, areaOv)
         const { visibleAdj, brokenPairs } = buildEffectiveAdjacency(patchedAreas, adjOv)
         const adj = visibleAdj[fromAreaId] ?? []
         if (!adj.includes(toAreaId)) {

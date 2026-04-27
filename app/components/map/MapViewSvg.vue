@@ -30,6 +30,10 @@ const params = computed<Record<string, unknown>>(() => props.map?.params ?? {})
 
 const baseGeneratedMap = useGeneratedMap(mapTypeId, mapSeed, params)
 
+// Sempre passare per buildEffectiveMap così il client e il server
+// (che usa la stessa funzione in handleMoveRequest) condividono il
+// medesimo grafo: niente più mismatch fra strade visibili e raggiungibili
+// e niente "salti" visivi quando si aggiunge il primo override.
 const generatedMap = computed<GeneratedMap | null>(() => {
   const base = baseGeneratedMap.value
   if (!base) return null
@@ -37,7 +41,6 @@ const generatedMap = computed<GeneratedMap | null>(() => {
   if (!mapId) return base
   const areaOv = party.areaOverrides.filter(o => o.mapId === mapId)
   const adjOv = party.adjacencyOverrides.filter(o => o.mapId === mapId)
-  if (areaOv.length === 0 && adjOv.length === 0) return base
   return buildEffectiveMap(base, areaOv, adjOv)
 })
 
