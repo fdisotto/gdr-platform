@@ -234,11 +234,12 @@ const viewBox = computed(() => `0 0 ${containerW.value} ${containerH.value}`)
 const contentScale = computed(() =>
   Math.max(containerW.value / LOGICAL_W, containerH.value / LOGICAL_H)
 )
-// Larghezza del fade ai bordi del container (~10% del lato corto, con
-// minimo 40 / massimo 140 px) così il fade è proporzionato allo schermo.
+// Larghezza del fade ai bordi del container. Volutamente piccola
+// (~4% del lato corto, clamp 24-70 px): basta a togliere la linea
+// retta senza mangiare la mappa.
 const fadePx = computed(() => {
   const minSide = Math.min(containerW.value, containerH.value)
-  return Math.max(40, Math.min(140, Math.round(minSide * 0.10)))
+  return Math.max(24, Math.min(70, Math.round(minSide * 0.04)))
 })
 const contentTransform = computed(() => {
   const s = contentScale.value
