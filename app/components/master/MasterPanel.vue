@@ -6,9 +6,7 @@ import { usePartyStore } from '~/stores/party'
 import { usePartySeed } from '~/composables/usePartySeed'
 import { useActiveMapAreas } from '~/composables/useActiveMapAreas'
 import PartySettingsTab from '~/components/master/PartySettingsTab.vue'
-import MasterListTab from '~/components/master/MasterListTab.vue'
-import InvitesTab from '~/components/master/InvitesTab.vue'
-import JoinRequestsTab from '~/components/master/JoinRequestsTab.vue'
+import MembersTab from '~/components/master/MembersTab.vue'
 import MapManagementTab from '~/components/master/MapManagementTab.vue'
 
 const seed = usePartySeed()
@@ -17,10 +15,11 @@ const connection = usePartyConnections().open(seed)
 const party = usePartyStore(seed)
 const activeMapAreas = useActiveMapAreas(seed)
 
-type Tab = 'tools' | 'world' | 'settings' | 'masters' | 'invites' | 'requests' | 'log' | 'bans'
+type Tab = 'tools' | 'world' | 'settings' | 'members' | 'log'
 
-// Tab raggruppate per area funzionale: Sessione (azioni in-game),
-// Party (gestione membri/visibilità), Audit (log e moderazione).
+// Tab raggruppate per area funzionale. Tutta la gestione membri
+// (master, inviti, richieste, banditi) vive in una sola tab "Membri"
+// con sezioni interne, invece di 4 tab separate.
 interface TabGroup {
   id: string
   label: string
@@ -40,17 +39,14 @@ const TAB_GROUPS: TabGroup[] = [
     label: 'Party',
     tabs: [
       { id: 'settings', label: 'Impostazioni', icon: '⚙' },
-      { id: 'masters', label: 'Master', icon: '👑' },
-      { id: 'invites', label: 'Inviti', icon: '✉' },
-      { id: 'requests', label: 'Richieste', icon: '📥' }
+      { id: 'members', label: 'Membri', icon: '👥' }
     ]
   },
   {
     id: 'audit',
     label: 'Audit',
     tabs: [
-      { id: 'log', label: 'Log', icon: '📜' },
-      { id: 'bans', label: 'Banditi', icon: '🚫' }
+      { id: 'log', label: 'Log', icon: '📜' }
     ]
   }
 ]
@@ -110,12 +106,6 @@ function clearWeather() {
     areaId: weatherArea.value === '*' ? null : weatherArea.value,
     clear: true
   })
-}
-
-function unbanNickname(nicknameLower: string) {
-  if (!confirm(`Sbloccare ${nicknameLower}?`)) return
-  connection.send({ type: 'master:unban', nicknameLower })
-  setTimeout(() => tools.refresh(), 200)
 }
 
 const decodedActions = computed(() => {
@@ -453,63 +443,11 @@ const decodedActions = computed(() => {
       <!-- SETTINGS -->
       <PartySettingsTab v-else-if="activeTab === 'settings'" />
 
-      <!-- MASTERS -->
-      <MasterListTab v-else-if="activeTab === 'masters'" />
-
-      <!-- INVITES -->
-      <InvitesTab v-else-if="activeTab === 'invites'" />
-
-      <!-- REQUESTS -->
-      <JoinRequestsTab v-else-if="activeTab === 'requests'" />
+      <!-- MEMBERS: master + inviti + richieste + banditi tutto insieme -->
+      <MembersTab v-else-if="activeTab === 'members'" />
 
       <!-- WORLD -->
       <MapManagementTab v-else-if="activeTab === 'world'" />
-
-      <!-- BANS -->
-      <div v-else-if="activeTab === 'bans'">
-        <p
-          v-if="!tools.bans.length"
-          class="text-xs italic"
-          style="color: var(--z-text-lo)"
-        >
-          Nessun ban attivo.
-        </p>
-        <ul
-          v-else
-          class="space-y-2"
-        >
-          <li
-            v-for="b in tools.bans"
-            :key="b.nicknameLower"
-            class="flex items-center justify-between gap-3 px-3 py-2 rounded"
-            style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
-          >
-            <div class="flex-1">
-              <div
-                class="text-sm font-semibold"
-                style="color: var(--z-blood-300)"
-              >
-                {{ b.nicknameLower }}
-              </div>
-              <div
-                class="text-xs"
-                style="color: var(--z-text-md)"
-              >
-                <span class="font-mono-z">{{ formatDate(b.bannedAt) }}</span>
-                <span v-if="b.reason"> · {{ b.reason }}</span>
-              </div>
-            </div>
-            <UButton
-              size="xs"
-              color="primary"
-              variant="soft"
-              @click="unbanNickname(b.nicknameLower)"
-            >
-              Sblocca
-            </UButton>
-          </li>
-        </ul>
-      </div>
     </div>
   </section>
 </template>
