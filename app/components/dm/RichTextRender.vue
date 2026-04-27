@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { parseRich, type RichNode } from '~~/shared/dm/rich'
+import RichTextNode from '~/components/dm/RichTextNode.vue'
 
 const props = defineProps<{
   body: string

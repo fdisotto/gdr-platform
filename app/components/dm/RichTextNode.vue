@@ -1,5 +1,5 @@
 <script lang="ts">
-import { defineComponent, h, type PropType, type VNode } from 'vue'
+import { Fragment, defineComponent, h, type PropType, type VNode } from 'vue'
 import type { RichNode } from '~~/shared/dm/rich'
 
 // Render function manuale: evita whitespace artificiale che il compilatore
@@ -15,31 +15,31 @@ const RichTextNode = defineComponent({
     }
   },
   setup(props) {
-    function render(nodes: RichNode[]): VNode[] {
+    function renderNodes(nodes: RichNode[]): VNode[] {
       return nodes.map((n, i): VNode => {
         if (n.type === 'text') {
           return h('span', { key: i }, n.value)
         }
         if (n.type === 'b') {
-          return h('strong', { key: i }, render(n.children))
+          return h('strong', { key: i }, renderNodes(n.children))
         }
         if (n.type === 'i') {
-          return h('em', { key: i }, render(n.children))
+          return h('em', { key: i }, renderNodes(n.children))
         }
         if (n.type === 'u') {
-          return h('u', { key: i }, render(n.children))
+          return h('u', { key: i }, renderNodes(n.children))
         }
         if (n.type === 'size') {
-          return h('span', { key: i, class: `dm-size-${n.value}` }, render(n.children))
+          return h('span', { key: i, class: `dm-size-${n.value}` }, renderNodes(n.children))
         }
         return h(
           'span',
           { key: i, class: 'dm-align', style: { textAlign: n.value } },
-          render(n.children)
+          renderNodes(n.children)
         )
       })
     }
-    return () => render(props.nodes)
+    return () => h(Fragment, null, renderNodes(props.nodes))
   }
 })
 
