@@ -463,5 +463,9 @@ CREATE INDEX \`area_visits_map_idx\` ON \`area_visits\` (\`party_seed\`,\`map_id
   {
     hash: '0010_glossy_thunderbolts',
     sql: `ALTER TABLE \`parties\` ADD \`fog_enabled\` integer DEFAULT true NOT NULL;`
+  },
+  {
+    hash: '0011_condemned_gideon',
+    sql: `ALTER TABLE \`messages\` ADD \`subject\` text;`
   }
 ]

@@ -76,6 +76,10 @@ export const messages = sqliteTable('messages', {
   targetPlayerId: text('target_player_id'),
   body: text('body').notNull(),
   rollPayload: text('roll_payload'),
+  // v2d-dm-thread: oggetto del thread DM (NULL per messaggi non-DM
+  // o per i thread legacy senza soggetto). I DM dello stesso peer con
+  // subject diversi sono thread separati.
+  subject: text('subject'),
   createdAt: integer('created_at').notNull(),
   deletedAt: integer('deleted_at'),
   deletedBy: text('deleted_by'),

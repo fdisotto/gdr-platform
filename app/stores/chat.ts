@@ -11,6 +11,8 @@ export interface ChatMessage {
   targetPlayerId: string | null
   body: string
   rollPayload: string | null
+  // v2d-dm-thread: oggetto del thread DM (solo kind='dm').
+  subject?: string | null
   createdAt: number
   deletedAt: number | null
   deletedBy: string | null
@@ -136,7 +138,7 @@ function chatStoreFactory() {
     if (msg.kind !== 'dm') return
     const otherId = msg.authorPlayerId === selfId ? msg.targetPlayerId : msg.authorPlayerId
     if (!otherId) return
-    const key = threadKey(selfId, otherId)
+    const key = threadKey(selfId, otherId, msg.subject ?? null)
     const existing = dmsByThread.value[key] ?? []
     dmsByThread.value[key] = [...existing, msg]
   }
@@ -175,8 +177,18 @@ function chatStoreFactory() {
     return messagesByArea.value[areaId] ?? []
   }
 
-  function threadKey(aId: string, bId: string): string {
-    return [aId, bId].sort().join('::')
+  // v2d-dm-thread: la key del thread DM include il subject. Cosi' due
+  // missive verso lo stesso peer ma con oggetti diversi sono thread
+  // separati. Il separator '|' (no '::') divide ids+subject. Per i
+  // messaggi legacy senza subject (campo nullable) usiamo subject ''.
+  function threadKey(aId: string, bId: string, subject: string | null = null): string {
+    const subj = (subject ?? '').slice(0, 64)
+    return [aId, bId].sort().join('::') + '|' + subj
+  }
+  function parseThreadKey(key: string): { peers: [string, string], subject: string } {
+    const [peers, subject = ''] = key.split('|')
+    const [a, b] = (peers ?? '').split('::') as [string, string]
+    return { peers: [a, b], subject }
   }
 
   function appendDm(msg: ChatMessage, selfId: string) {
@@ -185,7 +197,7 @@ function chatStoreFactory() {
       ? msg.targetPlayerId
       : msg.authorPlayerId
     if (!otherId) return
-    const key = threadKey(selfId, otherId)
+    const key = threadKey(selfId, otherId, msg.subject ?? null)
     const existing = dmsByThread.value[key] ?? []
     const matched = matchPendingIndex(existing, msg)
     if (matched >= 0) {
@@ -202,15 +214,15 @@ function chatStoreFactory() {
     return dmsByThread.value[key] ?? []
   }
 
-  function listDmThreads(selfId: string, knownPlayers: Array<{ id: string, nickname: string }>): Array<{ key: string, otherId: string, otherNickname: string, lastMessage: ChatMessage | null }> {
+  function listDmThreads(selfId: string, knownPlayers: Array<{ id: string, nickname: string }>): Array<{ key: string, otherId: string, otherNickname: string, subject: string, lastMessage: ChatMessage | null }> {
     const byId = new Map(knownPlayers.map(p => [p.id, p.nickname]))
-    const result: Array<{ key: string, otherId: string, otherNickname: string, lastMessage: ChatMessage | null }> = []
+    const result: Array<{ key: string, otherId: string, otherNickname: string, subject: string, lastMessage: ChatMessage | null }> = []
     for (const [key, msgs] of Object.entries(dmsByThread.value)) {
-      const [a, b] = key.split('::') as [string, string]
+      const { peers: [a, b], subject } = parseThreadKey(key)
       const otherId = a === selfId ? b : a
       const otherNickname = byId.get(otherId) ?? otherId.slice(0, 6)
       const lastMessage = msgs[msgs.length - 1] ?? null
-      result.push({ key, otherId, otherNickname, lastMessage })
+      result.push({ key, otherId, otherNickname, subject, lastMessage })
     }
     return result.sort((x, y) =>
       (y.lastMessage?.createdAt ?? 0) - (x.lastMessage?.createdAt ?? 0)
@@ -252,7 +264,7 @@ function chatStoreFactory() {
       if (m.kind !== 'dm') continue
       const otherId = m.authorPlayerId === selfId ? m.targetPlayerId : m.authorPlayerId
       if (!otherId) continue
-      const key = threadKey(selfId, otherId)
+      const key = threadKey(selfId, otherId, m.subject ?? null)
       grouped[key] = grouped[key] ?? []
       grouped[key].push(m)
     }

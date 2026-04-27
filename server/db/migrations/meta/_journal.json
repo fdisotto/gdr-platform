@@ -78,6 +78,13 @@
       "when": 1777281758477,
       "tag": "0010_glossy_thunderbolts",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1777303149315,
+      "tag": "0011_condemned_gideon",
+      "breakpoints": true
     }
   ]
 }

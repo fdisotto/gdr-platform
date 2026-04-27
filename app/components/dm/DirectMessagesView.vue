@@ -5,6 +5,7 @@ import { usePartyStore } from '~/stores/party'
 import { useViewStore } from '~/stores/view'
 import { usePartySeed } from '~/composables/usePartySeed'
 import { useSettingsStore } from '~/stores/settings'
+import { useFeedbackStore } from '~/stores/feedback'
 import { seedFromString } from '~~/shared/seed/prng'
 import { usePartyConnections } from '~/composables/usePartyConnections'
 
@@ -13,6 +14,7 @@ const chatStore = useChatStore(seed)
 const partyStore = usePartyStore(seed)
 const viewStore = useViewStore(seed)
 const settings = useSettingsStore()
+const feedback = useFeedbackStore()
 const connection = usePartyConnections().open(seed)
 
 const NICK_COLORS = [
@@ -42,14 +44,13 @@ const otherPlayers = computed(() =>
   partyStore.players.filter(p => p.id !== partyStore.me?.id)
 )
 
+const selectedThread = computed(() => {
+  if (!selectedKey.value || !partyStore.me) return null
+  return threads.value.find(t => t.key === selectedKey.value) ?? null
+})
+
 function openThread(threadKey: string) {
   viewStore.openThread(threadKey)
-}
-
-function startNewWith(otherId: string) {
-  if (!partyStore.me) return
-  const key = chatStore.threadKey(partyStore.me.id, otherId)
-  viewStore.openThread(key)
 }
 
 function formatDate(ms: number): string {
@@ -58,15 +59,84 @@ function formatDate(ms: number): string {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+// ── Composer "nuova missiva" ────────────────────────────────────────────
+// Modal con destinatario + oggetto + corpo. Il thread si crea
+// implicitamente al primo messaggio (server lo memorizza con subject).
+const showNew = ref(false)
+const newToId = ref('')
+const newSubject = ref('')
+const newFirstBody = ref('')
+const newError = ref<string | null>(null)
+
+// Combobox cercabile per il destinatario.
+const newToQuery = ref('')
+const newToFocused = ref(false)
+const filteredRecipients = computed(() => {
+  const q = newToQuery.value.trim().toLowerCase()
+  const list = otherPlayers.value
+  if (!q) return list
+  return list.filter(p => p.nickname.toLowerCase().includes(q))
+})
+const newToNickname = computed(() =>
+  otherPlayers.value.find(p => p.id === newToId.value)?.nickname ?? null
+)
+function pickRecipient(id: string, nickname: string) {
+  newToId.value = id
+  newToQuery.value = nickname
+  newToFocused.value = false
+}
+
+function openNew(prefillToId?: string) {
+  newToId.value = prefillToId ?? ''
+  newToQuery.value = prefillToId
+    ? (otherPlayers.value.find(p => p.id === prefillToId)?.nickname ?? '')
+    : ''
+  newToFocused.value = false
+  newSubject.value = ''
+  newFirstBody.value = ''
+  newError.value = null
+  showNew.value = true
+}
+function cancelNew() {
+  showNew.value = false
+}
+function submitNew() {
+  const subj = newSubject.value.trim().slice(0, 64)
+  const body = newFirstBody.value.trim()
+  if (!newToId.value) {
+    newError.value = 'Scegli un destinatario.'
+    return
+  }
+  if (!subj) {
+    newError.value = 'L\'oggetto della missiva e\' obbligatorio.'
+    return
+  }
+  if (!body) {
+    newError.value = 'Scrivi il corpo della missiva.'
+    return
+  }
+  connection.send({
+    type: 'chat:send',
+    kind: 'dm',
+    body,
+    targetPlayerId: newToId.value,
+    subject: subj
+  })
+  // Salta sul thread appena creato (anche se l'echo del server arrivera'
+  // a stretto giro): la threadKey e' deterministica dai dati locali.
+  if (partyStore.me) {
+    const key = chatStore.threadKey(partyStore.me.id, newToId.value, subj)
+    viewStore.openThread(key)
+  }
+  feedback.pushToast({ level: 'info', title: 'Missiva inviata' })
+  showNew.value = false
+}
+
+// ── Composer per thread esistente ───────────────────────────────────────
 const newBody = ref('')
 const sendError = ref<string | null>(null)
 const loadingMore = ref(false)
 const HISTORY_PAGE_SIZE = 50
-
-const selectedThread = computed(() => {
-  if (!selectedKey.value || !partyStore.me) return null
-  return threads.value.find(t => t.key === selectedKey.value) ?? null
-})
 
 const hasMoreHistory = computed(() => {
   if (!selectedKey.value) return false
@@ -84,7 +154,6 @@ function loadMoreHistory() {
     before,
     limit: HISTORY_PAGE_SIZE
   })
-  // Reset del flag alla prossima mutazione della thread (vedi watcher sotto)
 }
 
 watch(selectedMessages, () => {
@@ -94,16 +163,17 @@ watch(selectedMessages, () => {
 function send() {
   const body = newBody.value.trim()
   if (!body) return
-  const other = selectedThread.value
-  if (!other) {
-    sendError.value = 'nessun destinatario selezionato'
+  const t = selectedThread.value
+  if (!t) {
+    sendError.value = 'Nessun thread selezionato.'
     return
   }
   connection.send({
     type: 'chat:send',
     kind: 'dm',
     body,
-    targetPlayerId: other.otherId
+    targetPlayerId: t.otherId,
+    subject: t.subject
   })
   newBody.value = ''
   sendError.value = null
@@ -115,30 +185,38 @@ function send() {
     class="w-full flex flex-1 min-h-0"
     style="background: var(--z-bg-900)"
   >
-    <!-- Lista conversazioni (inbox): full-width su mobile quando nessun thread
-         selezionato, nascosta su mobile quando invece c'è un thread aperto.
-         Su desktop resta sempre visibile come sidebar 320px. -->
+    <!-- Sidebar lista thread -->
     <aside
       class="flex flex-col w-full md:w-80"
       :class="selectedKey ? 'hidden md:flex' : 'flex'"
       style="border-right: 1px solid var(--z-border); background: var(--z-bg-800)"
     >
       <header
-        class="px-4 py-3"
+        class="px-4 py-3 flex items-center justify-between gap-2"
         style="border-bottom: 1px solid var(--z-border)"
       >
-        <h3
-          class="text-sm font-semibold"
-          style="color: var(--z-green-300)"
+        <div>
+          <h3
+            class="text-sm font-semibold"
+            style="color: var(--z-green-300)"
+          >
+            Missive
+          </h3>
+          <p
+            class="text-xs"
+            style="color: var(--z-text-lo)"
+          >
+            Thread per oggetto
+          </p>
+        </div>
+        <UButton
+          size="xs"
+          color="primary"
+          icon="i-lucide-pencil"
+          @click="openNew()"
         >
-          Missive
-        </h3>
-        <p
-          class="text-xs"
-          style="color: var(--z-text-lo)"
-        >
-          Inbox di messaggi privati
-        </p>
+          Nuova
+        </UButton>
       </header>
       <ul class="flex-1 overflow-y-auto">
         <li
@@ -152,7 +230,7 @@ function send() {
         >
           <div class="flex items-baseline justify-between gap-2">
             <span
-              class="text-sm font-semibold"
+              class="text-sm font-semibold truncate"
               :style="selectedKey === t.key
                 ? undefined
                 : (settings.colorNicknames ? { color: nicknameColor(t.otherNickname) } : { color: 'var(--z-text-hi)' })"
@@ -161,16 +239,29 @@ function send() {
             </span>
             <span
               v-if="t.lastMessage"
-              class="text-xs font-mono-z"
+              class="text-xs font-mono-z shrink-0"
               style="opacity: 0.7"
             >
               {{ formatDate(t.lastMessage.createdAt) }}
             </span>
           </div>
           <div
+            class="text-xs truncate mt-0.5"
+            style="opacity: 0.85"
+          >
+            <span
+              v-if="t.subject"
+              style="font-weight: 600"
+            >📜 {{ t.subject }}</span>
+            <span
+              v-else
+              style="font-style: italic; opacity: 0.6"
+            >(senza oggetto)</span>
+          </div>
+          <div
             v-if="t.lastMessage"
-            class="text-xs truncate mt-1"
-            style="opacity: 0.75"
+            class="text-xs truncate mt-0.5"
+            style="opacity: 0.65"
           >
             {{ t.lastMessage.body }}
           </div>
@@ -180,33 +271,12 @@ function send() {
           class="text-xs italic px-4 py-3"
           style="color: var(--z-text-lo)"
         >
-          Nessuna missiva ricevuta.
+          Nessuna missiva. Apri "Nuova" per iniziare.
         </li>
       </ul>
-      <div style="border-top: 1px solid var(--z-border)">
-        <h4
-          class="text-xs uppercase tracking-wide px-4 pt-3 pb-1"
-          style="color: var(--z-text-md)"
-        >
-          Avvia corrispondenza
-        </h4>
-        <ul class="pb-2">
-          <li
-            v-for="p in otherPlayers"
-            :key="p.id"
-            class="px-4 py-1 text-xs cursor-pointer hover:opacity-80"
-            :style="settings.colorNicknames ? { color: nicknameColor(p.nickname) } : { color: 'var(--z-green-300)' }"
-            @click="startNewWith(p.id)"
-          >
-            + {{ p.nickname }}
-          </li>
-        </ul>
-      </div>
     </aside>
 
-    <!-- Missive view (letters): full-width su mobile quando thread selezionato,
-         nascosta altrimenti. Su desktop sempre visibile (placeholder se nessun
-         thread). -->
+    <!-- View del thread selezionato -->
     <div
       class="flex-1 flex flex-col overflow-hidden"
       :class="selectedKey ? 'flex' : 'hidden md:flex'"
@@ -225,18 +295,29 @@ function send() {
         >
           ←
         </button>
-        <div>
+        <div class="flex-1 min-w-0">
           <p
             class="text-xs uppercase tracking-wide"
             style="color: var(--z-text-md)"
           >
             Corrispondenza con
+            <strong
+              :style="settings.colorNicknames ? { color: nicknameColor(selectedThread.otherNickname) } : { color: 'var(--z-green-300)' }"
+            >{{ selectedThread.otherNickname }}</strong>
           </p>
           <p
-            class="text-base md:text-lg font-semibold"
-            :style="settings.colorNicknames ? { color: nicknameColor(selectedThread.otherNickname) } : { color: 'var(--z-green-300)' }"
+            v-if="selectedThread.subject"
+            class="text-base md:text-lg font-semibold truncate"
+            style="color: var(--z-rust-300)"
           >
-            {{ selectedThread.otherNickname }}
+            📜 {{ selectedThread.subject }}
+          </p>
+          <p
+            v-else
+            class="text-base md:text-lg italic truncate"
+            style="color: var(--z-text-lo)"
+          >
+            (thread senza oggetto)
           </p>
         </div>
       </div>
@@ -305,11 +386,11 @@ function send() {
           class="text-xs italic"
           style="color: var(--z-text-lo)"
         >
-          Seleziona una conversazione dalla lista o avvia una nuova corrispondenza.
+          Seleziona un thread dalla lista o apri "Nuova" per scriverne uno.
         </p>
       </div>
 
-      <!-- Composer nuova missiva -->
+      <!-- Composer reply al thread aperto -->
       <div
         v-if="selectedThread"
         class="px-6 py-3 flex gap-2 items-start"
@@ -319,7 +400,7 @@ function send() {
           v-model="newBody"
           class="flex-1 rounded px-3 py-2 text-sm resize-none"
           style="background: var(--z-bg-700); border: 1px solid var(--z-border); color: var(--z-text-hi); min-height: 60px; outline: none"
-          placeholder="Scrivi una missiva…"
+          placeholder="Rispondi al thread…"
           @keydown.enter.exact.prevent="send"
         />
         <UButton
@@ -332,11 +413,125 @@ function send() {
       </div>
       <p
         v-if="sendError"
-        class="px-6 pb-2 text-xs"
+        class="px-6 pb-3 text-xs"
         style="color: var(--z-blood-300)"
       >
         {{ sendError }}
       </p>
+    </div>
+
+    <!-- Modal "nuova missiva" -->
+    <div
+      v-if="showNew"
+      class="fixed inset-0 z-30 flex items-center justify-center p-4"
+      style="background: rgba(0, 0, 0, 0.55)"
+      @click.self="cancelNew"
+    >
+      <div
+        class="w-full max-w-md p-5 rounded-md space-y-3"
+        style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
+        @click.stop
+      >
+        <h3
+          class="text-sm font-semibold"
+          style="color: var(--z-whisper-300)"
+        >
+          ✉ Nuova missiva
+        </h3>
+        <div class="relative">
+          <label
+            class="block text-xs uppercase tracking-wide mb-1"
+            style="color: var(--z-text-md)"
+          >Destinatario</label>
+          <input
+            v-model="newToQuery"
+            type="text"
+            placeholder="Cerca un player…"
+            class="w-full px-3 py-2 rounded font-mono-z text-sm"
+            style="background: var(--z-bg-900); border: 1px solid var(--z-border); color: var(--z-text-hi); outline: none"
+            @focus="newToFocused = true"
+            @input="newToId = ''"
+          >
+          <ul
+            v-if="newToFocused && filteredRecipients.length > 0"
+            class="absolute z-10 left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded text-sm"
+            style="background: var(--z-bg-900); border: 1px solid var(--z-border)"
+          >
+            <li
+              v-for="p in filteredRecipients"
+              :key="p.id"
+              class="px-3 py-1.5 cursor-pointer hover:bg-black/30"
+              :style="newToId === p.id ? 'background: var(--z-whisper-500); color: var(--z-bg-900)' : 'color: var(--z-text-hi)'"
+              @mousedown.prevent="pickRecipient(p.id, p.nickname)"
+            >
+              {{ p.nickname }}
+            </li>
+          </ul>
+          <p
+            v-if="newToFocused && filteredRecipients.length === 0"
+            class="absolute z-10 left-0 right-0 mt-1 px-3 py-2 text-xs italic rounded"
+            style="background: var(--z-bg-900); border: 1px solid var(--z-border); color: var(--z-text-lo)"
+          >
+            Nessun player corrisponde a "{{ newToQuery }}"
+          </p>
+          <p
+            v-if="newToId && newToNickname && newToQuery !== newToNickname"
+            class="text-xs mt-1"
+            style="color: var(--z-green-300)"
+          >
+            ✓ Selezionato: {{ newToNickname }}
+          </p>
+        </div>
+        <div>
+          <label
+            class="block text-xs uppercase tracking-wide mb-1"
+            style="color: var(--z-text-md)"
+          >Oggetto <span style="color: var(--z-blood-300)">*</span></label>
+          <input
+            v-model="newSubject"
+            type="text"
+            maxlength="64"
+            placeholder="Es. Piano per stanotte"
+            class="w-full px-3 py-2 rounded font-mono-z text-sm"
+            style="background: var(--z-bg-900); border: 1px solid var(--z-border); color: var(--z-text-hi); outline: none"
+          >
+        </div>
+        <div>
+          <label
+            class="block text-xs uppercase tracking-wide mb-1"
+            style="color: var(--z-text-md)"
+          >Messaggio</label>
+          <textarea
+            v-model="newFirstBody"
+            rows="4"
+            class="w-full px-3 py-2 rounded text-sm resize-none"
+            style="background: var(--z-bg-900); border: 1px solid var(--z-border); color: var(--z-text-hi); outline: none"
+          />
+        </div>
+        <p
+          v-if="newError"
+          class="text-xs"
+          style="color: var(--z-blood-300)"
+        >
+          {{ newError }}
+        </p>
+        <div class="flex justify-end gap-2 pt-1">
+          <UButton
+            size="sm"
+            variant="ghost"
+            @click="cancelNew"
+          >
+            Annulla
+          </UButton>
+          <UButton
+            size="sm"
+            color="primary"
+            @click="submitNew"
+          >
+            Invia
+          </UButton>
+        </div>
+      </div>
     </div>
   </section>
 </template>

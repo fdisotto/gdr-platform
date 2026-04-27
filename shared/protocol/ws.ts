@@ -32,7 +32,10 @@ export const ChatSendEvent = z.object({
   body: z.string().min(1).max(2000),
   areaId: z.string().optional().nullable(),
   targetPlayerId: z.string().optional().nullable(),
-  rollExpr: z.string().optional()
+  rollExpr: z.string().optional(),
+  // v2d-dm-thread: oggetto della missiva. Obbligatorio per kind='dm'
+  // (validato server-side in handleChatSend).
+  subject: z.string().min(1).max(64).optional()
 })
 export type ChatSendEvent = z.infer<typeof ChatSendEvent>
 
@@ -46,6 +49,7 @@ export const MessageRowSchema = z.object({
   targetPlayerId: z.string().nullable(),
   body: z.string(),
   rollPayload: z.string().nullable(),
+  subject: z.string().nullable().optional(),
   createdAt: z.number(),
   deletedAt: z.number().nullable(),
   deletedBy: z.string().nullable(),

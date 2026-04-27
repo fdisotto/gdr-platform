@@ -14,6 +14,7 @@ export interface MessageRow {
   targetPlayerId: string | null
   body: string
   rollPayload: string | null
+  subject: string | null
   createdAt: number
   deletedAt: number | null
   deletedBy: string | null
@@ -33,6 +34,8 @@ export interface InsertMessageInput {
   targetPlayerId?: string | null
   body: string
   rollPayload?: string | null
+  // v2d-dm-thread: oggetto del thread DM. Solo per kind='dm'.
+  subject?: string | null
 }
 
 export function insertMessage(db: Db, input: InsertMessageInput): MessageRow {
@@ -49,6 +52,7 @@ export function insertMessage(db: Db, input: InsertMessageInput): MessageRow {
     targetPlayerId: input.targetPlayerId ?? null,
     body: input.body,
     rollPayload: input.rollPayload ?? null,
+    subject: input.subject ?? null,
     createdAt: now,
     deletedAt: null,
     deletedBy: null,

@@ -327,6 +327,7 @@ async function handleChatSend(peer: Peer, raw: unknown) {
   let body = res.data.body
   let rollPayload: string | null = null
 
+  let subject: string | null = null
   if (kind === 'dm') {
     const targetIdentifier = res.data.targetPlayerId ?? ''
     const target = partyPlayers.find(p => p.id === targetIdentifier || p.nickname.toLowerCase() === targetIdentifier.toLowerCase())
@@ -334,6 +335,13 @@ async function handleChatSend(peer: Peer, raw: unknown) {
       sendJson(peer, { type: 'error', code: 'not_found', detail: 'target_not_found' })
       return
     }
+    // v2d-dm-thread: oggetto obbligatorio per le missive.
+    const subjRaw = (res.data.subject ?? '').trim()
+    if (!subjRaw) {
+      sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'subject_required' })
+      return
+    }
+    subject = subjRaw.slice(0, 64)
     targetPlayerId = target.id
     storedAreaId = null
   } else if (kind === 'whisper') {
@@ -382,7 +390,8 @@ async function handleChatSend(peer: Peer, raw: unknown) {
     areaId: storedAreaId,
     targetPlayerId,
     body,
-    rollPayload
+    rollPayload,
+    subject
   })
 
   const broadcast: MessageNewEvent = { type: 'message:new', message: stored }
