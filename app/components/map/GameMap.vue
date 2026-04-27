@@ -234,12 +234,13 @@ const viewBox = computed(() => `0 0 ${containerW.value} ${containerH.value}`)
 const contentScale = computed(() =>
   Math.max(containerW.value / LOGICAL_W, containerH.value / LOGICAL_H)
 )
-// Larghezza del fade ai bordi del container. Volutamente piccola
-// (~4% del lato corto, clamp 24-70 px): basta a togliere la linea
-// retta senza mangiare la mappa.
+// Larghezza del fade ai bordi: piccola (~2% del lato corto, clamp
+// 14-36 px) e con stop gradient concentrati vicino al bordo →
+// solo i pixel piu' esterni sfumano, il resto del contenuto resta
+// pieno.
 const fadePx = computed(() => {
   const minSide = Math.min(containerW.value, containerH.value)
-  return Math.max(24, Math.min(70, Math.round(minSide * 0.04)))
+  return Math.max(14, Math.min(36, Math.round(minSide * 0.02)))
 })
 const contentTransform = computed(() => {
   const s = contentScale.value
@@ -1057,6 +1058,11 @@ function onSvgClickCapture(e: MouseEvent) {
             stop-opacity="1"
           />
           <stop
+            offset="55%"
+            stop-color="black"
+            stop-opacity="0.25"
+          />
+          <stop
             offset="100%"
             stop-color="black"
             stop-opacity="0"
@@ -1073,6 +1079,11 @@ function onSvgClickCapture(e: MouseEvent) {
             offset="0%"
             stop-color="black"
             stop-opacity="1"
+          />
+          <stop
+            offset="55%"
+            stop-color="black"
+            stop-opacity="0.25"
           />
           <stop
             offset="100%"
@@ -1093,6 +1104,11 @@ function onSvgClickCapture(e: MouseEvent) {
             stop-opacity="1"
           />
           <stop
+            offset="55%"
+            stop-color="black"
+            stop-opacity="0.25"
+          />
+          <stop
             offset="100%"
             stop-color="black"
             stop-opacity="0"
@@ -1109,6 +1125,11 @@ function onSvgClickCapture(e: MouseEvent) {
             offset="0%"
             stop-color="black"
             stop-opacity="1"
+          />
+          <stop
+            offset="55%"
+            stop-color="black"
+            stop-opacity="0.25"
           />
           <stop
             offset="100%"
