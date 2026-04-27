@@ -349,7 +349,7 @@ function makeConnection(seed: string): PartyConnection {
       }
       case 'area:entered': {
         const payload = data as { areaId: string, messages: ChatMessage[] }
-        chatStore.messagesByArea[payload.areaId] = payload.messages
+        chatStore.setAreaMessages(payload.areaId, payload.messages)
         break
       }
       case 'chat:history-batch': {

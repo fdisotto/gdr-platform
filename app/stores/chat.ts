@@ -49,8 +49,23 @@ function chatStoreFactory() {
     lastSpokeAt.value = msg.createdAt
   }
 
+  // Pagina iniziale che il server invia per area in state:init e
+  // area:entered. Se il client riceve esattamente questo numero, è
+  // probabile che ne esistano altri sul server → hasMore=true; con
+  // meno, sappiamo per certo che non ce ne sono altri → hasMore=false.
+  const INITIAL_AREA_PAGE_SIZE = 100
+
   function hydrate(payload: Record<string, ChatMessage[]>) {
     messagesByArea.value = { ...payload }
+    // Inizializza il flag hasMore per ogni area in payload basandosi
+    // sulla dimensione del batch ricevuto. Senza questa inizializzazione
+    // il fallback a 'true' faceva apparire "carica più vecchi" anche su
+    // chat vuote / corte.
+    const nextHasMore: Record<string, boolean> = {}
+    for (const [areaId, msgs] of Object.entries(payload)) {
+      nextHasMore[areaId] = msgs.length >= INITIAL_AREA_PAGE_SIZE
+    }
+    areaHasMore.value = nextHasMore
     // Riprendi l'ultimo speaker pubblico dalla history iniziale così il
     // badge ha uno stato sensato subito al join (non vuoto finché non
     // qualcuno riparla).
@@ -68,6 +83,11 @@ function chatStoreFactory() {
     }
     lastSpeakerPlayerId.value = bestId
     lastSpokeAt.value = bestTs
+  }
+
+  function setAreaMessages(areaId: string, msgs: ChatMessage[]) {
+    messagesByArea.value = { ...messagesByArea.value, [areaId]: msgs }
+    areaHasMore.value = { ...areaHasMore.value, [areaId]: msgs.length >= INITIAL_AREA_PAGE_SIZE }
   }
 
   function append(msg: ChatMessage) {
@@ -215,11 +235,15 @@ function chatStoreFactory() {
   }
 
   function areaHasMoreFor(areaId: string): boolean {
-    return areaHasMore.value[areaId] ?? true
+    // Default conservativo: senza informazioni esplicite NON mostriamo
+    // il pulsante "carica più vecchi" (sennò appare anche per aree
+    // mai aperte / vuote). Lo store imposta il flag a true solo quando
+    // hydrate / setAreaMessages / prependArea ricevono un batch pieno.
+    return areaHasMore.value[areaId] ?? false
   }
 
   function threadHasMoreFor(key: string): boolean {
-    return threadHasMore.value[key] ?? true
+    return threadHasMore.value[key] ?? false
   }
 
   function hydrateDms(dms: ChatMessage[], selfId: string) {
@@ -237,6 +261,13 @@ function chatStoreFactory() {
       grouped[key]!.sort((a, b) => a.createdAt - b.createdAt)
     }
     dmsByThread.value = grouped
+    // Inizializza hasMore per ogni thread basandosi sulla dimensione del
+    // batch ricevuto (stessa logica di hydrate per le aree).
+    const nextHasMore: Record<string, boolean> = {}
+    for (const [key, msgs] of Object.entries(grouped)) {
+      nextHasMore[key] = msgs.length >= INITIAL_AREA_PAGE_SIZE
+    }
+    threadHasMore.value = nextHasMore
   }
 
   function reset() {
@@ -256,6 +287,7 @@ function chatStoreFactory() {
     hydrate, hydrateDms, append, update, remove, forArea, forThread,
     appendDm, appendPending, appendPendingDm,
     listDmThreads, threadKey,
+    setAreaMessages,
     prependArea, prependThread,
     areaHasMoreFor, threadHasMoreFor,
     reset
