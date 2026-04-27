@@ -47,7 +47,7 @@ const clock = computed(() => time.format())
         :style="view.mainView === 'map'
           ? 'background: var(--z-green-700); color: var(--z-green-100)'
           : 'background: transparent; color: var(--z-text-md)'"
-        @click="view.show('map')"
+        @click="view.backToMap()"
       >
         <UIcon
           name="i-lucide-map"
@@ -62,7 +62,7 @@ const clock = computed(() => time.format())
         :style="view.mainView === 'dm'
           ? 'background: var(--z-whisper-500); color: var(--z-bg-900)'
           : 'background: transparent; color: var(--z-text-md)'"
-        @click="view.show('dm')"
+        @click="view.openThread(view.selectedThreadKey ?? '')"
       >
         <UIcon
           name="i-lucide-mail"
@@ -78,7 +78,7 @@ const clock = computed(() => time.format())
         :style="view.mainView === 'master'
           ? 'background: var(--z-blood-700); color: var(--z-blood-300)'
           : 'background: transparent; color: var(--z-text-md)'"
-        @click="view.show('master')"
+        @click="view.openMaster()"
       >
         <UIcon
           name="i-lucide-wrench"

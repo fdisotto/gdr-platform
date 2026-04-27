@@ -12,13 +12,13 @@ import { defineStore } from 'pinia'
  * stessa seed ritornano la stessa istanza. Pinia internamente memoizza
  * sulla id, ma evitiamo di ricreare la `defineStore` a ogni call.
  */
-export function makeKeyed<R>(prefix: string, factory: () => R): (seed: string) => R {
+export function makeKeyed<R>(prefix: string, factory: (seed: string) => R): (seed: string) => R {
   const defs = new Map<string, () => R>()
   return (seed: string): R => {
     const id = `${prefix}-${seed}`
     let useStore = defs.get(id)
     if (!useStore) {
-      useStore = defineStore(id, factory) as unknown as () => R
+      useStore = defineStore(id, () => factory(seed)) as unknown as () => R
       defs.set(id, useStore)
     }
     return useStore()
