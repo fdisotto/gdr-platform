@@ -1,6 +1,6 @@
 import { HelloEvent, ChatSendEvent, MoveRequestEvent, HistoryFetchEvent, MasterAreaEvent, MasterSpawnZombieEvent, MasterRemoveZombieEvent, MasterPlacePlayerEvent, MasterMoveZombieEvent, MasterSpawnZombiesEvent, VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent, MasterDeleteMessageEvent, MasterPurgeMessageEvent, MasterRestoreMessageEvent, MasterEditMessageEvent,
   MasterAreaRenameEvent, MasterAreaMoveEvent, MasterAreaAddEvent, MasterAreaRemoveEvent,
-  MasterRoadAddEvent, MasterRoadRemoveEvent, MasterRoadResetEvent, MasterRoadBreakEvent, MasterFogEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, MasterFetchActionsEvent, MasterFetchBansEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type MessageRemovedEvent,
+  MasterRoadAddEvent, MasterRoadRemoveEvent, MasterRoadResetEvent, MasterRoadBreakEvent, MasterFogEvent, MasterSetCityNameEvent, MasterMuteEvent, MasterUnmuteEvent, MasterKickEvent, MasterBanEvent, MasterUnbanEvent, MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent, MasterWeatherOverrideEvent, MasterMovePlayerEvent, MasterFetchActionsEvent, MasterFetchBansEvent, type StateInitEvent, type TimeTickEvent, type MessageNewEvent, type PlayerMovedEvent, type PlayerJoinedEvent, type PlayerLeftEvent, type HistoryBatchEvent, type Zombie, type ZombieSpawnedEvent, type ZombieRemovedEvent, type PlayerPlacedEvent, type ZombieMovedEvent, type ZombiesBatchSpawnedEvent, type VoiceSignalEvent, type MessageUpdateEvent, type MessageRemovedEvent,
   type AreaOverrideUpdatedEvent, type AreaOverrideRemovedEvent, type AreaOverridePublic,
   type AdjacencyOverrideUpdatedEvent, type AdjacencyOverrideRemovedEvent, type AdjacencyOverridePublic,
   type AreaDiscoveredEvent,
@@ -12,7 +12,7 @@ import { findUserById } from '~~/server/services/users'
 import { addBan, removeBan, listBans } from '~~/server/services/bans'
 import { logMasterAction, listMasterActions } from '~~/server/services/master-actions'
 import { setOverride, clearOverride, listOverrides } from '~~/server/services/weather-overrides'
-import { partyMustExist, setPartyFogEnabled } from '~~/server/services/parties'
+import { partyMustExist, setPartyFogEnabled, setPartyCityName } from '~~/server/services/parties'
 import { listAreasState, updateAreaState, findAreaState } from '~~/server/services/areas'
 import { listAreaMessages, insertMessage, listAreaMessagesBefore, listThreadMessagesBefore, listRecentDmsForPlayer, softDeleteMessage, restoreMessage, hardDeleteMessage, editMessage, findMessage, type MessageRow } from '~~/server/services/messages'
 import { registry, sendJson, chatRateLimiter, listPartyZombies, addZombie, removeZombie, moveZombie, addZombies, listPlayerPositions, setPlayerPosition, resetPlayerPosition, ensurePartyHydrated } from '~~/server/ws/state'
@@ -208,6 +208,10 @@ export default defineWebSocketHandler({
     }
     if (parsed.type === 'master:fog') {
       await handleMasterFog(peer, parsed)
+      return
+    }
+    if (parsed.type === 'master:set-city-name') {
+      await handleMasterSetCityName(peer, parsed)
       return
     }
     if (parsed.type === 'master:mute') {
@@ -1337,6 +1341,36 @@ async function handleMasterFog(peer: Peer, raw: unknown) {
     payload: { enabled: res.data.enabled }
   })
   const event = { type: 'party:fog-changed' as const, enabled: res.data.enabled }
+  const payload = JSON.stringify(event)
+  for (const c of registry.listParty(ctx.conn.partySeed)) {
+    try {
+      c.ws.send(payload)
+    } catch { /* skip */ }
+  }
+}
+
+async function handleMasterSetCityName(peer: Peer, raw: unknown) {
+  const res = MasterSetCityNameEvent.safeParse(raw)
+  if (!res.success) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload' })
+    return
+  }
+  const ctx = requireMaster(peer)
+  if (!ctx) return
+  const name = res.data.name.trim()
+  if (!name) {
+    sendJson(peer, { type: 'error', code: 'invalid_payload', detail: 'empty_name' })
+    return
+  }
+  setPartyCityName(ctx.db, ctx.conn.partySeed, name)
+  logMasterAction(ctx.db, {
+    partySeed: ctx.conn.partySeed,
+    masterId: ctx.me.id,
+    action: 'city-rename',
+    target: ctx.conn.partySeed,
+    payload: { name }
+  })
+  const event = { type: 'party:renamed' as const, cityName: name }
   const payload = JSON.stringify(event)
   for (const c of registry.listParty(ctx.conn.partySeed)) {
     try {

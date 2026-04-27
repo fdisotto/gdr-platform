@@ -140,6 +140,11 @@ function partyStoreFactory() {
     party.value = { ...party.value, fogEnabled: enabled }
   }
 
+  function setCityName(cityName: string) {
+    if (!party.value) return
+    party.value = { ...party.value, cityName }
+  }
+
   return {
     me, party, players, areasState,
     maps, transitions, currentMapId,
@@ -147,7 +152,7 @@ function partyStoreFactory() {
     hydrate, reset,
     applyOverride, removeOverride,
     applyAdjacencyOverride, removeAdjacencyOverride,
-    markAreaDiscovered, setFogEnabled
+    markAreaDiscovered, setFogEnabled, setCityName
   }
 }
 

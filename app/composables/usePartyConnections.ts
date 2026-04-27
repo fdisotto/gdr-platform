@@ -307,6 +307,11 @@ function makeConnection(seed: string): PartyConnection {
         partyStore.setFogEnabled(enabled)
         break
       }
+      case 'party:renamed': {
+        const { cityName } = data as { cityName: string }
+        partyStore.setCityName(cityName)
+        break
+      }
       case 'time:tick': {
         serverTime.sync((data as { serverTime: number }).serverTime)
         break

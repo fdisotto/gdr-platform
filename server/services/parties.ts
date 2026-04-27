@@ -164,6 +164,13 @@ export function setPartyFogEnabled(db: Db, seed: string, enabled: boolean): void
     .run()
 }
 
+export function setPartyCityName(db: Db, seed: string, name: string): void {
+  db.update(parties)
+    .set({ cityName: name })
+    .where(eq(parties.seed, seed))
+    .run()
+}
+
 // v2c: hard delete della party. FK CASCADE su tutte le tabelle dipendenti
 // (players, messages, areas_state, area_access_bans, weather_overrides,
 // master_actions, bans, zombies, player_positions, party_invites,

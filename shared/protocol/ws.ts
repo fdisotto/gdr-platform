@@ -585,6 +585,21 @@ export const PartyFogChangedEvent = z.object({
 })
 export type PartyFogChangedEvent = z.infer<typeof PartyFogChangedEvent>
 
+// Master rinomina la città/party (parties.city_name). Il nome viene
+// validato server-side (lunghezza, niente stringhe vuote) e
+// rebroadcastato a tutti.
+export const MasterSetCityNameEvent = z.object({
+  type: z.literal('master:set-city-name'),
+  name: z.string().min(1).max(64)
+})
+export type MasterSetCityNameEvent = z.infer<typeof MasterSetCityNameEvent>
+
+export const PartyRenamedEvent = z.object({
+  type: z.literal('party:renamed'),
+  cityName: z.string()
+})
+export type PartyRenamedEvent = z.infer<typeof PartyRenamedEvent>
+
 // Broadcast a tutti i player della party dopo qualsiasi area-edit.
 export const AreaOverrideUpdatedEvent = z.object({
   type: z.literal('area-override:updated'),
@@ -763,7 +778,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
   AreaOverrideUpdatedEvent, AreaOverrideRemovedEvent,
   AdjacencyOverrideUpdatedEvent, AdjacencyOverrideRemovedEvent,
   AreaDiscoveredEvent,
-  PartyFogChangedEvent
+  PartyFogChangedEvent,
+  PartyRenamedEvent
 ])
 export type ServerEvent = z.infer<typeof ServerEvent>
 
@@ -783,6 +799,7 @@ export const ClientEvent = z.discriminatedUnion('type', [
   MasterAreaAddEvent, MasterAreaRemoveEvent,
   MasterRoadAddEvent, MasterRoadRemoveEvent, MasterRoadResetEvent,
   MasterRoadBreakEvent,
-  MasterFogEvent
+  MasterFogEvent,
+  MasterSetCityNameEvent
 ])
 export type ClientEvent = z.infer<typeof ClientEvent>
