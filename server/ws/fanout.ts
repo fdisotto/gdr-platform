@@ -8,6 +8,11 @@ export interface FanoutSpec {
   areaId?: string | null
   targetPlayerId?: string | null
   authorPlayerId?: string | null
+  // v2d: adjacency da usare per il 'shout' (area corrente + vicini).
+  // Quando passata sostituisce l'ADJACENCY legacy MVP, che non
+  // conosce le aree generate dei mapType v2d. Se assente, fallback su
+  // ADJACENCY legacy per le party pre-multi-mappa.
+  adjacency?: Record<string, readonly string[]>
 }
 
 export function pickFanoutRecipients(connections: readonly RoleAware[], spec: FanoutSpec): RoleAware[] {
@@ -37,7 +42,9 @@ function shouldReceive(c: RoleAware, spec: FanoutSpec): boolean {
     case 'shout': {
       if (spec.areaId == null) return false
       if (c.areaId === spec.areaId) return true
-      const neigh = ADJACENCY[spec.areaId as AreaId] ?? []
+      const neigh = spec.adjacency
+        ? (spec.adjacency[spec.areaId] ?? [])
+        : (ADJACENCY[spec.areaId as AreaId] ?? [])
       return (neigh as readonly string[]).includes(c.areaId)
     }
     case 'roll':

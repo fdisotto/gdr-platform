@@ -393,11 +393,27 @@ async function handleChatSend(peer: Peer, raw: unknown) {
     ...c,
     role: (roleById.get(c.playerId) ?? 'user') as 'user' | 'master'
   }))
+  // v2d: per lo shout serve l'adjacency della mappa attiva del player
+  // (post-override). Computata solo se siamo in una mappa v2d; per le
+  // party legacy il fanout cade sul default ADJACENCY MVP interno.
+  let shoutAdjacency: Record<string, readonly string[]> | undefined
+  if (kind === 'shout' && me.currentMapId) {
+    const gm = generateMapForPartyMap(db, me.currentMapId)
+    if (gm) {
+      const areaOv = listOverridesForMap(db, conn.partySeed, me.currentMapId)
+      const adjOv = listAdjacencyOverridesForParty(db, conn.partySeed)
+        .filter(o => o.mapId === me.currentMapId)
+      const patched = applyAreaOverrides(gm.areas, areaOv)
+      shoutAdjacency = buildEffectiveAdjacency(patched, adjOv).visibleAdj
+    }
+  }
+
   const recipients = pickFanoutRecipients(roleAware, {
     kind,
     areaId: storedAreaId,
     authorPlayerId: conn.playerId,
-    targetPlayerId
+    targetPlayerId,
+    adjacency: shoutAdjacency
   })
   for (const r of recipients) {
     try {
