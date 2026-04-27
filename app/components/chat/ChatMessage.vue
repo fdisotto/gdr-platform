@@ -136,6 +136,11 @@ function purgeMsg() {
   connection.send({ type: 'master:purge-message', messageId: props.message.id })
   closeMenu()
 }
+// Ripristina un messaggio soft-deleted: torna visibile a tutti.
+function restoreMsg() {
+  connection.send({ type: 'master:restore-message', messageId: props.message.id })
+  closeMenu()
+}
 function copyText() {
   if (typeof navigator !== 'undefined' && navigator.clipboard) {
     navigator.clipboard.writeText(props.message.body).catch(() => {})
@@ -232,6 +237,16 @@ if (typeof document !== 'undefined') {
         👁
       </button>
       <button
+        v-if="isDeleted"
+        type="button"
+        class="px-1.5 py-0.5 rounded text-xs hover:bg-black/30"
+        style="color: var(--z-green-300)"
+        title="Ripristina messaggio oscurato"
+        @click="restoreMsg"
+      >
+        ↩
+      </button>
+      <button
         type="button"
         class="px-1.5 py-0.5 rounded text-xs hover:bg-black/30"
         style="color: var(--z-blood-300)"
@@ -289,12 +304,22 @@ if (typeof document !== 'undefined') {
         Modifica
       </button>
       <button
+        v-if="!isDeleted"
         type="button"
         class="block w-full text-left px-3 py-1 text-xs hover:opacity-80"
         style="color: var(--z-rust-300)"
         @click="deleteMsg"
       >
         Oscura
+      </button>
+      <button
+        v-if="isDeleted"
+        type="button"
+        class="block w-full text-left px-3 py-1 text-xs hover:opacity-80"
+        style="color: var(--z-green-300)"
+        @click="restoreMsg"
+      >
+        Ripristina
       </button>
       <button
         type="button"

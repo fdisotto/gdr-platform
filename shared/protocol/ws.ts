@@ -468,6 +468,16 @@ export const MasterPurgeMessageEvent = z.object({
 })
 export type MasterPurgeMessageEvent = z.infer<typeof MasterPurgeMessageEvent>
 
+// Ripristina un messaggio soft-deleted: deletedAt → null. La riga torna
+// visibile a tutti come prima. Solo per il master e solo se la riga è
+// in stato deleted (sennò no-op). Non funziona dopo una purge perché
+// la riga non esiste più.
+export const MasterRestoreMessageEvent = z.object({
+  type: z.literal('master:restore-message'),
+  messageId: z.string()
+})
+export type MasterRestoreMessageEvent = z.infer<typeof MasterRestoreMessageEvent>
+
 // Broadcast emesso dopo una purge: i client rimuovono la riga dal feed.
 export const MessageRemovedEvent = z.object({
   type: z.literal('message:removed'),
@@ -763,7 +773,7 @@ export const ClientEvent = z.discriminatedUnion('type', [
   MasterPlacePlayerEvent,
   MasterMoveZombieEvent, MasterSpawnZombiesEvent,
   VoiceOfferEvent, VoiceAnswerEvent, VoiceIceEvent, VoiceLeaveEvent,
-  MasterDeleteMessageEvent, MasterPurgeMessageEvent, MasterEditMessageEvent,
+  MasterDeleteMessageEvent, MasterPurgeMessageEvent, MasterRestoreMessageEvent, MasterEditMessageEvent,
   MasterMuteEvent, MasterUnmuteEvent,
   MasterKickEvent, MasterBanEvent, MasterUnbanEvent,
   MasterNpcEvent, MasterAnnounceEvent, MasterHiddenRollEvent,

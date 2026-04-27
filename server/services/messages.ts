@@ -82,6 +82,16 @@ export function softDeleteMessage(db: Db, messageId: string, byPlayerId: string)
     .run()
 }
 
+// Ripristina un messaggio soft-deleted: azzera deletedAt/deletedBy. La
+// riga torna visibile (e modificabile) come prima della delete. No-op
+// se la riga non esiste o non è in stato deleted.
+export function restoreMessage(db: Db, messageId: string): void {
+  db.update(messages)
+    .set({ deletedAt: null, deletedBy: null })
+    .where(eq(messages.id, messageId))
+    .run()
+}
+
 // Hard delete: rimuove la riga dal DB. Usato per la "purge" master quando
 // soft-delete (placeholder "[messaggio rimosso]") non basta. Niente recovery.
 export function hardDeleteMessage(db: Db, messageId: string): void {
