@@ -10,9 +10,10 @@ import AreaSprite from '~/components/map/AreaSprite.vue'
 // area (alberi, edifici, auto, macerie, casse, lampioni, fuochi)
 // disposti dentro ogni cella, scalati in base al bbox dell'area così
 // restano visibili anche su celle piccole. Posizione e rotazione
-// deterministiche su (partySeed, areaId, status).
+// deterministiche su (partySeed, areaId, status, mapTypeId).
 type DecorKind = 'tree' | 'building' | 'car' | 'rubble' | 'crate' | 'lamp' | 'fire'
 type AreaStatus = 'intact' | 'infested' | 'ruined' | 'closed'
+type MapTypeId = 'city' | 'country' | 'wasteland' | 'mixed'
 
 interface DecorPlacement {
   id: string
@@ -33,6 +34,10 @@ interface GridLine {
 
 const props = defineProps<{
   areas?: readonly Area[]
+  // v2d-shape-B: il tipo di mappa pilota la palette del decor — city
+  // dominata da edifici, country da alberi, wasteland da macerie.
+  // Quando assente fallback a 'mixed' (palette equilibrata).
+  mapTypeId?: string | null
 }>()
 
 const effectiveAreas = computed<readonly Area[]>(() => props.areas ?? LEGACY_AREAS)
@@ -40,11 +45,41 @@ const effectiveAreas = computed<readonly Area[]>(() => props.areas ?? LEGACY_ARE
 const partySeed = usePartySeed()
 const party = usePartyStore(partySeed)
 
-const palette: Record<AreaStatus, DecorKind[]> = {
-  intact: ['tree', 'building', 'crate', 'lamp', 'tree', 'building'],
-  infested: ['car', 'crate', 'fire', 'rubble', 'building', 'fire'],
-  ruined: ['rubble', 'rubble', 'car', 'building', 'crate', 'rubble'],
-  closed: ['building', 'crate', 'lamp', 'building', 'rubble']
+// Palette differenziate per (mapTypeId × status). I duplicati nei pool
+// aumentano la frequenza dello sprite e modellano l'ambiente:
+// - city: edifici dominanti, lampioni, qualche auto
+// - country: alberi dominanti, edifici sporadici
+// - wasteland: macerie ovunque, alberi morti rari, fuochi spontanei
+// - mixed (legacy/fallback): mix bilanciato di tutto
+const PALETTES: Record<MapTypeId, Record<AreaStatus, DecorKind[]>> = {
+  city: {
+    intact: ['building', 'building', 'building', 'lamp', 'lamp', 'car', 'crate'],
+    infested: ['building', 'car', 'fire', 'rubble', 'building', 'crate'],
+    ruined: ['rubble', 'rubble', 'building', 'car', 'rubble', 'crate'],
+    closed: ['building', 'building', 'lamp', 'crate', 'rubble']
+  },
+  country: {
+    intact: ['tree', 'tree', 'tree', 'tree', 'building', 'crate', 'lamp'],
+    infested: ['tree', 'tree', 'rubble', 'fire', 'car', 'building'],
+    ruined: ['tree', 'rubble', 'rubble', 'building', 'tree'],
+    closed: ['tree', 'building', 'crate', 'tree']
+  },
+  wasteland: {
+    intact: ['rubble', 'rubble', 'crate', 'car', 'lamp', 'tree'],
+    infested: ['rubble', 'fire', 'fire', 'car', 'rubble', 'crate'],
+    ruined: ['rubble', 'rubble', 'rubble', 'rubble', 'car'],
+    closed: ['rubble', 'rubble', 'crate', 'building']
+  },
+  mixed: {
+    intact: ['tree', 'building', 'crate', 'lamp', 'tree', 'building'],
+    infested: ['car', 'crate', 'fire', 'rubble', 'building', 'fire'],
+    ruined: ['rubble', 'rubble', 'car', 'building', 'crate', 'rubble'],
+    closed: ['building', 'crate', 'lamp', 'building', 'rubble']
+  }
+}
+function paletteForMap(typeId: string | null | undefined): Record<AreaStatus, DecorKind[]> {
+  if (typeId === 'city' || typeId === 'country' || typeId === 'wasteland') return PALETTES[typeId]
+  return PALETTES.mixed
 }
 
 const statusByArea = computed(() => {
@@ -56,10 +91,14 @@ const statusByArea = computed(() => {
 const placements = computed<DecorPlacement[]>(() => {
   const out: DecorPlacement[] = []
   const seedStr = party.party?.seed ?? 'fallback'
+  const palette = paletteForMap(props.mapTypeId)
+  // mapTypeId nel seed così cambiando il tipo (es. drop+ricreate) cambia
+  // anche la disposizione, evitando l'effetto "stessa scena diverso bg".
+  const typeKey = props.mapTypeId ?? 'mixed'
   for (const area of effectiveAreas.value) {
     const status = statusByArea.value.get(area.id) ?? 'intact'
     const pool = palette[status]
-    const rng = mulberry32(seedFromString(`${seedStr}|decor|${area.id}|${status}`))
+    const rng = mulberry32(seedFromString(`${seedStr}|decor|${typeKey}|${area.id}|${status}`))
     // Numero sprite proporzionale all'area: bbox grande → più sprite,
     // bbox piccola → meno. Range 6-14.
     const areaSize = area.svg.w * area.svg.h

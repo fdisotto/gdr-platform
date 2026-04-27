@@ -1116,7 +1116,10 @@ function onSvgClickCapture(e: MouseEvent) {
             stroke-opacity="0.9"
             pointer-events="none"
           />
-          <MapDecor :areas="effectiveAreas" />
+          <MapDecor
+            :areas="effectiveAreas"
+            :map-type-id="props.mapTypeId ?? null"
+          />
           <MapRoads
             :areas="effectiveAreas"
             :pairs="adjacencyPairs"
