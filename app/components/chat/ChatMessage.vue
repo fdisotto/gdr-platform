@@ -40,11 +40,16 @@ const rollData = computed(() => {
       rolls: { count: number, sides: number, values: number[] }[]
       modifier: number
       total: number
+      hidden?: boolean
     }
   } catch {
     return null
   }
 })
+
+// Hidden roll: marker che rende il messaggio visibile come "nota
+// privata del master" invece di un message della chat condivisa.
+const isHiddenRoll = computed(() => rollData.value?.hidden === true)
 
 const kindStyle = computed(() => {
   const k = props.message.kind
@@ -131,10 +136,23 @@ function deleteMsg() {
   closeMenu()
 }
 // Hard delete (purge): rimuove la riga dal DB + dal feed di tutti.
-function purgeMsg() {
-  if (!confirm('Cancellare definitivamente questo messaggio?')) return
+// Conferma inline: il primo click attiva la modalita' confirm
+// (mostra icone ✓ / × accanto al messaggio), il secondo conferma.
+const confirmingPurge = ref(false)
+function startPurge() {
+  confirmingPurge.value = true
+  // Auto-cancel dopo 5 sec se non confermato
+  setTimeout(() => {
+    confirmingPurge.value = false
+  }, 5000)
+}
+function confirmPurge() {
   connection.send({ type: 'master:purge-message', messageId: props.message.id })
+  confirmingPurge.value = false
   closeMenu()
+}
+function cancelPurge() {
+  confirmingPurge.value = false
 }
 // Ripristina un messaggio soft-deleted: torna visibile a tutti.
 function restoreMsg() {
@@ -162,12 +180,20 @@ if (typeof document !== 'undefined') {
   <div
     ref="menuRoot"
     class="group relative flex items-start gap-1"
+    :class="isHiddenRoll ? 'hidden-roll' : ''"
     @contextmenu="openMenu"
   >
     <div
       class="flex-1 min-w-0 text-sm"
       :style="message.pending ? { ...kindStyle, opacity: 0.55 } : kindStyle"
     >
+      <!-- Badge "solo master" per hidden roll, mostrato a sinistra del time -->
+      <span
+        v-if="isHiddenRoll"
+        class="text-[10px] uppercase tracking-wider mr-2 px-1.5 py-0.5 rounded"
+        style="background: var(--z-blood-700); color: var(--z-blood-300); border: 1px solid var(--z-blood-300); font-weight: 600"
+        title="Tiro nascosto: visibile solo a te"
+      >👁 solo master</span>
       <span
         class="text-xs font-mono-z mr-2"
         style="color: var(--z-text-lo)"
@@ -246,15 +272,40 @@ if (typeof document !== 'undefined') {
       >
         ↩
       </button>
-      <button
-        type="button"
-        class="px-1.5 py-0.5 rounded text-xs hover:bg-black/30"
-        style="color: var(--z-blood-300)"
-        title="Cancella messaggio (hard delete)"
-        @click="purgeMsg"
-      >
-        🗑
-      </button>
+      <!-- Cancella definitivo: due step inline al posto del confirm()
+           (scomodo). Primo click → mostra ✓/× per conferma o annulla,
+           auto-reset dopo 5s. -->
+      <template v-if="!confirmingPurge">
+        <button
+          type="button"
+          class="px-1.5 py-0.5 rounded text-xs hover:bg-black/30"
+          style="color: var(--z-blood-300)"
+          title="Cancella messaggio (hard delete)"
+          @click="startPurge"
+        >
+          🗑
+        </button>
+      </template>
+      <template v-else>
+        <button
+          type="button"
+          class="px-1.5 py-0.5 rounded text-xs"
+          style="background: var(--z-blood-700); color: var(--z-blood-300); border: 1px solid var(--z-blood-300)"
+          title="Conferma cancellazione"
+          @click="confirmPurge"
+        >
+          ✓
+        </button>
+        <button
+          type="button"
+          class="px-1.5 py-0.5 rounded text-xs hover:bg-black/30"
+          style="color: var(--z-text-md)"
+          title="Annulla"
+          @click="cancelPurge"
+        >
+          ×
+        </button>
+      </template>
     </div>
     <div
       v-if="editing"
@@ -325,10 +376,21 @@ if (typeof document !== 'undefined') {
         type="button"
         class="block w-full text-left px-3 py-1 text-xs hover:opacity-80"
         style="color: var(--z-blood-300)"
-        @click="purgeMsg"
+        @click="startPurge"
       >
         Cancella definitivamente
       </button>
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Hidden roll: stripe a sinistra + bg ambrato per dare l'idea di
+   "appunto privato del master" invece di message della chat. */
+.hidden-roll {
+  background: rgba(160, 87, 42, 0.10);
+  border-left: 3px solid var(--z-rust-500);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0 4px 4px 0;
+}
+</style>

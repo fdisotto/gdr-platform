@@ -1699,6 +1699,8 @@ async function handleMasterHiddenRoll(peer: Peer, raw: unknown) {
   // valorizzato (quella corrente del master) cosi' lo store client
   // (che scarta i message senza areaId) lo riceve come messaggio in
   // quel feed. Il fanout invia solo al master, niente broadcast.
+  // hidden:true nel rollPayload: il client lo stila come "nota
+  // privata del master" invece di un message normale.
   const stored = insertMessage(ctx.db, {
     partySeed: ctx.conn.partySeed,
     kind: 'roll',
@@ -1706,7 +1708,7 @@ async function handleMasterHiddenRoll(peer: Peer, raw: unknown) {
     authorDisplay: ctx.me.nickname,
     areaId: ctx.conn.areaId,
     body: res.data.expr,
-    rollPayload: JSON.stringify({ expr: res.data.expr, ...rolled })
+    rollPayload: JSON.stringify({ expr: res.data.expr, hidden: true, ...rolled })
   })
   logMasterAction(ctx.db, { partySeed: ctx.conn.partySeed, masterId: ctx.me.id, action: 'hidden-roll', payload: { expr: res.data.expr, total: rolled.total } })
   const event: MessageNewEvent = { type: 'message:new', message: stored }
