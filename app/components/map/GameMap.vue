@@ -761,15 +761,14 @@ function onAreaEditClick(areaId: string, e: MouseEvent) {
   roadFromAreaId.value = null
 }
 
-// Click su una strada in edit mode: shift+click toggla rotta/intatta;
-// click normale apre un mini menu rimuovi/rompi/ripara. Per non
-// complicare l'UX con menu modali, usiamo il modificatore shift come
-// shortcut e il click semplice come rimuovi.
+// Click su una strada in edit mode: apre un mini menu modale con
+// pulsanti rimuovi / rompi / ripara. Shift+click resta come shortcut
+// per togglare rapidamente rotta/intatta senza menu.
+const roadMenu = ref<{ areaA: string, areaB: string, isBroken: boolean } | null>(null)
 function onRoadClick(areaA: string, areaB: string, e: MouseEvent) {
   if (!editMode.value || !props.mapId) return
   const isBroken = isBrokenBetween(areaA, areaB)
   if (e.shiftKey) {
-    // Shift+click: rompi se intatta, ripara se rotta.
     connection.send({
       type: 'master:road-break',
       mapId: props.mapId,
@@ -779,19 +778,31 @@ function onRoadClick(areaA: string, areaB: string, e: MouseEvent) {
     })
     return
   }
-  // Click semplice: prompt 3-vie. Se è già rotta, offri ripara/rimuovi.
-  const action = isBroken
-    ? prompt('strada interrotta — scrivi "ripara" per rimettere in funzione, "rimuovi" per cancellarla', 'ripara')
-    : prompt('strada — scrivi "rompi" per renderla interrotta, "rimuovi" per cancellarla', 'rompi')
-  if (!action) return
-  const a = action.trim().toLowerCase()
-  if (a === 'rimuovi') {
-    connection.send({ type: 'master:road-remove', mapId: props.mapId, areaA, areaB })
-  } else if (a === 'rompi' && !isBroken) {
-    connection.send({ type: 'master:road-break', mapId: props.mapId, areaA, areaB, broken: true })
-  } else if (a === 'ripara' && isBroken) {
-    connection.send({ type: 'master:road-break', mapId: props.mapId, areaA, areaB, broken: false })
-  }
+  roadMenu.value = { areaA, areaB, isBroken }
+}
+function closeRoadMenu() {
+  roadMenu.value = null
+}
+function roadMenuRemove() {
+  if (!roadMenu.value || !props.mapId) return
+  connection.send({
+    type: 'master:road-remove',
+    mapId: props.mapId,
+    areaA: roadMenu.value.areaA,
+    areaB: roadMenu.value.areaB
+  })
+  closeRoadMenu()
+}
+function roadMenuToggleBroken(broken: boolean) {
+  if (!roadMenu.value || !props.mapId) return
+  connection.send({
+    type: 'master:road-break',
+    mapId: props.mapId,
+    areaA: roadMenu.value.areaA,
+    areaB: roadMenu.value.areaB,
+    broken
+  })
+  closeRoadMenu()
 }
 
 // ── v2d-edit: status zona (intact / infested / ruined / closed) ────────────
@@ -1367,6 +1378,78 @@ function onSvgClickCapture(e: MouseEvent) {
           >
             ↪ origine selezionata, clicca un'altra area
           </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- v2d-edit: modal azioni strada (rimuovi / rompi / ripara). -->
+    <div
+      v-if="roadMenu"
+      class="absolute inset-0 z-30 flex items-center justify-center"
+      style="background: rgba(0, 0, 0, 0.55)"
+      @click.self="closeRoadMenu"
+    >
+      <div
+        class="rounded-md p-4 space-y-3 min-w-[280px]"
+        style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
+        @click.stop
+      >
+        <header
+          class="text-xs uppercase tracking-wide"
+          style="color: var(--z-text-md)"
+        >
+          Strada — {{ roadMenu.areaA }} ↔ {{ roadMenu.areaB }}
+        </header>
+        <p
+          v-if="roadMenu.isBroken"
+          class="text-sm"
+          style="color: var(--z-blood-300)"
+        >
+          ⚠ La strada è interrotta: i player non possono attraversarla.
+        </p>
+        <p
+          v-else
+          class="text-sm"
+          style="color: var(--z-text-md)"
+        >
+          La strada è intatta e attraversabile.
+        </p>
+        <div class="flex flex-col gap-1.5">
+          <UButton
+            v-if="!roadMenu.isBroken"
+            size="sm"
+            color="warning"
+            block
+            @click="roadMenuToggleBroken(true)"
+          >
+            ✖ Rompi strada
+          </UButton>
+          <UButton
+            v-else
+            size="sm"
+            color="primary"
+            block
+            @click="roadMenuToggleBroken(false)"
+          >
+            🔧 Ripara strada
+          </UButton>
+          <UButton
+            size="sm"
+            color="error"
+            variant="soft"
+            block
+            @click="roadMenuRemove"
+          >
+            🗑 Rimuovi strada
+          </UButton>
+          <UButton
+            size="sm"
+            variant="ghost"
+            block
+            @click="closeRoadMenu"
+          >
+            Annulla
+          </UButton>
         </div>
       </div>
     </div>
