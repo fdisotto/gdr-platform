@@ -4,6 +4,7 @@ import { useMasterToolsStore } from '~/stores/master-tools'
 import { usePartyConnections } from '~/composables/usePartyConnections'
 import { usePartyStore } from '~/stores/party'
 import { usePartySeed } from '~/composables/usePartySeed'
+import { useActiveMapAreas } from '~/composables/useActiveMapAreas'
 import PartySettingsTab from '~/components/master/PartySettingsTab.vue'
 import MasterListTab from '~/components/master/MasterListTab.vue'
 import InvitesTab from '~/components/master/InvitesTab.vue'
@@ -14,21 +15,46 @@ const seed = usePartySeed()
 const tools = useMasterToolsStore(seed)
 const connection = usePartyConnections().open(seed)
 const party = usePartyStore(seed)
+const activeMapAreas = useActiveMapAreas(seed)
 
-type Tab = 'tools' | 'log' | 'bans' | 'settings' | 'masters' | 'invites' | 'requests' | 'world'
-const activeTab = ref<Tab>('tools')
+type Tab = 'tools' | 'world' | 'settings' | 'masters' | 'invites' | 'requests' | 'log' | 'bans'
 
-const TAB_LABELS: Record<Tab, string> = {
-  tools: 'Strumenti',
-  log: 'Log',
-  bans: 'Banditi',
-  settings: 'Impostazioni',
-  masters: 'Master',
-  invites: 'Inviti',
-  requests: 'Richieste',
-  world: 'Mondo'
+// Tab raggruppate per area funzionale: Sessione (azioni in-game),
+// Party (gestione membri/visibilità), Audit (log e moderazione).
+interface TabGroup {
+  id: string
+  label: string
+  tabs: Array<{ id: Tab, label: string, icon: string }>
 }
-const ALL_TABS: Tab[] = ['tools', 'log', 'bans', 'settings', 'masters', 'invites', 'requests', 'world']
+const TAB_GROUPS: TabGroup[] = [
+  {
+    id: 'session',
+    label: 'Sessione',
+    tabs: [
+      { id: 'tools', label: 'Strumenti', icon: '🛠' },
+      { id: 'world', label: 'Mondo', icon: '🗺' }
+    ]
+  },
+  {
+    id: 'party',
+    label: 'Party',
+    tabs: [
+      { id: 'settings', label: 'Impostazioni', icon: '⚙' },
+      { id: 'masters', label: 'Master', icon: '👑' },
+      { id: 'invites', label: 'Inviti', icon: '✉' },
+      { id: 'requests', label: 'Richieste', icon: '📥' }
+    ]
+  },
+  {
+    id: 'audit',
+    label: 'Audit',
+    tabs: [
+      { id: 'log', label: 'Log', icon: '📜' },
+      { id: 'bans', label: 'Banditi', icon: '🚫' }
+    ]
+  }
+]
+const activeTab = ref<Tab>('tools')
 
 onMounted(() => {
   tools.refresh()
@@ -52,7 +78,7 @@ function sendAnnounce() {
   announceText.value = ''
 }
 
-const npcArea = ref(party.me?.currentAreaId ?? 'piazza')
+const npcArea = ref(party.me?.currentAreaId ?? activeMapAreas.value[0]?.id ?? '')
 const npcName = ref('')
 const npcBody = ref('')
 function sendNpc() {
@@ -92,12 +118,6 @@ function unbanNickname(nicknameLower: string) {
   setTimeout(() => tools.refresh(), 200)
 }
 
-const AREAS = [
-  'piazza', 'giardino', 'supermercato', 'ospedale', 'chiesa',
-  'polizia', 'scuola', 'rifugio', 'benzinaio', 'case',
-  'fogne', 'porto', 'radio', 'ponte'
-] as const
-
 const decodedActions = computed(() => {
   return tools.actions.map(a => ({
     ...a,
@@ -112,7 +132,7 @@ const decodedActions = computed(() => {
     style="background: var(--z-bg-900)"
   >
     <aside
-      class="w-full md:w-44 flex flex-row md:flex-col"
+      class="w-full md:w-52 flex flex-row md:flex-col overflow-x-auto md:overflow-x-visible"
       style="border-right: 1px solid var(--z-border); border-bottom: 1px solid var(--z-border); background: var(--z-bg-800)"
     >
       <h3
@@ -121,18 +141,33 @@ const decodedActions = computed(() => {
       >
         Master
       </h3>
-      <button
-        v-for="t in ALL_TABS"
-        :key="t"
-        type="button"
-        class="flex-1 md:flex-none text-left px-3 md:px-4 py-2 text-xs md:text-sm capitalize"
-        :style="activeTab === t
-          ? 'background: var(--z-blood-700); color: var(--z-blood-300)'
-          : 'background: transparent; color: var(--z-text-md)'"
-        @click="activeTab = t"
+      <!-- Sidebar raggruppata: ogni gruppo ha un header e le sue tab.
+           Su mobile le tab scorrono orizzontalmente, niente header gruppo. -->
+      <div
+        v-for="g in TAB_GROUPS"
+        :key="g.id"
+        class="contents md:block"
       >
-        {{ TAB_LABELS[t] }}
-      </button>
+        <h4
+          class="hidden md:block text-[10px] uppercase tracking-wider px-4 pt-3 pb-1"
+          style="color: var(--z-text-lo)"
+        >
+          {{ g.label }}
+        </h4>
+        <button
+          v-for="t in g.tabs"
+          :key="t.id"
+          type="button"
+          class="flex-1 md:flex-none text-left px-3 md:px-4 py-2 text-xs md:text-sm flex items-center gap-2 shrink-0 whitespace-nowrap"
+          :style="activeTab === t.id
+            ? 'background: var(--z-blood-700); color: var(--z-blood-300)'
+            : 'background: transparent; color: var(--z-text-md)'"
+          @click="activeTab = t.id"
+        >
+          <span class="text-base leading-none">{{ t.icon }}</span>
+          <span>{{ t.label }}</span>
+        </button>
+      </div>
       <div class="hidden md:block flex-1" />
       <UButton
         size="xs"
@@ -195,11 +230,11 @@ const decodedActions = computed(() => {
               style="border-color: var(--z-border); color: var(--z-text-hi)"
             >
               <option
-                v-for="a in AREAS"
-                :key="a"
-                :value="a"
+                v-for="a in activeMapAreas"
+                :key="a.id"
+                :value="a.id"
               >
-                {{ a }}
+                {{ a.name }}
               </option>
             </select>
             <input
@@ -280,11 +315,11 @@ const decodedActions = computed(() => {
                 * globale
               </option>
               <option
-                v-for="a in AREAS"
-                :key="a"
-                :value="a"
+                v-for="a in activeMapAreas"
+                :key="a.id"
+                :value="a.id"
               >
-                {{ a }}
+                {{ a.name }}
               </option>
             </select>
             <select
