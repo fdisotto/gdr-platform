@@ -22,10 +22,13 @@ interface Props {
   // - 'base': solo poligono fondo + pattern status (cliccabile, hover)
   // - 'marker': solo marker centrale + label + player count (no events)
   layer?: 'all' | 'base' | 'marker'
-  // v2d-fog: se true l'area è "coperta da fog of war" (non ancora
-  // esplorata dalla party). Il base fill diventa nero solido e marker/
-  // label sono sostituiti da un punto interrogativo.
-  fog?: boolean
+  // v2d-fog: livello di copertura fog of war.
+  // - 'none': area visitata o master → render normale.
+  // - 'adjacent': area adiacente alla mia ma non visitata → silhouette
+  //   con pattern fog e "?" centrale, niente nome / player count.
+  // - 'unknown': area non visitata e non adiacente → buio totale,
+  //   niente decor / marker / label / count.
+  fogLevel?: 'none' | 'adjacent' | 'unknown'
 }
 const props = defineProps<Props>()
 defineEmits<{ (e: 'click'): void }>()
@@ -36,19 +39,26 @@ const polyPoints = computed(() => props.area.svg.points ?? '')
 const showBase = computed(() => !props.layer || props.layer === 'all' || props.layer === 'base')
 const showMarker = computed(() => !props.layer || props.layer === 'all' || props.layer === 'marker')
 
+const fogLevel = computed(() => props.fogLevel ?? 'none')
+const isFogAdjacent = computed(() => fogLevel.value === 'adjacent')
+const isFogUnknown = computed(() => fogLevel.value === 'unknown')
+const isFog = computed(() => fogLevel.value !== 'none')
+
 function strokeColor(): string {
   // v2d-shape-B: per Voronoi i bordi li disegna il mesh path globale in
   // GameMap (UNA volta per edge condiviso). Le celle hanno solo fill;
   // current/adjacent/fog si distinguono per fill-tint o pattern, non
   // per stroke. Per legacy/organic invece il bordo cella resta.
   if (isVoronoi.value) return 'transparent'
-  if (props.fog) return '#1f1f1f'
+  if (isFog.value) return '#1f1f1f'
   if (props.isCurrent) return 'var(--z-green-100)'
   if (props.isAdjacent) return 'var(--z-green-300)'
   return 'var(--z-green-700)'
 }
 function baseFillUrl(): string {
-  return props.fog ? 'url(#area-fog)' : 'url(#area-bg)'
+  if (isFogUnknown.value) return '#050606'
+  if (isFogAdjacent.value) return 'url(#area-fog)'
+  return 'url(#area-bg)'
 }
 function strokeWidth(): number {
   return props.isCurrent ? 2.5 : 1.5
@@ -106,7 +116,7 @@ function cursorStyle(): string {
            si crea doppio bordo sull'edge condiviso fra due celle dello
            stesso tipo (es. due adjacent confinanti). -->
       <polygon
-        v-if="isVoronoi && !fog && (isCurrent || isAdjacent)"
+        v-if="isVoronoi && !isFog && (isCurrent || isAdjacent)"
         :points="voronoiPoints!"
         :fill="isCurrent ? 'var(--z-green-300)' : 'var(--z-green-500)'"
         :opacity="isCurrent ? 0.32 : 0.16"
@@ -135,61 +145,65 @@ function cursorStyle(): string {
         :stroke-width="strokeWidth()"
         :fill-opacity="fillOpacity()"
       />
-      <!-- pattern status: per Voronoi attaccato al poligono, per legacy al rect -->
-      <polygon
-        v-if="isVoronoi && status() === 'infested'"
-        :points="voronoiPoints!"
-        fill="url(#area-infested)"
-        opacity="0.6"
-        pointer-events="none"
-      />
-      <polygon
-        v-else-if="isPolygon && status() === 'infested'"
-        :points="polyPoints"
-        :transform="`translate(${area.svg.x}, ${area.svg.y})`"
-        fill="url(#area-infested)"
-        opacity="0.6"
-        pointer-events="none"
-      />
-      <rect
-        v-else-if="status() === 'infested'"
-        :x="area.svg.x"
-        :y="area.svg.y"
-        :width="area.svg.w"
-        :height="area.svg.h"
-        rx="8"
-        ry="8"
-        fill="url(#area-infested)"
-        opacity="0.6"
-        pointer-events="none"
-      />
-      <polygon
-        v-if="isVoronoi && status() === 'ruined'"
-        :points="voronoiPoints!"
-        fill="url(#area-ruined)"
-        opacity="0.35"
-        pointer-events="none"
-      />
-      <polygon
-        v-else-if="isPolygon && status() === 'ruined'"
-        :points="polyPoints"
-        :transform="`translate(${area.svg.x}, ${area.svg.y})`"
-        fill="url(#area-ruined)"
-        opacity="0.35"
-        pointer-events="none"
-      />
-      <rect
-        v-else-if="status() === 'ruined'"
-        :x="area.svg.x"
-        :y="area.svg.y"
-        :width="area.svg.w"
-        :height="area.svg.h"
-        rx="8"
-        ry="8"
-        fill="url(#area-ruined)"
-        opacity="0.35"
-        pointer-events="none"
-      />
+      <!-- pattern status: visibile solo se la zona NON è in fog (sennò
+           il player vedrebbe lo stato infested/ruined di un'area che
+           non ha mai esplorato). -->
+      <template v-if="!isFog">
+        <polygon
+          v-if="isVoronoi && status() === 'infested'"
+          :points="voronoiPoints!"
+          fill="url(#area-infested)"
+          opacity="0.6"
+          pointer-events="none"
+        />
+        <polygon
+          v-else-if="isPolygon && status() === 'infested'"
+          :points="polyPoints"
+          :transform="`translate(${area.svg.x}, ${area.svg.y})`"
+          fill="url(#area-infested)"
+          opacity="0.6"
+          pointer-events="none"
+        />
+        <rect
+          v-else-if="status() === 'infested'"
+          :x="area.svg.x"
+          :y="area.svg.y"
+          :width="area.svg.w"
+          :height="area.svg.h"
+          rx="8"
+          ry="8"
+          fill="url(#area-infested)"
+          opacity="0.6"
+          pointer-events="none"
+        />
+        <polygon
+          v-if="isVoronoi && status() === 'ruined'"
+          :points="voronoiPoints!"
+          fill="url(#area-ruined)"
+          opacity="0.35"
+          pointer-events="none"
+        />
+        <polygon
+          v-else-if="isPolygon && status() === 'ruined'"
+          :points="polyPoints"
+          :transform="`translate(${area.svg.x}, ${area.svg.y})`"
+          fill="url(#area-ruined)"
+          opacity="0.35"
+          pointer-events="none"
+        />
+        <rect
+          v-else-if="status() === 'ruined'"
+          :x="area.svg.x"
+          :y="area.svg.y"
+          :width="area.svg.w"
+          :height="area.svg.h"
+          rx="8"
+          ry="8"
+          fill="url(#area-ruined)"
+          opacity="0.35"
+          pointer-events="none"
+        />
+      </template>
     </g>
 
     <!-- ── LAYER MARKER: marker centrale + label + closed icon + player count.
@@ -201,7 +215,7 @@ function cursorStyle(): string {
       pointer-events="none"
     >
       <g
-        v-if="fog"
+        v-if="isFogAdjacent"
         :transform="`translate(${area.svg.w / 2}, ${area.svg.h / 2})`"
       >
         <circle
@@ -221,7 +235,7 @@ function cursorStyle(): string {
         </text>
       </g>
       <g
-        v-else-if="isVoronoi"
+        v-else-if="!isFog && isVoronoi"
         :transform="`translate(${area.svg.w / 2}, ${area.svg.h / 2})`"
       >
         <circle
@@ -236,7 +250,7 @@ function cursorStyle(): string {
         />
       </g>
       <g
-        v-if="status() === 'closed'"
+        v-if="status() === 'closed' && !isFog"
         :transform="`translate(${area.svg.w / 2 - 12}, ${area.svg.h / 2 - 12})`"
       >
         <rect
@@ -255,7 +269,7 @@ function cursorStyle(): string {
         />
       </g>
       <g
-        v-if="!fog"
+        v-if="!isFog"
         :transform="isVoronoi
           ? `translate(${area.svg.w / 2}, ${area.svg.h / 2 - 16})`
           : `translate(${area.svg.w / 2}, ${area.svg.h / 2 + 4})`"
@@ -283,7 +297,7 @@ function cursorStyle(): string {
         </text>
       </g>
       <g
-        v-if="playerCount > 0 && !fog"
+        v-if="playerCount > 0 && !isFog"
         :transform="`translate(${area.svg.w - 18}, 14)`"
       >
         <circle

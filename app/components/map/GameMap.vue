@@ -411,11 +411,29 @@ const visitedSetForMap = computed<Set<string>>(() => {
   return set
 })
 
-function isFog(areaId: string): boolean {
-  if (isMaster.value) return false
-  if (!props.mapId) return false
-  return !visitedSetForMap.value.has(areaId)
+// v2d-fog: livello di fog per ogni area dal punto di vista del player
+// corrente. 3 stati:
+// - 'none' → area visitata, area corrente o master (visibilità piena)
+// - 'adjacent' → adiacente alla mia area corrente, mai visitata
+//   (silhouette + "?", niente nome / player count)
+// - 'unknown' → tutte le altre non visitate (cella nera uniforme)
+// Visitando una nuova area entra nel visitedSet via WS broadcast e
+// passa permanentemente a 'none'.
+function fogLevelFor(areaId: string): 'none' | 'adjacent' | 'unknown' {
+  if (isMaster.value) return 'none'
+  if (!props.mapId) return 'none'
+  if (visitedSetForMap.value.has(areaId)) return 'none'
+  if (currentAreaId.value === areaId) return 'none'
+  if (adjacentSet.value.has(areaId)) return 'adjacent'
+  return 'unknown'
 }
+
+// Aree completamente sconosciute: nere, e devono coprire anche strade/
+// decor incidenti che provengono da zone visibili. Per questo serve un
+// overlay nero renderizzato DOPO MapRoads/MapDecor/MapTransitionDoors.
+const unknownAreas = computed<readonly Area[]>(() => {
+  return effectiveAreas.value.filter(a => fogLevelFor(a.id) === 'unknown')
+})
 
 const stateById = computed(() => {
   const map = new Map<string, { status: 'intact' | 'infested' | 'ruined' | 'closed', customName: string | null }>()
@@ -944,7 +962,7 @@ function onSvgClickCapture(e: MouseEvent) {
               :player-count="(playersByArea.get(a.id)?.length ?? 0)"
               :voronoi-points="voronoiByArea.get(a.id) ?? null"
               :layer="hasVoronoi ? 'base' : 'all'"
-              :fog="isFog(a.id)"
+              :fog-level="fogLevelFor(a.id)"
               @click="!editMode && onAreaClick(a.id as AreaId)"
             />
           </g>
@@ -981,6 +999,22 @@ function onSvgClickCapture(e: MouseEvent) {
             @transition-click="onTransitionClick"
           />
 
+          <!-- v2d-fog: copertura nera SOPRA strade/decor/porte per le
+               zone 'unknown'. Le strade che partono da zone visibili
+               verso una unknown vengono coperte all'ingresso → effetto
+               "qui finisce ciò che conosci". -->
+          <g
+            v-if="hasVoronoi && unknownAreas.length > 0"
+            pointer-events="none"
+          >
+            <polygon
+              v-for="a in unknownAreas"
+              :key="`fog-${a.id}`"
+              :points="voronoiByArea.get(a.id) ?? ''"
+              fill="#050606"
+            />
+          </g>
+
           <!-- v2d-shape-B: layer marker — solo se Voronoi attivo (per il
                legacy MVP il rect 'all' include già marker+label). -->
           <template v-if="hasVoronoi">
@@ -997,7 +1031,7 @@ function onSvgClickCapture(e: MouseEvent) {
                 :player-count="(playersByArea.get(a.id)?.length ?? 0)"
                 :voronoi-points="voronoiByArea.get(a.id) ?? null"
                 layer="marker"
-                :fog="isFog(a.id)"
+                :fog-level="fogLevelFor(a.id)"
               />
             </g>
           </template>
