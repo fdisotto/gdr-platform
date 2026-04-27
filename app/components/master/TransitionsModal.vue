@@ -114,10 +114,46 @@ async function addTransition() {
   }
 }
 
-async function deleteTransition(t: TransitionRow) {
-  if (!confirm('Eliminare questa porta?')) return
+// Conferma inline al posto di confirm() per delete: il primo click
+// attiva confirmingDeleteId, il secondo conferma. Auto-reset 5s.
+const confirmingDeleteId = ref<string | null>(null)
+function startDelete(t: TransitionRow) {
+  confirmingDeleteId.value = t.id
+  setTimeout(() => {
+    if (confirmingDeleteId.value === t.id) confirmingDeleteId.value = null
+  }, 5000)
+}
+async function confirmDelete(t: TransitionRow) {
   try {
     await $fetch(`/api/parties/${seed}/maps/${t.fromMapId}/transitions/${t.id}`, { method: 'DELETE' })
+    confirmingDeleteId.value = null
+    await refresh()
+  } catch (e) {
+    err.reportFromError(e)
+  }
+}
+
+// Edit inline dell'etichetta: solo il label e' modificabile (cambiare
+// area sorgente/destinazione vuol dire creare una porta diversa).
+const editingId = ref<string | null>(null)
+const editLabel = ref('')
+function startEdit(t: TransitionRow) {
+  editingId.value = t.id
+  editLabel.value = t.label ?? ''
+}
+function cancelEdit() {
+  editingId.value = null
+  editLabel.value = ''
+}
+async function commitEdit(t: TransitionRow) {
+  const label = editLabel.value.trim().slice(0, 64) || null
+  try {
+    await $fetch(`/api/parties/${seed}/maps/${t.fromMapId}/transitions/${t.id}/rename`, {
+      method: 'POST',
+      body: { label }
+    })
+    editingId.value = null
+    editLabel.value = ''
     await refresh()
   } catch (e) {
     err.reportFromError(e)
@@ -177,21 +213,79 @@ async function deleteTransition(t: TransitionRow) {
               <li
                 v-for="t in transitions.outgoing"
                 :key="t.id"
-                class="px-2 py-1.5 text-xs font-mono-z flex items-center justify-between"
+                class="px-2 py-1.5 text-xs font-mono-z flex items-center gap-2"
                 style="background: var(--z-bg-900); border-radius: 4px; color: var(--z-text-md)"
               >
-                <span>
+                <span class="flex-1 min-w-0 truncate">
                   {{ t.fromAreaId }} → {{ t.toAreaId }}
-                  <span v-if="t.label">({{ t.label }})</span>
+                  <span
+                    v-if="t.label && editingId !== t.id"
+                    style="color: var(--z-rust-300)"
+                  >({{ t.label }})</span>
                 </span>
-                <UButton
-                  size="xs"
-                  variant="ghost"
-                  color="error"
-                  @click="deleteTransition(t)"
+                <input
+                  v-if="editingId === t.id"
+                  v-model="editLabel"
+                  type="text"
+                  maxlength="64"
+                  placeholder="Etichetta"
+                  class="px-2 py-0.5 rounded font-mono-z text-xs"
+                  style="background: var(--z-bg-800); border: 1px solid var(--z-border); color: var(--z-text-hi); width: 110px"
+                  autofocus
+                  @keyup.enter="commitEdit(t)"
+                  @keyup.escape="cancelEdit"
                 >
-                  ×
-                </UButton>
+                <template v-if="editingId === t.id">
+                  <UButton
+                    size="xs"
+                    color="primary"
+                    @click="commitEdit(t)"
+                  >
+                    ✓
+                  </UButton>
+                  <UButton
+                    size="xs"
+                    variant="ghost"
+                    @click="cancelEdit"
+                  >
+                    ×
+                  </UButton>
+                </template>
+                <template v-else-if="confirmingDeleteId === t.id">
+                  <UButton
+                    size="xs"
+                    color="error"
+                    @click="confirmDelete(t)"
+                  >
+                    ✓ elimina
+                  </UButton>
+                  <UButton
+                    size="xs"
+                    variant="ghost"
+                    @click="confirmingDeleteId = null"
+                  >
+                    ×
+                  </UButton>
+                </template>
+                <template v-else>
+                  <UButton
+                    size="xs"
+                    variant="ghost"
+                    color="neutral"
+                    icon="i-lucide-pencil"
+                    title="Rinomina porta"
+                    @click="startEdit(t)"
+                  />
+                  <UButton
+                    size="xs"
+                    variant="ghost"
+                    color="error"
+                    title="Elimina porta"
+                    @click="startDelete(t)"
+                  >
+                    🗑
+                  </UButton>
+                </template>
               </li>
             </ul>
             <p

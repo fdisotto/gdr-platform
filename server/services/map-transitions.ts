@@ -169,6 +169,18 @@ export function createTransition(db: Db, input: CreateTransitionInput): Transiti
   return [direct, reverse]
 }
 
+export function updateTransitionLabel(db: Db, transitionId: string, label: string | null): void {
+  const row = db.select().from(mapTransitions)
+    .where(eq(mapTransitions.id, transitionId))
+    .get() as RawRow | undefined
+  if (!row) throw new DomainError('not_found', `transition ${transitionId}`)
+  const cleaned = label?.trim().slice(0, 64) || null
+  db.update(mapTransitions)
+    .set({ label: cleaned })
+    .where(eq(mapTransitions.id, transitionId))
+    .run()
+}
+
 export function deleteTransition(db: Db, transitionId: string): void {
   const row = db.select().from(mapTransitions)
     .where(eq(mapTransitions.id, transitionId))
