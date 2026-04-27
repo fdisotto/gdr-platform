@@ -133,13 +133,28 @@ async function confirmDelete(t: TransitionRow) {
   }
 }
 
-// Edit inline dell'etichetta: solo il label e' modificabile (cambiare
-// area sorgente/destinazione vuol dire creare una porta diversa).
+// Edit inline completo: fromAreaId, toMapId, toAreaId, label (la
+// fromMapId resta fissa - per cambiarla conviene cancellare e ricreare).
 const editingId = ref<string | null>(null)
 const editLabel = ref('')
+const editFromAreaId = ref('')
+const editToMapId = ref('')
+const editToAreaId = ref('')
+const editToMapAreas = computed<GeneratedArea[]>(() => {
+  const m = allMaps.value.find(mm => mm.id === editToMapId.value)
+  if (!m) return []
+  try {
+    return generate(m.mapTypeId, m.mapSeed, {}).areas
+  } catch {
+    return []
+  }
+})
 function startEdit(t: TransitionRow) {
   editingId.value = t.id
   editLabel.value = t.label ?? ''
+  editFromAreaId.value = t.fromAreaId
+  editToMapId.value = t.toMapId
+  editToAreaId.value = t.toAreaId
 }
 function cancelEdit() {
   editingId.value = null
@@ -150,7 +165,12 @@ async function commitEdit(t: TransitionRow) {
   try {
     await $fetch(`/api/parties/${seed}/maps/${t.fromMapId}/transitions/${t.id}/rename`, {
       method: 'POST',
-      body: { label }
+      body: {
+        fromAreaId: editFromAreaId.value,
+        toMapId: editToMapId.value,
+        toAreaId: editToAreaId.value,
+        label
+      }
     })
     editingId.value = null
     editLabel.value = ''
@@ -213,79 +233,141 @@ async function commitEdit(t: TransitionRow) {
               <li
                 v-for="t in transitions.outgoing"
                 :key="t.id"
-                class="px-2 py-1.5 text-xs font-mono-z flex items-center gap-2"
+                class="px-2 py-1.5 text-xs font-mono-z"
                 style="background: var(--z-bg-900); border-radius: 4px; color: var(--z-text-md)"
               >
-                <span class="flex-1 min-w-0 truncate">
-                  {{ t.fromAreaId }} → {{ t.toAreaId }}
-                  <span
-                    v-if="t.label && editingId !== t.id"
-                    style="color: var(--z-rust-300)"
-                  >({{ t.label }})</span>
-                </span>
-                <input
+                <!-- Modalita' edit: form completo da/a/etichetta -->
+                <div
                   v-if="editingId === t.id"
-                  v-model="editLabel"
-                  type="text"
-                  maxlength="64"
-                  placeholder="Etichetta"
-                  class="px-2 py-0.5 rounded font-mono-z text-xs"
-                  style="background: var(--z-bg-800); border: 1px solid var(--z-border); color: var(--z-text-hi); width: 110px"
-                  autofocus
-                  @keyup.enter="commitEdit(t)"
-                  @keyup.escape="cancelEdit"
+                  class="space-y-2"
                 >
-                <template v-if="editingId === t.id">
-                  <UButton
-                    size="xs"
-                    color="primary"
-                    @click="commitEdit(t)"
-                  >
-                    ✓
-                  </UButton>
-                  <UButton
-                    size="xs"
-                    variant="ghost"
-                    @click="cancelEdit"
-                  >
-                    ×
-                  </UButton>
-                </template>
-                <template v-else-if="confirmingDeleteId === t.id">
-                  <UButton
-                    size="xs"
-                    color="error"
-                    @click="confirmDelete(t)"
-                  >
-                    ✓ elimina
-                  </UButton>
-                  <UButton
-                    size="xs"
-                    variant="ghost"
-                    @click="confirmingDeleteId = null"
-                  >
-                    ×
-                  </UButton>
-                </template>
-                <template v-else>
-                  <UButton
-                    size="xs"
-                    variant="ghost"
-                    color="neutral"
-                    icon="i-lucide-pencil"
-                    title="Rinomina porta"
-                    @click="startEdit(t)"
-                  />
-                  <UButton
-                    size="xs"
-                    variant="ghost"
-                    color="error"
-                    title="Elimina porta"
-                    @click="startDelete(t)"
-                  >
-                    🗑
-                  </UButton>
-                </template>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <label class="block">
+                      <span style="color: var(--z-text-md)">Da</span>
+                      <select
+                        v-model="editFromAreaId"
+                        class="block w-full mt-0.5 px-2 py-1 rounded text-xs"
+                        style="background: var(--z-bg-800); border: 1px solid var(--z-border); color: var(--z-text-hi)"
+                      >
+                        <option
+                          v-for="a in fromMapAreas"
+                          :key="a.id"
+                          :value="a.id"
+                        >
+                          {{ a.name }} {{ a.edge ? '(edge)' : '' }}
+                        </option>
+                      </select>
+                    </label>
+                    <label class="block">
+                      <span style="color: var(--z-text-md)">Mappa di dest.</span>
+                      <select
+                        v-model="editToMapId"
+                        class="block w-full mt-0.5 px-2 py-1 rounded text-xs"
+                        style="background: var(--z-bg-800); border: 1px solid var(--z-border); color: var(--z-text-hi)"
+                      >
+                        <option
+                          v-for="m in allMaps"
+                          :key="m.id"
+                          :value="m.id"
+                        >
+                          {{ m.name }}
+                        </option>
+                      </select>
+                    </label>
+                    <label class="block">
+                      <span style="color: var(--z-text-md)">Area di dest.</span>
+                      <select
+                        v-model="editToAreaId"
+                        class="block w-full mt-0.5 px-2 py-1 rounded text-xs"
+                        style="background: var(--z-bg-800); border: 1px solid var(--z-border); color: var(--z-text-hi)"
+                      >
+                        <option
+                          v-for="a in editToMapAreas"
+                          :key="a.id"
+                          :value="a.id"
+                        >
+                          {{ a.name }} {{ a.edge ? '(edge)' : '' }}
+                        </option>
+                      </select>
+                    </label>
+                    <label class="block">
+                      <span style="color: var(--z-text-md)">Etichetta</span>
+                      <input
+                        v-model="editLabel"
+                        type="text"
+                        maxlength="64"
+                        class="block w-full mt-0.5 px-2 py-1 rounded text-xs"
+                        style="background: var(--z-bg-800); border: 1px solid var(--z-border); color: var(--z-text-hi)"
+                        @keyup.enter="commitEdit(t)"
+                        @keyup.escape="cancelEdit"
+                      >
+                    </label>
+                  </div>
+                  <div class="flex justify-end gap-1.5">
+                    <UButton
+                      size="xs"
+                      variant="ghost"
+                      @click="cancelEdit"
+                    >
+                      Annulla
+                    </UButton>
+                    <UButton
+                      size="xs"
+                      color="primary"
+                      @click="commitEdit(t)"
+                    >
+                      Salva
+                    </UButton>
+                  </div>
+                </div>
+                <!-- Modalita' read: riga compatta con icone azione -->
+                <div
+                  v-else
+                  class="flex items-center gap-2"
+                >
+                  <span class="flex-1 min-w-0 truncate">
+                    {{ t.fromAreaId }} → {{ t.toAreaId }}
+                    <span
+                      v-if="t.label"
+                      style="color: var(--z-rust-300)"
+                    >({{ t.label }})</span>
+                  </span>
+                  <template v-if="confirmingDeleteId === t.id">
+                    <UButton
+                      size="xs"
+                      color="error"
+                      @click="confirmDelete(t)"
+                    >
+                      ✓ elimina
+                    </UButton>
+                    <UButton
+                      size="xs"
+                      variant="ghost"
+                      @click="confirmingDeleteId = null"
+                    >
+                      ×
+                    </UButton>
+                  </template>
+                  <template v-else>
+                    <UButton
+                      size="xs"
+                      variant="ghost"
+                      color="neutral"
+                      icon="i-lucide-pencil"
+                      title="Modifica porta"
+                      @click="startEdit(t)"
+                    />
+                    <UButton
+                      size="xs"
+                      variant="ghost"
+                      color="error"
+                      title="Elimina porta"
+                      @click="startDelete(t)"
+                    >
+                      🗑
+                    </UButton>
+                  </template>
+                </div>
               </li>
             </ul>
             <p

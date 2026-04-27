@@ -181,6 +181,49 @@ export function updateTransitionLabel(db: Db, transitionId: string, label: strin
     .run()
 }
 
+export interface UpdateTransitionInput {
+  fromAreaId?: string
+  toMapId?: string
+  toAreaId?: string
+  label?: string | null
+}
+
+// Aggiorna i campi di una transizione (area sorgente, mappa+area
+// destinazione, label). Se cambiano gli endpoint, valida che le aree
+// esistano nelle mappe target. fromMapId resta fisso (se serve cambiare
+// la mappa sorgente conviene cancellare e ricreare).
+export function updateTransition(db: Db, partySeed: string, transitionId: string, input: UpdateTransitionInput): TransitionRow {
+  const row = db.select().from(mapTransitions)
+    .where(eq(mapTransitions.id, transitionId))
+    .get() as RawRow | undefined
+  if (!row || row.partySeed !== partySeed) {
+    throw new DomainError('not_found', `transition ${transitionId}`)
+  }
+  const next = {
+    fromAreaId: input.fromAreaId ?? row.fromAreaId,
+    toMapId: input.toMapId ?? row.toMapId,
+    toAreaId: input.toAreaId ?? row.toAreaId,
+    label: input.label !== undefined
+      ? (input.label?.trim().slice(0, 64) || null)
+      : row.label
+  }
+  if (next.fromAreaId !== row.fromAreaId) {
+    assertAreaExists(db, row.fromMapId, next.fromAreaId)
+  }
+  if (next.toMapId !== row.toMapId || next.toAreaId !== row.toAreaId) {
+    const target = findPartyMap(db, next.toMapId)
+    if (!target || target.partySeed !== partySeed) {
+      throw new DomainError('map_not_found', next.toMapId)
+    }
+    assertAreaExists(db, next.toMapId, next.toAreaId)
+  }
+  db.update(mapTransitions)
+    .set(next)
+    .where(eq(mapTransitions.id, transitionId))
+    .run()
+  return mapRow({ ...row, ...next })
+}
+
 export function deleteTransition(db: Db, transitionId: string): void {
   const row = db.select().from(mapTransitions)
     .where(eq(mapTransitions.id, transitionId))
