@@ -234,6 +234,12 @@ const viewBox = computed(() => `0 0 ${containerW.value} ${containerH.value}`)
 const contentScale = computed(() =>
   Math.max(containerW.value / LOGICAL_W, containerH.value / LOGICAL_H)
 )
+// Larghezza del fade ai bordi del container (~10% del lato corto, con
+// minimo 40 / massimo 140 px) così il fade è proporzionato allo schermo.
+const fadePx = computed(() => {
+  const minSide = Math.min(containerW.value, containerH.value)
+  return Math.max(40, Math.min(140, Math.round(minSide * 0.10)))
+})
 const contentTransform = computed(() => {
   const s = contentScale.value
   const tx = (containerW.value - LOGICAL_W * s) / 2
@@ -243,8 +249,9 @@ const contentTransform = computed(() => {
 
 // ── Zoom & pan ───────────────────────────────────────────────────────────────
 // Transform applicato sopra a contentTransform: viewBox coords → viewBox coords.
-// zoom in [1, 4], pan in pixel del container (stessa scala del viewBox).
-const MIN_ZOOM = 1
+// zoom in [0.5, 4]: con il content scale 'cover' la mappa parte gia'
+// piena, ma serve poter zoomare fuori per vedere il contesto attorno.
+const MIN_ZOOM = 0.5
 const MAX_ZOOM = 4
 const zoom = ref(1)
 const panX = ref(0)
@@ -1030,37 +1037,83 @@ function onSvgClickCapture(e: MouseEvent) {
           />
           <feColorMatrix values="0 0 0 0 0.15 0 0 0 0 0.15 0 0 0 0 0.15 0 0 0 0.35 0" />
         </filter>
-        <!-- v2d-shape-B: vignette agganciata alle dimensioni del CONTAINER
-             (non al LOGICAL 1000x700) così sfuma i bordi visibili del
-             SVG indipendentemente dal cover/meet del contenuto. -->
-        <radialGradient
-          id="map-vignette"
-          gradientUnits="userSpaceOnUse"
-          :cx="containerW / 2"
-          :cy="containerH / 2"
-          :r="Math.max(containerW, containerH) * 0.65"
+        <!-- v2d-shape-B: 4 linearGradient (uno per lato) compongono una
+             vignetta rettangolare. Sfumano da bg-opaco al bordo a
+             trasparente verso l'interno → tutti i 4 bordi del
+             container sfumano coerentemente, niente "quadratone"
+             netto né angoli scoperti come col radial. -->
+        <linearGradient
+          id="fade-top"
+          x1="0"
+          y1="0"
+          x2="0"
+          y2="1"
         >
           <stop
             offset="0%"
             stop-color="#0b0d0c"
-            stop-opacity="0"
-          />
-          <stop
-            offset="55%"
-            stop-color="#0b0d0c"
-            stop-opacity="0"
-          />
-          <stop
-            offset="85%"
-            stop-color="#0b0d0c"
-            stop-opacity="0.55"
+            stop-opacity="1"
           />
           <stop
             offset="100%"
             stop-color="#0b0d0c"
+            stop-opacity="0"
+          />
+        </linearGradient>
+        <linearGradient
+          id="fade-bottom"
+          x1="0"
+          y1="1"
+          x2="0"
+          y2="0"
+        >
+          <stop
+            offset="0%"
+            stop-color="#0b0d0c"
             stop-opacity="1"
           />
-        </radialGradient>
+          <stop
+            offset="100%"
+            stop-color="#0b0d0c"
+            stop-opacity="0"
+          />
+        </linearGradient>
+        <linearGradient
+          id="fade-left"
+          x1="0"
+          y1="0"
+          x2="1"
+          y2="0"
+        >
+          <stop
+            offset="0%"
+            stop-color="#0b0d0c"
+            stop-opacity="1"
+          />
+          <stop
+            offset="100%"
+            stop-color="#0b0d0c"
+            stop-opacity="0"
+          />
+        </linearGradient>
+        <linearGradient
+          id="fade-right"
+          x1="1"
+          y1="0"
+          x2="0"
+          y2="0"
+        >
+          <stop
+            offset="0%"
+            stop-color="#0b0d0c"
+            stop-opacity="1"
+          />
+          <stop
+            offset="100%"
+            stop-color="#0b0d0c"
+            stop-opacity="0"
+          />
+        </linearGradient>
       </defs>
       <!-- Bg + grain riempiono l'intero viewBox dinamico: no più letterbox -->
       <rect
@@ -1344,16 +1397,34 @@ function onSvgClickCapture(e: MouseEvent) {
           />
         </g>
       </g>
-      <!-- v2d-shape-B: vignette agganciata al CONTAINER, non al LOGICAL.
-           Renderizzata dopo userTransform/contentTransform → sfuma i
-           bordi visibili dell'SVG indipendentemente dal cover/meet del
-           contenuto. pointer-events none per non bloccare click. -->
-      <rect
-        :width="containerW"
-        :height="containerH"
-        fill="url(#map-vignette)"
-        pointer-events="none"
-      />
+      <!-- v2d-shape-B: 4 strisce di fade lungo i bordi del container,
+           ognuna con la sua linear-gradient verso il bg. fadePx grande
+           abbastanza per non far sembrare un bordo netto, piccolo
+           abbastanza per lasciare visibile il centro del contenuto. -->
+      <g pointer-events="none">
+        <rect
+          :width="containerW"
+          :height="fadePx"
+          fill="url(#fade-top)"
+        />
+        <rect
+          :y="containerH - fadePx"
+          :width="containerW"
+          :height="fadePx"
+          fill="url(#fade-bottom)"
+        />
+        <rect
+          :width="fadePx"
+          :height="containerH"
+          fill="url(#fade-left)"
+        />
+        <rect
+          :x="containerW - fadePx"
+          :width="fadePx"
+          :height="containerH"
+          fill="url(#fade-right)"
+        />
+      </g>
     </svg>
     <MapLegend />
     <MapPlayersBox />
