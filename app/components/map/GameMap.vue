@@ -1189,10 +1189,7 @@ function onSvgClickCapture(e: MouseEvent) {
       />
 
       <!-- User zoom/pan applicato sopra al fit-to-container -->
-      <g
-        :transform="userTransform"
-        mask="url(#map-soft-edge)"
-      >
+      <g :transform="userTransform">
         <!-- Contenuto logico 1000x700 scalato uniformemente e centrato -->
         <g :transform="contentTransform">
           <!-- v2d-shape-B: layer base — poligoni Voronoi (o rect MVP) come
