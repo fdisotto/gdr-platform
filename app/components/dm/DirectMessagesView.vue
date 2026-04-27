@@ -7,7 +7,10 @@ import { usePartySeed } from '~/composables/usePartySeed'
 import { useSettingsStore } from '~/stores/settings'
 import { useFeedbackStore } from '~/stores/feedback'
 import { seedFromString } from '~~/shared/seed/prng'
+import { stripRich } from '~~/shared/dm/rich'
 import { usePartyConnections } from '~/composables/usePartyConnections'
+import RichTextEditor from '~/components/dm/RichTextEditor.vue'
+import RichTextRender from '~/components/dm/RichTextRender.vue'
 
 const seed = usePartySeed()
 const chatStore = useChatStore(seed)
@@ -274,7 +277,7 @@ function send() {
             class="text-xs truncate mt-0.5"
             style="opacity: 0.65"
           >
-            {{ t.lastMessage.body }}
+            {{ stripRich(t.lastMessage.body) }}
           </div>
         </li>
         <li
@@ -378,12 +381,12 @@ function send() {
           >
             [missiva rimossa]
           </p>
-          <p
+          <div
             v-else
-            style="color: var(--z-text-hi); white-space: pre-wrap"
+            style="color: var(--z-text-hi)"
           >
-            {{ m.body }}
-          </p>
+            <RichTextRender :body="m.body" />
+          </div>
         </article>
         <p
           v-if="selectedKey && !selectedMessages.length"
@@ -407,13 +410,13 @@ function send() {
         class="px-6 py-3 flex gap-2 items-start"
         style="border-top: 1px solid var(--z-border); background: var(--z-bg-800)"
       >
-        <textarea
-          v-model="newBody"
-          class="flex-1 rounded px-3 py-2 text-sm resize-none"
-          style="background: var(--z-bg-700); border: 1px solid var(--z-border); color: var(--z-text-hi); min-height: 60px; outline: none"
-          placeholder="Rispondi al thread…"
-          @keydown.enter.exact.prevent="send"
-        />
+        <div class="flex-1">
+          <RichTextEditor
+            v-model="newBody"
+            :rows="3"
+            placeholder="Rispondi al thread…"
+          />
+        </div>
         <UButton
           size="sm"
           color="primary"
@@ -529,11 +532,9 @@ function send() {
             class="block text-xs uppercase tracking-wide mb-1"
             style="color: var(--z-text-md)"
           >Messaggio</label>
-          <textarea
+          <RichTextEditor
             v-model="newFirstBody"
-            rows="4"
-            class="w-full px-3 py-2 rounded text-sm resize-none"
-            style="background: var(--z-bg-900); border: 1px solid var(--z-border); color: var(--z-text-hi); outline: none"
+            :rows="4"
           />
         </div>
         <p

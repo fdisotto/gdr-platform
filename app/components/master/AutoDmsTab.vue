@@ -3,6 +3,8 @@ import { onMounted, ref } from 'vue'
 import { usePartySeed } from '~/composables/usePartySeed'
 import { useFeedbackStore } from '~/stores/feedback'
 import { useErrorFeedback } from '~/composables/useErrorFeedback'
+import { stripRich } from '~~/shared/dm/rich'
+import RichTextEditor from '~/components/dm/RichTextEditor.vue'
 
 interface AutoDmRow {
   id: string
@@ -178,12 +180,9 @@ onMounted(load)
         class="w-full bg-transparent border rounded px-2 py-1 text-sm"
         style="border-color: var(--z-border); color: var(--z-text-hi)"
       >
-      <textarea
+      <RichTextEditor
         v-model="formBody"
-        rows="5"
-        maxlength="2000"
-        class="w-full bg-transparent border rounded px-2 py-1 text-sm"
-        style="border-color: var(--z-border); color: var(--z-text-hi)"
+        :rows="6"
         placeholder="Testo della missiva"
       />
       <label
@@ -254,10 +253,10 @@ onMounted(load)
               </span>
             </div>
             <p
-              class="text-xs mt-1 whitespace-pre-wrap line-clamp-3"
+              class="text-xs mt-1 line-clamp-3"
               style="color: var(--z-text-md)"
             >
-              {{ it.body }}
+              {{ stripRich(it.body) }}
             </p>
             <p
               class="text-[10px] mt-1"
