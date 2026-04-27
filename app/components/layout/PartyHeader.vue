@@ -30,7 +30,7 @@ const clock = computed(() => time.format())
         class="text-sm md:text-lg font-semibold truncate"
         style="color: var(--z-green-300)"
       >
-        {{ party.party?.cityName ?? 'Città ignota' }}
+        {{ party.party?.cityName ?? 'Party senza nome' }}
       </h1>
       <code
         class="hidden md:inline text-xs font-mono-z"

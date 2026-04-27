@@ -1675,7 +1675,7 @@ function onSvgClickCapture(e: MouseEvent) {
                 type="button"
                 class="px-1.5 py-0.5 rounded hover:bg-black/30"
                 style="color: var(--z-rust-300)"
-                title="Rinomina città"
+                title="Rinomina party"
                 @click="startCityRename"
               >
                 ✎

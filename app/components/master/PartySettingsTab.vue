@@ -100,7 +100,7 @@ async function archive() {
       </header>
       <dl class="grid grid-cols-1 sm:grid-cols-[7rem_1fr] gap-x-4 gap-y-2 sm:gap-y-2 text-sm sm:items-center">
         <dt style="color: var(--z-text-md)">
-          Nome città
+          Nome party
         </dt>
         <dd>
           <div
