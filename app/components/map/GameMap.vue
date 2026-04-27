@@ -527,6 +527,7 @@ function toggleEdit() {
   if (!editMode.value) {
     renamingAreaId.value = null
     renameDraft.value = ''
+    addAreaPending.value = false
   }
 }
 
@@ -746,7 +747,13 @@ function setAreaStatus(areaId: string, status: AreaStatus) {
   connection.send({ type: 'master:area', areaId, status })
 }
 
-// Aggiungi area al click sullo sfondo (in edit mode, solo su zona vuota)
+// Aggiungi area al click sullo SVG (in modalità "+ Nuova area"). In
+// modalità Voronoi le celle riempiono tutto il viewBox, quindi non c'è
+// più un "vuoto" cliccabile: usiamo un flag esplicito attivato dal
+// pulsante "+ Nuova area" del pannello edit. Il prossimo click in
+// qualsiasi punto inserisce la nuova area lì e disattiva il flag.
+const addAreaPending = ref(false)
+
 function addAreaAtPoint(clientX: number, clientY: number) {
   if (!editMode.value || !props.mapId) return
   const lp = screenToLogical(clientX, clientY)
@@ -767,12 +774,15 @@ function addAreaAtPoint(clientX: number, clientY: number) {
   })
 }
 
-function onSvgBgClick(e: MouseEvent) {
-  if (!editMode.value) return
-  // Solo se il click è sullo SVG-background, non su un'area child.
-  // Il check è basato sul currentTarget vs target: se uguali, è il bg.
-  if (e.currentTarget !== e.target) return
+// Capture-phase: intercetta il click PRIMA degli handler delle celle/
+// strade, così "+ Nuova area" funziona anche cliccando sopra una cella
+// esistente. Senza il flag attivo, niente effetti collaterali.
+function onSvgClickCapture(e: MouseEvent) {
+  if (!editMode.value || !addAreaPending.value) return
+  e.stopPropagation()
+  e.preventDefault()
   addAreaAtPoint(e.clientX, e.clientY)
+  addAreaPending.value = false
 }
 </script>
 
@@ -786,7 +796,10 @@ function onSvgBgClick(e: MouseEvent) {
       :viewBox="viewBox"
       preserveAspectRatio="none"
       style="width: 100%; height: 100%; display: block; touch-action: none"
-      :style="isPanning ? 'cursor: grabbing' : ''"
+      :style="isPanning
+        ? 'cursor: grabbing'
+        : (editMode && addAreaPending ? 'cursor: crosshair' : '')"
+      @click.capture="onSvgClickCapture"
       @wheel.prevent="onWheel"
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"
@@ -903,8 +916,6 @@ function onSvgBgClick(e: MouseEvent) {
         :width="containerW"
         :height="containerH"
         fill="url(#map-bg)"
-        :style="editMode ? 'cursor: crosshair' : ''"
-        @click="onSvgBgClick"
       />
       <rect
         :width="containerW"
@@ -1189,9 +1200,18 @@ function onSvgBgClick(e: MouseEvent) {
         style="color: var(--z-text-md); max-width: 280px"
       >
         <p>drag = sposta · doppio-click = rinomina · × = rimuovi</p>
-        <p>click vuoto = aggiungi area</p>
         <p>click area + click area = aggiungi/rimuovi strada</p>
         <p>click strada = rimuovi</p>
+        <button
+          type="button"
+          class="mt-1 px-2 py-1 rounded text-xs font-mono-z block"
+          :style="addAreaPending
+            ? 'background: var(--z-toxic-700, #4a5d1a); color: var(--z-toxic-300, #d4ea7a); border: 1px solid var(--z-toxic-300, #b3d33a)'
+            : 'background: var(--z-bg-900); color: var(--z-text-hi); border: 1px solid var(--z-border)'"
+          @click="addAreaPending = !addAreaPending"
+        >
+          {{ addAreaPending ? '× annulla — clicca un punto' : '+ nuova area' }}
+        </button>
         <div
           class="mt-1 flex items-center gap-1.5 pt-1"
           style="border-top: 1px solid var(--z-border)"
