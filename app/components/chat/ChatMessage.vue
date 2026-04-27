@@ -5,6 +5,7 @@ import { useSettingsStore } from '~/stores/settings'
 import { seedFromString } from '~~/shared/seed/prng'
 import { usePartyConnections } from '~/composables/usePartyConnections'
 import { usePartySeed } from '~/composables/usePartySeed'
+import RichTextRender from '~/components/dm/RichTextRender.vue'
 
 interface Props {
   message: ChatMessageType
@@ -220,10 +221,11 @@ if (typeof document !== 'undefined') {
         <span>{{ prefixAfter }}</span>
         <span
           :style="{
-            whiteSpace: 'pre-wrap',
             ...(isDeleted ? { textDecoration: 'line-through', opacity: 0.5 } : {})
           }"
-        >{{ message.body }}</span>
+        >
+          <RichTextRender :body="message.body" />
+        </span>
         <span
           v-if="message.kind === 'roll' && rollData"
           class="ml-2 font-mono-z text-xs px-2 py-0.5 rounded"

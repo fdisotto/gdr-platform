@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { nextTick, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 
 const props = defineProps<{
   modelValue: string
   rows?: number
   placeholder?: string
+  // 'full' include B/I/U + dimensioni + allineamento; 'minimal' espone
+  // solo B/I/U (per la chat normale dove servono giusto le evidenziazioni
+  // su parole/frasi).
+  mode?: 'full' | 'minimal'
 }>()
 
 const emit = defineEmits<{
@@ -33,23 +37,36 @@ async function wrap(open: string, close: string, defaultText = '') {
   refreshed.setSelectionRange(cursorStart, cursorEnd)
 }
 
-const buttons: Array<{
+interface ToolbarButton {
   label: string
   title: string
   open: string
   close: string
-  className?: string
-}> = [
-  { label: 'B', title: 'Grassetto', open: '[b]', close: '[/b]', className: 'font-bold' },
-  { label: 'I', title: 'Corsivo', open: '[i]', close: '[/i]', className: 'italic' },
-  { label: 'U', title: 'Sottolineato', open: '[u]', close: '[/u]', className: 'underline' },
-  { label: 'S', title: 'Testo piccolo', open: '[size=1]', close: '[/size]' },
-  { label: 'M', title: 'Testo normale', open: '[size=2]', close: '[/size]' },
-  { label: 'L', title: 'Testo grande', open: '[size=3]', close: '[/size]' },
-  { label: '⇤', title: 'Allinea a sinistra', open: '[align=left]', close: '[/align]' },
-  { label: '↔', title: 'Centra', open: '[align=center]', close: '[/align]' },
-  { label: '⇥', title: 'Allinea a destra', open: '[align=right]', close: '[/align]' }
-]
+  // Stile testo del pulsante (lo stato non è "attivo": è solo un suggerimento
+  // visivo del tipo di formattazione che applica).
+  buttonStyle?: string
+  buttonClass?: string
+}
+
+const ALL_BUTTONS: Record<string, ToolbarButton> = {
+  bold: { label: 'B', title: 'Grassetto', open: '[b]', close: '[/b]', buttonClass: 'font-bold' },
+  italic: { label: 'I', title: 'Corsivo', open: '[i]', close: '[/i]', buttonClass: 'italic' },
+  underline: { label: 'U', title: 'Sottolineato', open: '[u]', close: '[/u]', buttonClass: 'underline' },
+  size1: { label: 'A−', title: 'Testo piccolo', open: '[size=1]', close: '[/size]', buttonStyle: 'font-size: 0.7rem' },
+  size2: { label: 'A', title: 'Testo normale', open: '[size=2]', close: '[/size]', buttonStyle: 'font-size: 0.85rem' },
+  size3: { label: 'A+', title: 'Testo grande', open: '[size=3]', close: '[/size]', buttonStyle: 'font-size: 1rem' },
+  alignLeft: { label: '⬅', title: 'Allinea a sinistra', open: '[align=left]', close: '[/align]' },
+  alignCenter: { label: '⬌', title: 'Centra', open: '[align=center]', close: '[/align]' },
+  alignRight: { label: '➡', title: 'Allinea a destra', open: '[align=right]', close: '[/align]' }
+}
+
+const FULL_KEYS = ['bold', 'italic', 'underline', 'size1', 'size2', 'size3', 'alignLeft', 'alignCenter', 'alignRight'] as const
+const MINIMAL_KEYS = ['bold', 'italic', 'underline'] as const
+
+const buttons = computed<ToolbarButton[]>(() => {
+  const keys = props.mode === 'minimal' ? MINIMAL_KEYS : FULL_KEYS
+  return keys.map(k => ALL_BUTTONS[k]!)
+})
 </script>
 
 <template>
@@ -63,8 +80,9 @@ const buttons: Array<{
         :key="b.label"
         type="button"
         :title="b.title"
-        :class="['px-2 py-0.5 text-xs rounded', b.className]"
-        style="background: var(--z-bg-800); color: var(--z-text-md); border: 1px solid var(--z-border)"
+        :aria-label="b.title"
+        :class="['px-2 py-0.5 text-xs rounded leading-none min-w-[28px]', b.buttonClass]"
+        :style="`background: var(--z-bg-800); color: var(--z-text-md); border: 1px solid var(--z-border); ${b.buttonStyle ?? ''}`"
         @click="wrap(b.open, b.close)"
       >
         {{ b.label }}

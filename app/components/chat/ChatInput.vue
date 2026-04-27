@@ -101,6 +101,34 @@ const input = ref('')
 const errorText = ref<string | null>(null)
 const inputEl = ref<HTMLTextAreaElement | null>(null)
 
+// Toolbar minimale di formattazione: B/I/U avvolgono la selezione corrente
+// con i tag bbcode-like supportati dal renderer DM. Solo evidenziazioni
+// inline, niente size/align (riservati alle missive).
+const FORMAT_BUTTONS: Array<{ label: string, title: string, open: string, close: string, buttonClass?: string }> = [
+  { label: 'B', title: 'Grassetto', open: '[b]', close: '[/b]', buttonClass: 'font-bold' },
+  { label: 'I', title: 'Corsivo', open: '[i]', close: '[/i]', buttonClass: 'italic' },
+  { label: 'U', title: 'Sottolineato', open: '[u]', close: '[/u]', buttonClass: 'underline' }
+]
+
+async function wrapInput(open: string, close: string) {
+  const ta = inputEl.value
+  if (!ta) return
+  const value = input.value
+  const start = ta.selectionStart
+  const end = ta.selectionEnd
+  const before = value.slice(0, start)
+  const inside = value.slice(start, end)
+  const after = value.slice(end)
+  input.value = before + open + inside + close + after
+  await nextTick()
+  const refreshed = inputEl.value
+  if (!refreshed) return
+  refreshed.focus()
+  const cursorStart = before.length + open.length
+  const cursorEnd = cursorStart + inside.length
+  refreshed.setSelectionRange(cursorStart, cursorEnd)
+}
+
 const history = ref<string[]>([])
 const historyIndex = ref<number>(-1)
 const draftBeforeHistory = ref<string>('')
@@ -550,27 +578,43 @@ function onInputFocus() {
     </div>
 
     <form
-      class="flex gap-2"
+      class="flex flex-col gap-1"
       @submit.prevent="submit"
     >
-      <textarea
-        ref="inputEl"
-        v-model="input"
-        rows="1"
-        class="flex-1 bg-transparent border px-3 py-2 rounded font-mono-z text-sm resize-none"
-        style="border-color: var(--z-border); color: var(--z-text-hi); line-height: 22px; outline: none"
-        placeholder="Scrivi un messaggio… prova /. Shift+Enter = nuova riga"
-        autocomplete="off"
-        @keydown="handleKeydown"
-        @focus="onInputFocus"
-      />
-      <UButton
-        type="submit"
-        size="sm"
-        color="primary"
-      >
-        Invia
-      </UButton>
+      <div class="flex flex-wrap gap-1">
+        <button
+          v-for="b in FORMAT_BUTTONS"
+          :key="b.label"
+          type="button"
+          :title="b.title"
+          :aria-label="b.title"
+          :class="['px-2 py-0.5 text-xs rounded leading-none min-w-[28px]', b.buttonClass]"
+          style="background: var(--z-bg-800); color: var(--z-text-md); border: 1px solid var(--z-border)"
+          @click="wrapInput(b.open, b.close)"
+        >
+          {{ b.label }}
+        </button>
+      </div>
+      <div class="flex gap-2">
+        <textarea
+          ref="inputEl"
+          v-model="input"
+          rows="1"
+          class="flex-1 bg-transparent border px-3 py-2 rounded font-mono-z text-sm resize-none"
+          style="border-color: var(--z-border); color: var(--z-text-hi); line-height: 22px; outline: none"
+          placeholder="Scrivi un messaggio… prova /. Shift+Enter = nuova riga"
+          autocomplete="off"
+          @keydown="handleKeydown"
+          @focus="onInputFocus"
+        />
+        <UButton
+          type="submit"
+          size="sm"
+          color="primary"
+        >
+          Invia
+        </UButton>
+      </div>
     </form>
   </div>
 </template>
