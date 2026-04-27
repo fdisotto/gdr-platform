@@ -37,13 +37,14 @@ const showBase = computed(() => !props.layer || props.layer === 'all' || props.l
 const showMarker = computed(() => !props.layer || props.layer === 'all' || props.layer === 'marker')
 
 function strokeColor(): string {
+  // v2d-shape-B: per Voronoi i bordi li disegna il mesh path globale in
+  // GameMap (UNA volta per edge condiviso). Le celle hanno solo fill;
+  // current/adjacent/fog si distinguono per fill-tint o pattern, non
+  // per stroke. Per legacy/organic invece il bordo cella resta.
+  if (isVoronoi.value) return 'transparent'
   if (props.fog) return '#1f1f1f'
   if (props.isCurrent) return 'var(--z-green-100)'
   if (props.isAdjacent) return 'var(--z-green-300)'
-  // v2d-shape-B: per le celle Voronoi neutre niente stroke — i bordi
-  // condivisi sono disegnati una sola volta dal mesh path globale in
-  // GameMap. Per legacy/organic manteniamo il bordo per cella.
-  if (isVoronoi.value) return 'transparent'
   return 'var(--z-green-700)'
 }
 function baseFillUrl(): string {
@@ -98,6 +99,18 @@ function cursorStyle(): string {
         :stroke-width="strokeWidth()"
         :fill-opacity="fillOpacity()"
         stroke-linejoin="round"
+      />
+      <!-- v2d-shape-B: tint highlight per current/adjacent in Voronoi.
+           Senza stroke (gestito dal mesh globale) il highlight lo dà un
+           secondo polygon fill semi-trasparente sopra il base, così non
+           si crea doppio bordo sull'edge condiviso fra due celle dello
+           stesso tipo (es. due adjacent confinanti). -->
+      <polygon
+        v-if="isVoronoi && !fog && (isCurrent || isAdjacent)"
+        :points="voronoiPoints!"
+        :fill="isCurrent ? 'var(--z-green-300)' : 'var(--z-green-500)'"
+        :opacity="isCurrent ? 0.32 : 0.16"
+        pointer-events="none"
       />
       <polygon
         v-else-if="isPolygon"
