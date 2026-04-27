@@ -1037,13 +1037,14 @@ function onSvgClickCapture(e: MouseEvent) {
           />
           <feColorMatrix values="0 0 0 0 0.15 0 0 0 0 0.15 0 0 0 0 0.15 0 0 0 0.35 0" />
         </filter>
-        <!-- v2d-shape-B: 4 linearGradient (uno per lato) compongono una
-             vignetta rettangolare. Sfumano da bg-opaco al bordo a
-             trasparente verso l'interno → tutti i 4 bordi del
-             container sfumano coerentemente, niente "quadratone"
-             netto né angoli scoperti come col radial. -->
+        <!-- v2d-shape-B: mask SVG che fa fade-out reale del contenuto
+             ai bordi (le celle voronoi diventano trasparenti, non sono
+             solo coperte da un overlay): bianco al centro, nero ai
+             4 lati. Cosi' la linea retta del bordo del LOGICAL_W/H
+             non e' piu' visibile nemmeno con celle current verdi che
+             toccano il bordo. -->
         <linearGradient
-          id="fade-top"
+          id="mask-fade-top"
           x1="0"
           y1="0"
           x2="0"
@@ -1051,17 +1052,17 @@ function onSvgClickCapture(e: MouseEvent) {
         >
           <stop
             offset="0%"
-            stop-color="#0b0d0c"
+            stop-color="black"
             stop-opacity="1"
           />
           <stop
             offset="100%"
-            stop-color="#0b0d0c"
+            stop-color="black"
             stop-opacity="0"
           />
         </linearGradient>
         <linearGradient
-          id="fade-bottom"
+          id="mask-fade-bottom"
           x1="0"
           y1="1"
           x2="0"
@@ -1069,17 +1070,17 @@ function onSvgClickCapture(e: MouseEvent) {
         >
           <stop
             offset="0%"
-            stop-color="#0b0d0c"
+            stop-color="black"
             stop-opacity="1"
           />
           <stop
             offset="100%"
-            stop-color="#0b0d0c"
+            stop-color="black"
             stop-opacity="0"
           />
         </linearGradient>
         <linearGradient
-          id="fade-left"
+          id="mask-fade-left"
           x1="0"
           y1="0"
           x2="1"
@@ -1087,17 +1088,17 @@ function onSvgClickCapture(e: MouseEvent) {
         >
           <stop
             offset="0%"
-            stop-color="#0b0d0c"
+            stop-color="black"
             stop-opacity="1"
           />
           <stop
             offset="100%"
-            stop-color="#0b0d0c"
+            stop-color="black"
             stop-opacity="0"
           />
         </linearGradient>
         <linearGradient
-          id="fade-right"
+          id="mask-fade-right"
           x1="1"
           y1="0"
           x2="0"
@@ -1105,15 +1106,51 @@ function onSvgClickCapture(e: MouseEvent) {
         >
           <stop
             offset="0%"
-            stop-color="#0b0d0c"
+            stop-color="black"
             stop-opacity="1"
           />
           <stop
             offset="100%"
-            stop-color="#0b0d0c"
+            stop-color="black"
             stop-opacity="0"
           />
         </linearGradient>
+        <mask
+          id="map-soft-edge"
+          maskUnits="userSpaceOnUse"
+          x="0"
+          y="0"
+          :width="containerW"
+          :height="containerH"
+        >
+          <rect
+            :width="containerW"
+            :height="containerH"
+            fill="white"
+          />
+          <rect
+            :width="containerW"
+            :height="fadePx"
+            fill="url(#mask-fade-top)"
+          />
+          <rect
+            :y="containerH - fadePx"
+            :width="containerW"
+            :height="fadePx"
+            fill="url(#mask-fade-bottom)"
+          />
+          <rect
+            :width="fadePx"
+            :height="containerH"
+            fill="url(#mask-fade-left)"
+          />
+          <rect
+            :x="containerW - fadePx"
+            :width="fadePx"
+            :height="containerH"
+            fill="url(#mask-fade-right)"
+          />
+        </mask>
       </defs>
       <!-- Bg + grain riempiono l'intero viewBox dinamico: no più letterbox -->
       <rect
@@ -1130,7 +1167,10 @@ function onSvgClickCapture(e: MouseEvent) {
       />
 
       <!-- User zoom/pan applicato sopra al fit-to-container -->
-      <g :transform="userTransform">
+      <g
+        :transform="userTransform"
+        mask="url(#map-soft-edge)"
+      >
         <!-- Contenuto logico 1000x700 scalato uniformemente e centrato -->
         <g :transform="contentTransform">
           <!-- v2d-shape-B: layer base — poligoni Voronoi (o rect MVP) come
@@ -1386,8 +1426,14 @@ function onSvgClickCapture(e: MouseEvent) {
           </template>
 
           <MapWeatherOverlay :weather="weather" />
-
-          <!-- v2d-T28: porte di transizione cross-map -->
+        </g>
+      </g>
+      <!-- v2d-T28: porte di transizione cross-map renderizzate FUORI
+           dal gruppo masked: la mask sfuma il content ai bordi, ma le
+           porte (che terminano sul bordo del LOGICAL) devono restare
+           visibili e cliccabili al 100%. -->
+      <g :transform="userTransform">
+        <g :transform="contentTransform">
           <MapTransitionDoors
             :areas="effectiveAreas"
             :transitions="props.transitions ?? []"
@@ -1396,34 +1442,6 @@ function onSvgClickCapture(e: MouseEvent) {
             @transition-click="onTransitionClick"
           />
         </g>
-      </g>
-      <!-- v2d-shape-B: 4 strisce di fade lungo i bordi del container,
-           ognuna con la sua linear-gradient verso il bg. fadePx grande
-           abbastanza per non far sembrare un bordo netto, piccolo
-           abbastanza per lasciare visibile il centro del contenuto. -->
-      <g pointer-events="none">
-        <rect
-          :width="containerW"
-          :height="fadePx"
-          fill="url(#fade-top)"
-        />
-        <rect
-          :y="containerH - fadePx"
-          :width="containerW"
-          :height="fadePx"
-          fill="url(#fade-bottom)"
-        />
-        <rect
-          :width="fadePx"
-          :height="containerH"
-          fill="url(#fade-left)"
-        />
-        <rect
-          :x="containerW - fadePx"
-          :width="fadePx"
-          :height="containerH"
-          fill="url(#fade-right)"
-        />
       </g>
     </svg>
     <MapLegend />
