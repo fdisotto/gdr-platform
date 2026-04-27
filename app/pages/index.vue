@@ -1,9 +1,16 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '~/stores/auth'
 import { useAuth } from '~/composables/useAuth'
 import { useErrorFeedback } from '~/composables/useErrorFeedback'
+
+interface MyPartyRow {
+  seed: string
+  cityName: string
+  lastActivityAt: number
+  isMember: boolean
+}
 
 useSeoMeta({ title: 'GDR Zombi — Benvenuto' })
 
@@ -27,6 +34,41 @@ const displayName = ref('')
 const visibility = ref<'public' | 'private'>('private')
 const joinPolicy = ref<'auto' | 'request'>('request')
 const creating = ref(false)
+
+const myParties = ref<MyPartyRow[]>([])
+const loadingMyParties = ref(false)
+
+async function loadMyParties() {
+  if (!authStore.isUser) return
+  loadingMyParties.value = true
+  try {
+    const res = await $fetch<{ items: MyPartyRow[] }>('/api/parties', {
+      query: { mine: '1', limit: 50 }
+    })
+    myParties.value = res.items
+      .filter(p => p.isMember)
+      .sort((a, b) => b.lastActivityAt - a.lastActivityAt)
+  } catch (err) {
+    feedback.reportFromError(err)
+  } finally {
+    loadingMyParties.value = false
+  }
+}
+
+onMounted(() => {
+  loadMyParties()
+})
+
+const formatRelativeShort = (ms: number): string => {
+  const diff = Date.now() - ms
+  const m = Math.floor(diff / 60_000)
+  if (m < 1) return 'ora'
+  if (m < 60) return `${m}m fa`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h fa`
+  const d = Math.floor(h / 24)
+  return `${d}g fa`
+}
 
 const canCreate = computed(() =>
   displayName.value.length >= 2
@@ -144,6 +186,58 @@ async function onLogout() {
             </button>
           </div>
         </div>
+
+        <!-- Le tue party: mostrate per prime se ce ne sono. -->
+        <section
+          v-if="myParties.length > 0"
+          class="space-y-2 pt-4"
+          style="border-top: 1px solid var(--z-border)"
+        >
+          <h2
+            class="text-sm uppercase tracking-wide"
+            style="color: var(--z-text-md)"
+          >
+            Le tue party
+          </h2>
+          <ul class="space-y-1.5">
+            <li
+              v-for="p in myParties"
+              :key="p.seed"
+            >
+              <NuxtLink
+                :to="`/party/${p.seed}`"
+                class="flex items-center justify-between gap-3 px-3 py-2 rounded hover:opacity-90"
+                style="background: var(--z-bg-800); border: 1px solid var(--z-border); color: var(--z-text-hi)"
+              >
+                <span class="flex-1 truncate">
+                  <span style="color: var(--z-green-300)">🗺</span>
+                  <span class="ml-2 font-semibold">{{ p.cityName }}</span>
+                </span>
+                <span
+                  class="text-xs font-mono-z shrink-0"
+                  style="color: var(--z-text-lo)"
+                >
+                  {{ formatRelativeShort(p.lastActivityAt) }}
+                </span>
+              </NuxtLink>
+            </li>
+          </ul>
+        </section>
+
+        <p
+          v-else-if="loadingMyParties"
+          class="text-xs italic pt-4"
+          style="color: var(--z-text-lo); border-top: 1px solid var(--z-border)"
+        >
+          Caricamento delle tue party…
+        </p>
+        <p
+          v-else
+          class="text-xs italic pt-4"
+          style="color: var(--z-text-lo); border-top: 1px solid var(--z-border)"
+        >
+          Non sei ancora in nessuna party. Sfogliane una pubblica o creane una qui sotto.
+        </p>
 
         <section
           class="space-y-3 pt-4"
