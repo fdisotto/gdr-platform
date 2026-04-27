@@ -68,6 +68,26 @@ describe('shout fanout', () => {
     const result = pickFanoutRecipients(connections, { kind: 'shout', areaId: 'piazza' })
     expect(result.map(c => c.playerId)).toEqual(['alice'])
   })
+
+  it('shout v2d: usa l\'adjacency passata invece di ADJACENCY legacy', () => {
+    // Mappe v2d hanno id custom, non presenti in ADJACENCY MVP. Senza il
+    // fix, il fanout per shout cadrebbe a [] e propagherebbe solo
+    // all'area corrente (effettivo say).
+    const connections = [
+      conn('alice', 'voro_a', 'user'), // origine
+      conn('bob', 'voro_b', 'user'), // adiacente nell'adjacency v2d
+      conn('carla', 'voro_c', 'user') // non adiacente
+    ]
+    const adjacency = {
+      voro_a: ['voro_b'],
+      voro_b: ['voro_a'],
+      voro_c: []
+    }
+    const result = pickFanoutRecipients(connections, {
+      kind: 'shout', areaId: 'voro_a', adjacency
+    })
+    expect(result.map(c => c.playerId).sort()).toEqual(['alice', 'bob'])
+  })
 })
 
 describe('whisper fanout', () => {
