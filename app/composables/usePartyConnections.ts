@@ -310,6 +310,13 @@ function makeConnection(seed: string): PartyConnection {
       case 'party:renamed': {
         const { cityName } = data as { cityName: string }
         partyStore.setCityName(cityName)
+        // Aggiorna anche la lista myParties della tab bar (che pesca
+        // da /api/parties, ignara dei cambi WS) e i nomi usati nei
+        // toast cross-party.
+        crossNotif.setCityName(seed, cityName)
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('gdr:my-parties-changed'))
+        }
         break
       }
       case 'time:tick': {
