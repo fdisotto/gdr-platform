@@ -1186,9 +1186,10 @@ function onSvgClickCapture(e: MouseEvent) {
     <MapLegend />
     <MapPlayersBox />
 
-    <!-- v2d-world: banner mappa corrente + toggle 🌐 Mondo. Mostra in
-         che mappa si trova il player; click apre la vista mondo. -->
-    <div class="absolute top-3 left-1/2 -translate-x-1/2 z-10">
+    <!-- Top-left stack: banner mappa + (se master) pulsante modifica.
+         Banner spostato dal centro per non coprire la zona attiva. -->
+    <div class="absolute top-3 left-3 z-10 flex flex-col gap-1.5 items-start">
+      <!-- v2d-world: banner mappa corrente + toggle 🌐 Mondo -->
       <button
         type="button"
         class="px-3 py-1.5 rounded text-xs font-mono-z flex items-center gap-2"
@@ -1210,71 +1211,67 @@ function onSvgClickCapture(e: MouseEvent) {
           🌐 Mondo
         </span>
       </button>
-    </div>
 
-    <!-- v2d-edit: toggle "Modifica mappa" (master only, solo se mapId valido).
-         Top-left per non collidere con MapPlayersBox (top-right). -->
-    <div
-      v-if="isMaster && props.mapId"
-      class="absolute top-3 left-3 z-10"
-    >
-      <button
-        type="button"
-        class="px-3 py-1.5 rounded text-xs font-mono-z"
-        :style="editMode
-          ? 'background: var(--z-rust-700); color: var(--z-rust-300); border: 1px solid var(--z-rust-300)'
-          : 'background: var(--z-bg-800); color: var(--z-text-md); border: 1px solid var(--z-border)'"
-        @click="toggleEdit"
-      >
-        {{ editMode ? '✎ Modifica ON' : '✎ Modifica mappa' }}
-      </button>
-      <div
-        v-if="editMode"
-        class="mt-1 text-xs font-mono-z space-y-1"
-        style="color: var(--z-text-md); max-width: 280px"
-      >
-        <p>drag = sposta · doppio-click = rinomina · × = rimuovi</p>
-        <p>click area + click area = aggiungi/rimuovi strada</p>
-        <p>click strada = rimuovi</p>
+      <!-- v2d-edit: toggle "Modifica mappa" (master only, solo se mapId valido). -->
+      <div v-if="isMaster && props.mapId">
         <button
           type="button"
-          class="mt-1 px-2 py-1 rounded text-xs font-mono-z block"
-          :style="addAreaPending
-            ? 'background: var(--z-toxic-700, #4a5d1a); color: var(--z-toxic-300, #d4ea7a); border: 1px solid var(--z-toxic-300, #b3d33a)'
-            : 'background: var(--z-bg-900); color: var(--z-text-hi); border: 1px solid var(--z-border)'"
-          @click="addAreaPending = !addAreaPending"
+          class="px-3 py-1.5 rounded text-xs font-mono-z"
+          :style="editMode
+            ? 'background: var(--z-rust-700); color: var(--z-rust-300); border: 1px solid var(--z-rust-300)'
+            : 'background: var(--z-bg-800); color: var(--z-text-md); border: 1px solid var(--z-border)'"
+          @click="toggleEdit"
         >
-          {{ addAreaPending ? '× annulla — clicca un punto' : '+ nuova area' }}
+          {{ editMode ? '✎ Modifica ON' : '✎ Modifica mappa' }}
         </button>
         <div
-          class="mt-1 flex items-center gap-1.5 pt-1"
-          style="border-top: 1px solid var(--z-border)"
+          v-if="editMode"
+          class="mt-1 text-xs font-mono-z space-y-1"
+          style="color: var(--z-text-md); max-width: 280px"
         >
-          <span style="color: var(--z-text-md)">tipo strada:</span>
-          <select
-            v-model="roadKindForNew"
-            class="px-1.5 py-0.5 rounded text-xs"
-            style="background: var(--z-bg-900); border: 1px solid var(--z-border); color: var(--z-text-hi)"
+          <p>drag = sposta · doppio-click = rinomina · × = rimuovi</p>
+          <p>click area + click area = aggiungi/rimuovi strada</p>
+          <p>click strada = rimuovi</p>
+          <button
+            type="button"
+            class="mt-1 px-2 py-1 rounded text-xs font-mono-z block"
+            :style="addAreaPending
+              ? 'background: var(--z-toxic-700, #4a5d1a); color: var(--z-toxic-300, #d4ea7a); border: 1px solid var(--z-toxic-300, #b3d33a)'
+              : 'background: var(--z-bg-900); color: var(--z-text-hi); border: 1px solid var(--z-border)'"
+            @click="addAreaPending = !addAreaPending"
           >
-            <option value="auto">
-              auto ({{ props.mapTypeId ?? 'mvp' }})
-            </option>
-            <option
-              v-for="opt in ROAD_KIND_OPTIONS"
-              :key="opt.value"
-              :value="opt.value"
+            {{ addAreaPending ? '× annulla — clicca un punto' : '+ nuova area' }}
+          </button>
+          <div
+            class="mt-1 flex items-center gap-1.5 pt-1"
+            style="border-top: 1px solid var(--z-border)"
+          >
+            <span style="color: var(--z-text-md)">tipo strada:</span>
+            <select
+              v-model="roadKindForNew"
+              class="px-1.5 py-0.5 rounded text-xs"
+              style="background: var(--z-bg-900); border: 1px solid var(--z-border); color: var(--z-text-hi)"
             >
-              {{ opt.label }}
-            </option>
-          </select>
+              <option value="auto">
+                auto ({{ props.mapTypeId ?? 'mvp' }})
+              </option>
+              <option
+                v-for="opt in ROAD_KIND_OPTIONS"
+                :key="opt.value"
+                :value="opt.value"
+              >
+                {{ opt.label }}
+              </option>
+            </select>
+          </div>
+          <p
+            v-if="roadFromAreaId"
+            class="pt-0.5"
+            style="color: var(--z-toxic-500, #b3d33a)"
+          >
+            ↪ origine selezionata, clicca un'altra area
+          </p>
         </div>
-        <p
-          v-if="roadFromAreaId"
-          class="pt-0.5"
-          style="color: var(--z-toxic-500, #b3d33a)"
-        >
-          ↪ origine selezionata, clicca un'altra area
-        </p>
       </div>
     </div>
 
