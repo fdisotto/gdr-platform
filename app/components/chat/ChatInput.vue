@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { parseSlash, type SlashCommand } from '~~/shared/slash/parse'
-import { AREA_IDS } from '~~/shared/map/areas'
 import { usePartyStore } from '~/stores/party'
 import { useZombiesStore } from '~/stores/zombies'
 import { useChatStore, type ChatMessage } from '~/stores/chat'
 import { usePartyConnections } from '~/composables/usePartyConnections'
 import { usePartySeed } from '~/composables/usePartySeed'
+import { useActiveMapAreas } from '~/composables/useActiveMapAreas'
 
 interface CommandSuggestion {
   slash: string
@@ -66,6 +66,7 @@ const party = usePartyStore(seed)
 const zombiesStore = useZombiesStore(seed)
 const chatStore = useChatStore(seed)
 const connection = usePartyConnections().open(seed)
+const activeMapAreas = useActiveMapAreas(seed)
 
 const WEATHER_CODES = [
   { value: 'clear', hint: 'sereno' },
@@ -176,21 +177,21 @@ const argSuggestions = computed<CommandSuggestion[]>(() => {
 
   // /move NICK AREA — secondo arg
   if (cmd === '/move' && argIdx === 2) {
-    return (AREA_IDS as readonly string[])
-      .filter(a => a.toLowerCase().startsWith(partial))
+    return activeMapAreas.value
+      .filter(a => a.id.toLowerCase().startsWith(partial))
       .slice(0, 10)
-      .map(a => mk(a, 'area', '', false))
+      .map(a => mk(a.id, a.name, '', false))
   }
 
   // Comandi con area in 1a posizione
   const areaCmdsIdx1 = new Set(['/close', '/open', '/status', '/setname', '/weather'])
   if (areaCmdsIdx1.has(cmd) && argIdx === 1) {
-    const candidates = [...(AREA_IDS as readonly string[])]
-    if (cmd === '/weather') candidates.unshift('*')
+    const candidates: Array<{ id: string, name: string }> = activeMapAreas.value.slice()
+    if (cmd === '/weather') candidates.unshift({ id: '*', name: 'tutte le aree' })
     return candidates
-      .filter(a => a.toLowerCase().startsWith(partial))
+      .filter(a => a.id.toLowerCase().startsWith(partial))
       .slice(0, 12)
-      .map(a => mk(a, a === '*' ? 'tutte le aree' : 'area'))
+      .map(a => mk(a.id, a.name))
   }
 
   // /status AREA STATUS — secondo arg

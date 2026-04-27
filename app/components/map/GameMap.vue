@@ -765,6 +765,16 @@ function setAreaStatus(areaId: string, status: AreaStatus) {
   connection.send({ type: 'master:area', areaId, status })
 }
 
+// Equivalente di /open e /close dalla chat: se la zona è 'closed' la
+// riapre come 'intact'; altrimenti la chiude. Lascia invariato lo
+// status su infested/ruined → diventa direttamente closed.
+function toggleAreaOpenClose(areaId: string) {
+  if (!editMode.value) return
+  const cur = stateById.value.get(areaId)?.status ?? 'intact'
+  const next: AreaStatus = cur === 'closed' ? 'intact' : 'closed'
+  connection.send({ type: 'master:area', areaId, status: next })
+}
+
 // Aggiungi area al click sullo SVG (in modalità "+ Nuova area"). In
 // modalità Voronoi le celle riempiono tutto il viewBox, quindi non c'è
 // più un "vuoto" cliccabile: usiamo un flag esplicito attivato dal
@@ -1100,6 +1110,30 @@ function onSvgClickCapture(e: MouseEvent) {
                   fill="white"
                   style="pointer-events: none; user-select: none"
                 >×</text>
+              </g>
+              <!-- v2d-edit: toggle apri/chiudi area inline (= /open e /close
+                   da chat). Se chiusa → click apre (intact); altrimenti → chiude. -->
+              <g
+                style="cursor: pointer"
+                @click.stop="toggleAreaOpenClose(a.id)"
+              >
+                <title>{{ (stateById.get(a.id)?.status ?? 'intact') === 'closed' ? 'Apri zona' : 'Chiudi zona' }}</title>
+                <circle
+                  :cx="a.svg.x + a.svg.w - 36"
+                  :cy="a.svg.y + 12"
+                  r="11"
+                  :fill="(stateById.get(a.id)?.status ?? 'intact') === 'closed' ? 'var(--z-green-700)' : 'var(--z-bg-700)'"
+                  :stroke="(stateById.get(a.id)?.status ?? 'intact') === 'closed' ? 'var(--z-green-300)' : 'var(--z-text-md)'"
+                  stroke-width="1.5"
+                />
+                <text
+                  :x="a.svg.x + a.svg.w - 36"
+                  :y="a.svg.y + 16"
+                  text-anchor="middle"
+                  font-size="11"
+                  fill="white"
+                  style="pointer-events: none; user-select: none"
+                >{{ (stateById.get(a.id)?.status ?? 'intact') === 'closed' ? '🔓' : '🔒' }}</text>
               </g>
               <!-- v2d-edit: 4 pulsanti status zona (intact/infested/ruined/closed)
                    in alto a sinistra. Bordo bianco evidenzia lo status corrente. -->
