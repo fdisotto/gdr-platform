@@ -631,6 +631,82 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
   if (stored) return stored
   return defaultPlayerPos(index, total)
 }
+
+// ── Decor ambientale ────────────────────────────────────────────────────
+// Sprite SVG semplici sparsi nella zona per riempire visivamente lo
+// sfondo (edifici, alberi, auto, macerie, casse, lampioni, fuochi). La
+// scelta dei tipi dipende dallo status; posizione e rotazione sono
+// deterministiche su (areaId, status, viewBox) — niente shift a ogni
+// render. Pointer-events: none per non interferire con i tool.
+type DecorKind = 'tree' | 'building' | 'car' | 'rubble' | 'crate' | 'lamp' | 'fire'
+interface Decor {
+  id: string
+  kind: DecorKind
+  x: number
+  y: number
+  scale: number
+  rot: number
+}
+
+function hashStr(s: string): number {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+function rngFromHash(h: number): () => number {
+  let a = h
+  return () => {
+    a |= 0
+    a = (a + 0x6d2b79f5) | 0
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+const decorPalette: Record<string, DecorKind[]> = {
+  intact: ['tree', 'building', 'crate', 'lamp', 'tree'],
+  infested: ['car', 'crate', 'fire', 'rubble', 'building'],
+  ruined: ['rubble', 'rubble', 'car', 'building', 'crate'],
+  closed: ['building', 'crate', 'lamp', 'building']
+}
+
+const decorElements = computed<Decor[]>(() => {
+  if (!area.value) return []
+  const id = area.value.id
+  const st = status.value
+  const W = VIEWBOX_W
+  const H = VIEWBOX_H.value
+  const seed = `${id}::${st}::${W}::${H}`
+  const rng = rngFromHash(hashStr(seed))
+  const palette = decorPalette[st] ?? decorPalette.intact!
+  const N = 14
+  const out: Decor[] = []
+  // Safe zone centrale: i decor restano fuori da un raggio attorno al
+  // centro così non si sovrappongono a zombi/player default.
+  const cx = W / 2
+  const cy = H / 2
+  const safeR = Math.min(W, H) * 0.22
+  for (let i = 0; i < N; i++) {
+    let x = 0
+    let y = 0
+    let attempts = 0
+    do {
+      x = rng() * (W - 80) + 40
+      y = rng() * (H - 80) + 40
+      attempts++
+    } while (Math.hypot(x - cx, y - cy) < safeR && attempts < 8)
+    const kind = palette[Math.floor(rng() * palette.length)]!
+    const scale = 0.75 + rng() * 0.65
+    const rot = Math.floor(rng() * 360)
+    out.push({ id: `dec-${i}`, kind, x, y, scale, rot })
+  }
+  return out
+})
 </script>
 
 <template>
@@ -777,6 +853,237 @@ function playerMarkerPos(player: { id: string }, index: number, total: number): 
         pointer-events="none"
       >
         <MapWeatherOverlay :weather="weather" />
+      </g>
+
+      <!-- Decor ambientale (sotto i token interattivi) -->
+      <g pointer-events="none">
+        <g
+          v-for="d in decorElements"
+          :key="d.id"
+          :transform="`translate(${d.x}, ${d.y}) rotate(${d.rot}) scale(${d.scale})`"
+        >
+          <!-- Tree: chioma + tronco -->
+          <g v-if="d.kind === 'tree'">
+            <circle
+              r="16"
+              fill="#1f2c1c"
+              stroke="#13190f"
+              stroke-width="1.5"
+              opacity="0.9"
+            />
+            <circle
+              r="11"
+              fill="#2e4226"
+              opacity="0.85"
+            />
+            <circle
+              cx="-3"
+              cy="-3"
+              r="3"
+              fill="#3d572f"
+              opacity="0.9"
+            />
+          </g>
+          <!-- Building: rect con finestre -->
+          <g v-else-if="d.kind === 'building'">
+            <rect
+              x="-20"
+              y="-26"
+              width="40"
+              height="52"
+              fill="#23272a"
+              stroke="#0f1112"
+              stroke-width="1.5"
+            />
+            <rect
+              x="-13"
+              y="-19"
+              width="6"
+              height="6"
+              fill="#3a3f3c"
+            />
+            <rect
+              x="-3"
+              y="-19"
+              width="6"
+              height="6"
+              fill="#3a3f3c"
+            />
+            <rect
+              x="7"
+              y="-19"
+              width="6"
+              height="6"
+              fill="#3a3f3c"
+            />
+            <rect
+              x="-13"
+              y="-7"
+              width="6"
+              height="6"
+              fill="#3a3f3c"
+            />
+            <rect
+              x="-3"
+              y="-7"
+              width="6"
+              height="6"
+              fill="#3a3f3c"
+            />
+            <rect
+              x="7"
+              y="-7"
+              width="6"
+              height="6"
+              fill="#3a3f3c"
+            />
+            <rect
+              x="-13"
+              y="5"
+              width="6"
+              height="6"
+              fill="#2a2e2b"
+            />
+            <rect
+              x="7"
+              y="5"
+              width="6"
+              height="6"
+              fill="#2a2e2b"
+            />
+          </g>
+          <!-- Car: chassis + tetto -->
+          <g v-else-if="d.kind === 'car'">
+            <rect
+              x="-18"
+              y="-8"
+              width="36"
+              height="16"
+              rx="3"
+              ry="3"
+              fill="#2c211b"
+              stroke="#0f0a07"
+              stroke-width="1.2"
+            />
+            <rect
+              x="-11"
+              y="-6"
+              width="22"
+              height="7"
+              fill="#4a342a"
+            />
+            <circle
+              cx="-11"
+              cy="9"
+              r="3"
+              fill="#0f0a07"
+            />
+            <circle
+              cx="11"
+              cy="9"
+              r="3"
+              fill="#0f0a07"
+            />
+          </g>
+          <!-- Rubble: poligoni irregolari -->
+          <g v-else-if="d.kind === 'rubble'">
+            <polygon
+              points="-13,9 -6,-8 5,-10 12,3 10,10 -4,12"
+              fill="#2a2520"
+              stroke="#13100c"
+              stroke-width="1"
+            />
+            <polygon
+              points="-3,-3 6,-7 9,3 1,6"
+              fill="#3a3530"
+            />
+            <polygon
+              points="-9,5 -5,2 -3,7 -7,9"
+              fill="#1f1c18"
+            />
+          </g>
+          <!-- Crate: cassa di legno -->
+          <g v-else-if="d.kind === 'crate'">
+            <rect
+              x="-8"
+              y="-8"
+              width="16"
+              height="16"
+              fill="#5a4628"
+              stroke="#22180a"
+              stroke-width="1.2"
+            />
+            <line
+              x1="-8"
+              y1="0"
+              x2="8"
+              y2="0"
+              stroke="#22180a"
+              stroke-width="0.8"
+            />
+            <line
+              x1="0"
+              y1="-8"
+              x2="0"
+              y2="8"
+              stroke="#22180a"
+              stroke-width="0.8"
+            />
+          </g>
+          <!-- Lamp: palo + alone luce -->
+          <g v-else-if="d.kind === 'lamp'">
+            <circle
+              cx="0"
+              cy="-2"
+              r="11"
+              fill="#d97757"
+              opacity="0.10"
+            />
+            <line
+              x1="0"
+              y1="-2"
+              x2="0"
+              y2="20"
+              stroke="#2a2520"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
+            <circle
+              cy="-2"
+              r="3"
+              fill="#f4c074"
+              stroke="#d97757"
+              stroke-width="1"
+            />
+          </g>
+          <!-- Fire: brace + fiamma -->
+          <g v-else-if="d.kind === 'fire'">
+            <ellipse
+              cx="0"
+              cy="4"
+              rx="9"
+              ry="3"
+              fill="#13100c"
+            />
+            <ellipse
+              cx="0"
+              cy="3"
+              rx="6"
+              ry="2"
+              fill="#3a1f12"
+            />
+            <path
+              d="M -4 3 Q -3 -4 0 -8 Q 3 -4 4 3 Z"
+              fill="#d9572a"
+              opacity="0.9"
+            />
+            <path
+              d="M -2 3 Q -1 -1 0 -5 Q 1 -1 2 3 Z"
+              fill="#f4c95a"
+              opacity="0.95"
+            />
+          </g>
+        </g>
       </g>
 
       <!-- Zombies / NPCs -->
