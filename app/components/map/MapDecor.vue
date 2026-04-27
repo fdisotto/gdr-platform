@@ -7,10 +7,10 @@ import { AREAS as LEGACY_AREAS, type Area } from '~~/shared/map/areas'
 import AreaSprite from '~/components/map/AreaSprite.vue'
 
 // Decor "ricco" per la mappa principale: stessi sprite del dettaglio
-// area (alberi, edifici, auto, macerie, casse, lampioni, fuochi) ma a
-// scala piccola, deterministico per (areaId + status). 4-6 sprite per
-// area, posizionati dentro il bbox dell'area lasciando libero il
-// centro per il marker della cella.
+// area (alberi, edifici, auto, macerie, casse, lampioni, fuochi)
+// disposti dentro ogni cella, scalati in base al bbox dell'area così
+// restano visibili anche su celle piccole. Posizione e rotazione
+// deterministiche su (partySeed, areaId, status).
 type DecorKind = 'tree' | 'building' | 'car' | 'rubble' | 'crate' | 'lamp' | 'fire'
 type AreaStatus = 'intact' | 'infested' | 'ruined' | 'closed'
 
@@ -23,6 +23,14 @@ interface DecorPlacement {
   rot: number
 }
 
+interface GridLine {
+  id: string
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}
+
 const props = defineProps<{
   areas?: readonly Area[]
 }>()
@@ -32,13 +40,11 @@ const effectiveAreas = computed<readonly Area[]>(() => props.areas ?? LEGACY_ARE
 const partySeed = usePartySeed()
 const party = usePartyStore(partySeed)
 
-const SPRITES_PER_AREA = 5
-
 const palette: Record<AreaStatus, DecorKind[]> = {
-  intact: ['tree', 'building', 'crate', 'lamp', 'tree'],
-  infested: ['car', 'crate', 'fire', 'rubble', 'building'],
-  ruined: ['rubble', 'rubble', 'car', 'building', 'crate'],
-  closed: ['building', 'crate', 'lamp', 'building']
+  intact: ['tree', 'building', 'crate', 'lamp', 'tree', 'building'],
+  infested: ['car', 'crate', 'fire', 'rubble', 'building', 'fire'],
+  ruined: ['rubble', 'rubble', 'car', 'building', 'crate', 'rubble'],
+  closed: ['building', 'crate', 'lamp', 'building', 'rubble']
 }
 
 const statusByArea = computed(() => {
@@ -54,35 +60,82 @@ const placements = computed<DecorPlacement[]>(() => {
     const status = statusByArea.value.get(area.id) ?? 'intact'
     const pool = palette[status]
     const rng = mulberry32(seedFromString(`${seedStr}|decor|${area.id}|${status}`))
-    // Safe zone centrale: lascia visibile il marker centrale (cerchio +
-    // label nelle celle voronoi). Tieni gli sprite dai bordi del bbox.
+    // Numero sprite proporzionale all'area: bbox grande → più sprite,
+    // bbox piccola → meno. Range 6-14.
+    const areaSize = area.svg.w * area.svg.h
+    const count = Math.max(6, Math.min(14, Math.round(Math.sqrt(areaSize) / 14)))
+    // Scala proporzionale al lato minore dell'area: più la cella è
+    // grande più gli sprite possono essere visibili. Range 0.30–0.55.
+    const minDim = Math.min(area.svg.w, area.svg.h)
+    const baseScale = Math.max(0.30, Math.min(0.55, minDim / 200))
+    // Safe zone centrale per non coprire il marker centrale (cerchio +
+    // label). Ridotta rispetto a prima: lasciamo più spazio agli sprite.
     const cx = area.svg.x + area.svg.w / 2
     const cy = area.svg.y + area.svg.h / 2
-    const safeR = Math.min(area.svg.w, area.svg.h) * 0.20
-    for (let i = 0; i < SPRITES_PER_AREA; i++) {
+    const safeR = Math.min(area.svg.w, area.svg.h) * 0.14
+    for (let i = 0; i < count; i++) {
       let x = 0
       let y = 0
       let attempts = 0
       do {
-        // Padding interno 8 unità così gli sprite non sbordano dal bbox.
-        x = area.svg.x + 8 + rng() * Math.max(0, area.svg.w - 16)
-        y = area.svg.y + 8 + rng() * Math.max(0, area.svg.h - 16)
+        x = area.svg.x + 6 + rng() * Math.max(0, area.svg.w - 12)
+        y = area.svg.y + 6 + rng() * Math.max(0, area.svg.h - 12)
         attempts++
-      } while (Math.hypot(x - cx, y - cy) < safeR && attempts < 6)
+      } while (Math.hypot(x - cx, y - cy) < safeR && attempts < 8)
       const kind = pool[Math.floor(rng() * pool.length)]!
-      // Scala piccola — l'unità "naturale" degli sprite (~20x40 unità) è
-      // rapportata a un bbox area che mediamente vale 100-200 unità → 0.18–0.30.
-      const scale = 0.18 + rng() * 0.14
+      const scale = baseScale * (0.85 + rng() * 0.5)
       const rot = Math.floor(rng() * 360)
       out.push({ id: `${area.id}-${i}`, kind, x, y, scale, rot })
     }
   }
   return out
 })
+
+// Grid stradale di sfondo: linee orizzontali e verticali sparse che
+// passano fra le celle. Aiuta a riempire la sensazione di "mappa
+// urbana" anche senza zoom sulle singole zone.
+const gridLines = computed<GridLine[]>(() => {
+  const seedStr = party.party?.seed ?? 'fallback'
+  const rng = mulberry32(seedFromString(seedStr + '|grid'))
+  const lines: GridLine[] = []
+  for (let i = 0; i < 7; i++) {
+    const y = 30 + rng() * 640
+    lines.push({ id: `h-${i}`, x1: rng() * 80, y1: y, x2: 900 + rng() * 90, y2: y })
+  }
+  for (let i = 0; i < 7; i++) {
+    const x = 30 + rng() * 940
+    lines.push({ id: `v-${i}`, x1: x, y1: rng() * 40, x2: x, y2: 620 + rng() * 70 })
+  }
+  return lines
+})
 </script>
 
 <template>
   <g pointer-events="none">
+    <!-- Grid stradale di sfondo (sotto alle celle, sopra al bg) -->
+    <g opacity="0.55">
+      <line
+        v-for="l in gridLines"
+        :key="`out-${l.id}`"
+        :x1="l.x1"
+        :y1="l.y1"
+        :x2="l.x2"
+        :y2="l.y2"
+        stroke="#1a1e1b"
+        stroke-width="4"
+      />
+      <line
+        v-for="l in gridLines"
+        :key="`in-${l.id}`"
+        :x1="l.x1"
+        :y1="l.y1"
+        :x2="l.x2"
+        :y2="l.y2"
+        stroke="#242a26"
+        stroke-width="2.5"
+      />
+    </g>
+    <!-- Sprite dentro ogni cella -->
     <g
       v-for="d in placements"
       :key="d.id"
