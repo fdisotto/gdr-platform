@@ -939,6 +939,10 @@ function onSvgClickCapture(e: MouseEvent) {
       @touchend="onTouchEnd"
     >
       <defs>
+        <!-- Bg uniforme: prima era un radial #151a16 → #0b0d0c, ma le
+             celle voronoi hanno fill-opacity ~0.40 e lasciavano
+             trasparire il bg scuro ai bordi → effetto vignetta che si
+             percepiva come "il content si sfuma". Ora uniforme. -->
         <radialGradient
           id="map-bg"
           cx="50%"
@@ -947,7 +951,7 @@ function onSvgClickCapture(e: MouseEvent) {
         >
           <stop
             offset="0%"
-            stop-color="#151a16"
+            stop-color="#0e1110"
           />
           <stop
             offset="100%"
