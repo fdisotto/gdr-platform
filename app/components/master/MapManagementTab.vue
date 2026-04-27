@@ -78,112 +78,129 @@ function onCreated() {
 </script>
 
 <template>
-  <div class="space-y-3">
-    <div class="flex items-center justify-between">
-      <h3
-        class="text-sm font-semibold"
-        style="color: var(--z-text-hi)"
+  <div class="space-y-6">
+    <!-- ── Mappe della party ─────────────────────────────────────────── -->
+    <section>
+      <header
+        class="flex items-center gap-2 mb-2 pb-1.5"
+        style="border-bottom: 1px solid var(--z-border)"
       >
-        Mappe della party
-      </h3>
-      <UButton
-        size="xs"
-        variant="soft"
-        color="primary"
-        :loading="loading"
-        @click="refresh"
-      >
-        Aggiorna
-      </UButton>
-    </div>
+        <span class="text-base">🗺</span>
+        <h3
+          class="text-sm font-semibold uppercase tracking-wide"
+          style="color: var(--z-green-300)"
+        >
+          Mappe
+        </h3>
+        <span
+          class="text-xs"
+          style="color: var(--z-text-lo)"
+        >zone, spawn, transizioni</span>
+        <div class="ml-auto">
+          <UButton
+            size="xs"
+            variant="ghost"
+            color="neutral"
+            icon="i-lucide-refresh-cw"
+            :loading="loading"
+            @click="refresh"
+          />
+        </div>
+      </header>
 
-    <p
-      v-if="loading"
-      class="text-xs italic"
-      style="color: var(--z-text-lo)"
-    >
-      Caricamento…
-    </p>
-    <div
-      v-else-if="maps.length === 0"
-      class="text-xs italic"
-      style="color: var(--z-text-lo)"
-    >
-      Nessuna mappa.
-    </div>
-    <div
-      v-else
-      class="space-y-2"
-    >
-      <div
-        v-for="m in maps"
-        :key="m.id"
-        class="p-3 rounded flex items-center justify-between gap-3"
-        style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
+      <p
+        v-if="loading"
+        class="text-xs italic"
+        style="color: var(--z-text-lo)"
       >
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2">
-            <span
-              class="text-sm font-mono-z truncate"
-              style="color: var(--z-text-hi)"
+        Caricamento…
+      </p>
+      <p
+        v-else-if="maps.length === 0"
+        class="text-xs italic"
+        style="color: var(--z-text-lo)"
+      >
+        Nessuna mappa.
+      </p>
+      <ul
+        v-else
+        class="space-y-2"
+      >
+        <li
+          v-for="m in maps"
+          :key="m.id"
+          class="p-3 rounded flex items-center justify-between gap-3"
+          style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
+        >
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span
+                class="text-sm font-mono-z truncate"
+                style="color: var(--z-text-hi)"
+              >
+                {{ m.name }}
+              </span>
+              <span
+                v-if="m.isSpawn"
+                class="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded"
+                style="background: var(--z-blood-700); color: var(--z-blood-300)"
+              >
+                spawn
+              </span>
+            </div>
+            <p
+              class="text-xs mt-0.5 font-mono-z"
+              style="color: var(--z-text-md)"
             >
-              {{ m.name }}
-            </span>
-            <span
-              v-if="m.isSpawn"
-              class="text-xs px-1.5 py-0.5 rounded"
-              style="background: var(--z-blood-700); color: var(--z-blood-300)"
-            >
-              spawn
-            </span>
+              {{ m.mapTypeId }} · {{ m.memberCount }} membri · {{ m.zombieCount }} zombi
+            </p>
           </div>
-          <p
-            class="text-xs mt-0.5 font-mono-z"
-            style="color: var(--z-text-md)"
-          >
-            tipo: {{ m.mapTypeId }} · membri: {{ m.memberCount }} · zombi: {{ m.zombieCount }}
-          </p>
-        </div>
-        <div class="flex gap-1.5">
-          <UButton
-            size="xs"
-            variant="soft"
-            color="neutral"
-            :disabled="m.isSpawn"
-            @click="setSpawn(m)"
-          >
-            Spawn
-          </UButton>
-          <UButton
-            size="xs"
-            variant="soft"
-            color="neutral"
-            @click="openTransitions(m)"
-          >
-            Porte
-          </UButton>
-          <UButton
-            size="xs"
-            variant="soft"
-            color="error"
-            :disabled="m.isSpawn"
-            @click="deleteMap(m)"
-          >
-            Elimina
-          </UButton>
-        </div>
-      </div>
-    </div>
+          <div class="flex gap-1.5 shrink-0">
+            <UButton
+              size="xs"
+              variant="soft"
+              color="neutral"
+              :disabled="m.isSpawn"
+              title="Imposta come mappa di spawn"
+              @click="setSpawn(m)"
+            >
+              Spawn
+            </UButton>
+            <UButton
+              size="xs"
+              variant="soft"
+              color="neutral"
+              title="Gestisci porte/transizioni"
+              @click="openTransitions(m)"
+            >
+              Porte
+            </UButton>
+            <UButton
+              size="xs"
+              variant="soft"
+              color="error"
+              :disabled="m.isSpawn"
+              title="Elimina mappa"
+              @click="deleteMap(m)"
+            >
+              ×
+            </UButton>
+          </div>
+        </li>
+      </ul>
 
-    <UButton
-      size="sm"
-      variant="solid"
-      color="primary"
-      block
-      @click="showCreate = true"
-    >
-      Crea nuova mappa
-    </UButton>
+      <UButton
+        size="sm"
+        variant="solid"
+        color="primary"
+        class="mt-3"
+        block
+        icon="i-lucide-plus"
+        @click="showCreate = true"
+      >
+        Crea nuova mappa
+      </UButton>
+    </section>
 
     <CreateMapModal
       v-if="showCreate"
