@@ -88,6 +88,35 @@ export function upsertAdjacencyOverride(db: Db, input: UpsertAdjacencyOverrideIn
   }
 }
 
+// Applica una lista di override ('add' / 'remove') a un'adjacency base
+// e restituisce il grafo effettivo. Il client fa lo stesso lato view —
+// usato dal server in handleMoveRequest per validare il movimento in
+// modo coerente con quello che il giocatore vede sulla mappa (master
+// può aggiungere/togliere strade dall'edit mode).
+export function applyAdjacencyOverrides(
+  baseAdj: Record<string, readonly string[]>,
+  overrides: ReadonlyArray<{ areaA: string, areaB: string, kind: 'add' | 'remove' }>
+): Record<string, string[]> {
+  const adj: Record<string, Set<string>> = {}
+  for (const k of Object.keys(baseAdj)) {
+    adj[k] = new Set(baseAdj[k])
+  }
+  for (const o of overrides) {
+    if (!adj[o.areaA]) adj[o.areaA] = new Set()
+    if (!adj[o.areaB]) adj[o.areaB] = new Set()
+    if (o.kind === 'add') {
+      adj[o.areaA]!.add(o.areaB)
+      adj[o.areaB]!.add(o.areaA)
+    } else {
+      adj[o.areaA]!.delete(o.areaB)
+      adj[o.areaB]!.delete(o.areaA)
+    }
+  }
+  const out: Record<string, string[]> = {}
+  for (const k of Object.keys(adj)) out[k] = Array.from(adj[k]!)
+  return out
+}
+
 // Cancella un override (restore al comportamento prossimità auto).
 export function deleteAdjacencyOverride(db: Db, partySeed: string, mapId: string, areaA: string, areaB: string): void {
   const [a, b] = normalizePair(areaA, areaB)

@@ -22,7 +22,7 @@ import { pickFanoutRecipients } from '~~/server/ws/fanout'
 import { isAreaId, areAdjacent } from '~~/shared/map/areas'
 import { isAreaClosed } from '~~/server/services/area-access'
 import { upsertOverride, deleteOverride, listOverridesForParty } from '~~/server/services/area-overrides'
-import { upsertAdjacencyOverride, deleteAdjacencyOverride, listAdjacencyOverridesForParty, normalizePair } from '~~/server/services/area-adjacency'
+import { upsertAdjacencyOverride, deleteAdjacencyOverride, listAdjacencyOverridesForParty, normalizePair, applyAdjacencyOverrides } from '~~/server/services/area-adjacency'
 import { markVisited, listVisitedForParty } from '~~/server/services/area-visits'
 import { listPartyMaps, findPartyMap } from '~~/server/services/party-maps'
 import { listTransitionsForParty, findTransition } from '~~/server/services/map-transitions'
@@ -449,7 +449,13 @@ async function handleMoveRequest(peer: Peer, raw: unknown) {
       }
 
       if (!isMaster) {
-        const adj = gm.adjacency[fromAreaId] ?? []
+        // Applica gli adjacency override del master alla adjacency base
+        // del generator: il client fa la stessa cosa per disegnare le
+        // strade, quindi il check di reachability deve combaciare.
+        const overrides = listAdjacencyOverridesForParty(db, conn.partySeed)
+          .filter(o => o.mapId === currentMapId)
+        const effectiveAdj = applyAdjacencyOverrides(gm.adjacency, overrides)
+        const adj = effectiveAdj[fromAreaId] ?? []
         if (!adj.includes(toAreaId)) {
           sendJson(peer, { type: 'error', code: 'not_adjacent' })
           return
