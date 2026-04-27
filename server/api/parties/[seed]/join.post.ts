@@ -1,8 +1,10 @@
 import { createError } from 'h3'
 import { JoinPartyBody } from '~~/shared/protocol/http'
 import { joinParty, listOnlinePlayers } from '~~/server/services/players'
-import { partyMustExist, touchParty } from '~~/server/services/parties'
+import { listMasters, partyMustExist, touchParty } from '~~/server/services/parties'
 import { listAreasState } from '~~/server/services/areas'
+import { listEnabledAutoDmsForTrigger } from '~~/server/services/auto-dms'
+import { insertMessage } from '~~/server/services/messages'
 import {
   findActiveByToken, consumeInvite
 } from '~~/server/services/party-invites'
@@ -50,6 +52,29 @@ export default defineEventHandler(async (event) => {
     const player = joinParty(db, seed, body.displayName, { userId: me.id })
     if (inviteUsedId) consumeInvite(db, inviteUsedId, me.id)
     touchParty(db, seed)
+
+    // Auto-DM on_join: invia missive automatiche al nuovo player. Se non
+    // esiste alcun master attivo, salta (l'autore deve essere un player
+    // valido per le FK su messages.authorPlayerId).
+    const autoDms = listEnabledAutoDmsForTrigger(db, seed, 'on_join')
+    if (autoDms.length > 0) {
+      const masters = listMasters(db, seed)
+      const sender = masters[0]
+      if (sender) {
+        for (const dm of autoDms) {
+          insertMessage(db, {
+            partySeed: seed,
+            kind: 'dm',
+            authorPlayerId: sender.id,
+            authorDisplay: sender.nickname,
+            targetPlayerId: player.id,
+            body: dm.body,
+            subject: dm.subject
+          })
+        }
+      }
+    }
+
     const areasState = listAreasState(db, seed)
     const players = listOnlinePlayers(db, seed)
     return {

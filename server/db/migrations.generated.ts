@@ -467,5 +467,21 @@ CREATE INDEX \`area_visits_map_idx\` ON \`area_visits\` (\`party_seed\`,\`map_id
   {
     hash: '0011_condemned_gideon',
     sql: `ALTER TABLE \`messages\` ADD \`subject\` text;`
+  },
+  {
+    hash: '0012_gorgeous_typhoid_mary',
+    sql: `CREATE TABLE \`auto_dms\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`party_seed\` text NOT NULL,
+	\`subject\` text NOT NULL,
+	\`body\` text NOT NULL,
+	\`enabled\` integer DEFAULT true NOT NULL,
+	\`trigger_kind\` text DEFAULT 'on_join' NOT NULL,
+	\`created_at\` integer NOT NULL,
+	\`updated_at\` integer NOT NULL,
+	FOREIGN KEY (\`party_seed\`) REFERENCES \`parties\`(\`seed\`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX \`auto_dms_party_idx\` ON \`auto_dms\` (\`party_seed\`);`
   }
 ]

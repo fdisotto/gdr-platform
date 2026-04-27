@@ -2,12 +2,14 @@ import { useDb } from '~~/server/utils/db'
 import { toH3Error } from '~~/server/utils/http'
 import { requireUser } from '~~/server/utils/auth-middleware'
 import {
-  isMaster, partyMustExist, touchParty
+  isMaster, listMasters, partyMustExist, touchParty
 } from '~~/server/services/parties'
 import { joinParty } from '~~/server/services/players'
 import {
   approveRequest, findRequest, rejectRequest
 } from '~~/server/services/party-join-requests'
+import { listEnabledAutoDmsForTrigger } from '~~/server/services/auto-dms'
+import { insertMessage } from '~~/server/services/messages'
 import { DomainError } from '~~/shared/errors'
 
 // v2b: master approva una richiesta. Internamente invoca joinParty con i
@@ -31,8 +33,9 @@ export default defineEventHandler(async (event) => {
     if (req.status !== 'pending') {
       throw new DomainError('conflict', `not pending (${req.status})`)
     }
+    let joined
     try {
-      joinParty(db, seed, req.displayName, { userId: req.userId })
+      joined = joinParty(db, seed, req.displayName, { userId: req.userId })
     } catch (e) {
       if (e instanceof DomainError && e.code === 'conflict') {
         // Auto-rifiuta la richiesta per sbloccare la coda.
@@ -42,6 +45,27 @@ export default defineEventHandler(async (event) => {
     }
     approveRequest(db, id, me.id)
     touchParty(db, seed)
+
+    // Auto-DM on_join: stesso hook del join diretto, vale anche quando il
+    // master approva manualmente la richiesta. Sender = primo master.
+    const autoDms = listEnabledAutoDmsForTrigger(db, seed, 'on_join')
+    if (autoDms.length > 0) {
+      const sender = listMasters(db, seed)[0]
+      if (sender) {
+        for (const dm of autoDms) {
+          insertMessage(db, {
+            partySeed: seed,
+            kind: 'dm',
+            authorPlayerId: sender.id,
+            authorDisplay: sender.nickname,
+            targetPlayerId: joined.id,
+            body: dm.body,
+            subject: dm.subject
+          })
+        }
+      }
+    }
+
     return { ok: true }
   } catch (e) {
     toH3Error(e)

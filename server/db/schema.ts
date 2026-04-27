@@ -18,6 +18,24 @@ export const parties = sqliteTable('parties', {
   fogEnabled: integer('fog_enabled', { mode: 'boolean' }).notNull().default(true)
 })
 
+// v2d-auto-dm: missive automatiche gestite dal master. Ogni record è
+// un template (subject + body) che il sistema invia come DM al nuovo
+// player ogni volta che entra (auto-join o dopo approvazione).
+// `enabled=false` la disattiva senza cancellarla. `triggerKind` per
+// future estensioni (per ora solo 'on_join').
+export const autoDms = sqliteTable('auto_dms', {
+  id: text('id').primaryKey(),
+  partySeed: text('party_seed').notNull().references(() => parties.seed, { onDelete: 'cascade' }),
+  subject: text('subject').notNull(),
+  body: text('body').notNull(),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  triggerKind: text('trigger_kind', { enum: ['on_join'] }).notNull().default('on_join'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull()
+}, t => [
+  index('auto_dms_party_idx').on(t.partySeed)
+])
+
 export const players = sqliteTable('players', {
   id: text('id').primaryKey(),
   partySeed: text('party_seed').notNull().references(() => parties.seed, { onDelete: 'cascade' }),

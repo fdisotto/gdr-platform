@@ -8,6 +8,7 @@ import { useActiveMapAreas } from '~/composables/useActiveMapAreas'
 import PartySettingsTab from '~/components/master/PartySettingsTab.vue'
 import MembersTab from '~/components/master/MembersTab.vue'
 import MapManagementTab from '~/components/master/MapManagementTab.vue'
+import AutoDmsTab from '~/components/master/AutoDmsTab.vue'
 
 const seed = usePartySeed()
 const tools = useMasterToolsStore(seed)
@@ -15,7 +16,7 @@ const connection = usePartyConnections().open(seed)
 const party = usePartyStore(seed)
 const activeMapAreas = useActiveMapAreas(seed)
 
-type Tab = 'tools' | 'world' | 'settings' | 'members' | 'log'
+type Tab = 'tools' | 'world' | 'settings' | 'members' | 'auto-dms' | 'log'
 
 // Tab raggruppate per area funzionale. Tutta la gestione membri
 // (master, inviti, richieste, banditi) vive in una sola tab "Membri"
@@ -39,7 +40,8 @@ const TAB_GROUPS: TabGroup[] = [
     label: 'Party',
     tabs: [
       { id: 'settings', label: 'Impostazioni', icon: '⚙' },
-      { id: 'members', label: 'Membri', icon: '👥' }
+      { id: 'members', label: 'Membri', icon: '👥' },
+      { id: 'auto-dms', label: 'Missive auto', icon: '✉' }
     ]
   },
   {
@@ -445,6 +447,9 @@ const decodedActions = computed(() => {
 
       <!-- MEMBERS: master + inviti + richieste + banditi tutto insieme -->
       <MembersTab v-else-if="activeTab === 'members'" />
+
+      <!-- AUTO DMS -->
+      <AutoDmsTab v-else-if="activeTab === 'auto-dms'" />
 
       <!-- WORLD -->
       <MapManagementTab v-else-if="activeTab === 'world'" />
