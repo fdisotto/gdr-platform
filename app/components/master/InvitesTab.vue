@@ -95,27 +95,24 @@ onMounted(load)
 </script>
 
 <template>
+  <!-- Reso dentro MembersTab che fornisce l'header '✉ Inviti'. Qua
+       solo l'azione 'genera' e la lista. -->
   <div class="space-y-3">
-    <div class="flex items-center justify-between">
-      <h4
-        class="text-xs uppercase tracking-wide"
-        style="color: var(--z-text-md)"
-      >
-        Inviti
-      </h4>
+    <div class="flex justify-end">
       <UButton
         size="xs"
         color="primary"
+        icon="i-lucide-plus"
         :loading="busy"
         @click="generate"
       >
-        Genera nuovo invito
+        Genera invito
       </UButton>
     </div>
 
     <p
       v-if="!items.length"
-      class="text-xs italic"
+      class="text-xs italic px-1"
       style="color: var(--z-text-lo)"
     >
       Nessun invito generato.

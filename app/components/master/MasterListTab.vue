@@ -15,9 +15,7 @@ const feedback = useErrorFeedback()
 const busy = ref(false)
 const leaveBusy = ref(false)
 
-const masters = computed(() => party.players.filter(p => p.role === 'master'))
 const users = computed(() => party.players.filter(p => p.role === 'user'))
-const masterCount = computed(() => masters.value.length)
 
 // La lista players viene popolata dallo state:init col solo nickname/role,
 // non userId. Per promote/demote serve userId. La risolveremo pescando dal
@@ -107,60 +105,54 @@ async function leaveParty() {
 </script>
 
 <template>
-  <div class="space-y-4">
-    <section
-      class="rounded-md p-3 space-y-2"
-      style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
-    >
-      <h4
-        class="text-xs uppercase tracking-wide"
-        style="color: var(--z-text-md)"
+  <!-- Reso dentro MembersTab che già fornisce l'header '👑 Master':
+       qua dentro mostriamo solo lista master + lista giocatori, e in
+       coda un piccolo footer 'Esci dalla party' come azione personale. -->
+  <div class="space-y-3">
+    <ul class="space-y-1.5 text-sm">
+      <li
+        v-for="m in masterMembers"
+        :key="m.playerId"
+        class="flex items-center justify-between gap-2 px-3 py-1.5 rounded"
+        style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
       >
-        Master ({{ masterMembers.length || masterCount }})
-      </h4>
-      <ul class="space-y-1 text-sm">
-        <li
-          v-for="m in masterMembers"
-          :key="m.playerId"
-          class="flex items-center justify-between gap-2"
+        <span
+          class="font-semibold"
+          style="color: var(--z-blood-300)"
+        >👑 {{ m.nickname }}</span>
+        <UButton
+          size="xs"
+          variant="soft"
+          color="neutral"
+          :disabled="masterMembers.length <= 1 || busy"
+          :title="masterMembers.length <= 1 ? 'Ultimo master, non retrocedibile' : ''"
+          @click="demote(m)"
         >
-          <span style="color: var(--z-blood-300)">{{ m.nickname }}</span>
-          <UButton
-            size="xs"
-            variant="soft"
-            color="neutral"
-            :disabled="masterMembers.length <= 1 || busy"
-            :title="masterMembers.length <= 1 ? 'Ultimo master, non retrocedibile' : ''"
-            @click="demote(m)"
-          >
-            Retrocedi
-          </UButton>
-        </li>
-        <li
-          v-if="!masterMembers.length"
-          class="text-xs italic"
-          style="color: var(--z-text-lo)"
-        >
-          Caricamento…
-        </li>
-      </ul>
-    </section>
+          Retrocedi
+        </UButton>
+      </li>
+      <li
+        v-if="!masterMembers.length"
+        class="text-xs italic px-3"
+        style="color: var(--z-text-lo)"
+      >
+        Caricamento…
+      </li>
+    </ul>
 
-    <section
-      class="rounded-md p-3 space-y-2"
-      style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
-    >
-      <h4
-        class="text-xs uppercase tracking-wide"
-        style="color: var(--z-text-md)"
+    <div class="space-y-1.5">
+      <h5
+        class="text-[10px] uppercase tracking-wider px-1"
+        style="color: var(--z-text-lo)"
       >
         Giocatori ({{ userMembers.length || users.length }})
-      </h4>
-      <ul class="space-y-1 text-sm">
+      </h5>
+      <ul class="space-y-1.5 text-sm">
         <li
           v-for="m in userMembers"
           :key="m.playerId"
-          class="flex items-center justify-between gap-2"
+          class="flex items-center justify-between gap-2 px-3 py-1.5 rounded"
+          style="background: var(--z-bg-800); border: 1px solid var(--z-border)"
         >
           <span style="color: var(--z-text-hi)">{{ m.nickname }}</span>
           <UButton
@@ -170,45 +162,40 @@ async function leaveParty() {
             :disabled="busy"
             @click="promote(m)"
           >
-            Promuovi a master
+            Promuovi
           </UButton>
         </li>
         <li
           v-if="!userMembers.length"
-          class="text-xs italic"
+          class="text-xs italic px-3"
           style="color: var(--z-text-lo)"
         >
           Nessun giocatore.
         </li>
       </ul>
-    </section>
+    </div>
 
-    <section
-      class="rounded-md p-3 space-y-2"
-      style="background: var(--z-bg-800); border: 1px solid var(--z-blood-500)"
+    <!-- Esci dalla party: azione personale, separata visivamente. -->
+    <div
+      class="flex items-center justify-between gap-3 pt-2"
+      style="border-top: 1px dashed var(--z-border)"
     >
-      <h4
-        class="text-xs uppercase tracking-wide"
-        style="color: var(--z-blood-300)"
-      >
-        Esci dalla party
-      </h4>
       <p
-        class="text-xs"
+        class="text-xs flex-1"
         style="color: var(--z-text-md)"
       >
-        Lasci la party. Se sei l'ultimo master devi prima promuovere
+        Lascia la party. Se sei l'ultimo master devi prima promuovere
         qualcun altro o archiviare.
       </p>
       <UButton
         color="error"
-        variant="soft"
-        size="sm"
+        variant="ghost"
+        size="xs"
         :loading="leaveBusy"
         @click="leaveParty"
       >
-        Esci
+        Esci dalla party
       </UButton>
-    </section>
+    </div>
   </div>
 </template>

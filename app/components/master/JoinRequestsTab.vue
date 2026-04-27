@@ -70,28 +70,22 @@ onMounted(load)
 </script>
 
 <template>
+  <!-- Reso dentro MembersTab che fornisce l'header '📥 Richieste'.
+       Qua solo refresh + lista. -->
   <div class="space-y-3">
-    <div class="flex items-center justify-between">
-      <h4
-        class="text-xs uppercase tracking-wide"
-        style="color: var(--z-text-md)"
-      >
-        Richieste di accesso
-      </h4>
+    <div class="flex justify-end">
       <UButton
         size="xs"
         variant="ghost"
         color="neutral"
         icon="i-lucide-refresh-cw"
         @click="load"
-      >
-        Aggiorna
-      </UButton>
+      />
     </div>
 
     <p
       v-if="!items.length"
-      class="text-xs italic"
+      class="text-xs italic px-1"
       style="color: var(--z-text-lo)"
     >
       Nessuna richiesta in attesa.
