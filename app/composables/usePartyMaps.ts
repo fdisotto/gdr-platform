@@ -4,11 +4,11 @@ import type { PartyMapPublic, TransitionPublic } from '~~/shared/protocol/ws'
 
 /**
  * Selettori reattivi sopra `usePartyStore(seed)` per il dominio multi-mappa.
- * - `maps`: lista mappe della party.
+ * - `maps`: lista mappe del party.
  * - `currentMapId`: id mappa attiva del giocatore corrente.
  * - `activeMap`: la mappa puntata da `currentMapId`, o null.
  * - `spawnMap`: la mappa con `isSpawn: true`, o null.
- * - `transitions`: tutte le transitions cross-map della party.
+ * - `transitions`: tutte le transitions cross-map del party.
  * - `transitionsForActiveMap`: subset filtrato per `fromMapId === currentMapId`.
  */
 export function usePartyMaps(seed: string) {

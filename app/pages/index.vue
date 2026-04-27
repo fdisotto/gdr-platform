@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '~/stores/auth'
 import { useAuth } from '~/composables/useAuth'
@@ -29,11 +29,6 @@ if (!authStore.loaded) {
 if (authStore.isSuperadmin) {
   await router.replace('/admin')
 }
-
-const displayName = ref('')
-const visibility = ref<'public' | 'private'>('private')
-const joinPolicy = ref<'auto' | 'request'>('request')
-const creating = ref(false)
 
 const myParties = ref<MyPartyRow[]>([])
 const loadingMyParties = ref(false)
@@ -68,35 +63,6 @@ const formatRelativeShort = (ms: number): string => {
   if (h < 24) return `${h}h fa`
   const d = Math.floor(h / 24)
   return `${d}g fa`
-}
-
-const canCreate = computed(() =>
-  displayName.value.length >= 2
-  && displayName.value.length <= 24
-  && authStore.isUser
-)
-
-async function onCreate() {
-  if (!canCreate.value || creating.value) return
-  creating.value = true
-  try {
-    const res = await $fetch<{ seed: string }>('/api/parties', {
-      method: 'POST',
-      body: {
-        displayName: displayName.value,
-        visibility: visibility.value,
-        joinPolicy: joinPolicy.value
-      }
-    })
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('gdr:my-parties-changed'))
-    }
-    await router.push(`/party/${res.seed}`)
-  } catch (err) {
-    feedback.reportFromError(err)
-  } finally {
-    creating.value = false
-  }
 }
 
 async function onLogout() {
@@ -187,7 +153,7 @@ async function onLogout() {
           </div>
         </div>
 
-        <!-- Le tue party: mostrate per prime se ce ne sono. -->
+        <!-- I tuoi party: mostrate per prime se ce ne sono. -->
         <section
           v-if="myParties.length > 0"
           class="space-y-2 pt-4"
@@ -197,7 +163,7 @@ async function onLogout() {
             class="text-sm uppercase tracking-wide"
             style="color: var(--z-text-md)"
           >
-            Le tue party
+            I tuoi party
           </h2>
           <ul class="space-y-1.5">
             <li
@@ -229,121 +195,55 @@ async function onLogout() {
           class="text-xs italic pt-4"
           style="color: var(--z-text-lo); border-top: 1px solid var(--z-border)"
         >
-          Caricamento delle tue party…
+          Caricamento dei tuoi party…
         </p>
         <p
           v-else
           class="text-xs italic pt-4"
           style="color: var(--z-text-lo); border-top: 1px solid var(--z-border)"
         >
-          Non sei ancora in nessuna party. Sfogliane una pubblica o creane una qui sotto.
+          Non sei ancora in nessun party. Sfogliane una pubblica o creane una qui sotto.
         </p>
 
+        <!-- CTA: due pulsanti grossi side-by-side per crea / sfoglia -->
         <section
-          class="space-y-3 pt-4"
+          class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4"
           style="border-top: 1px solid var(--z-border)"
         >
-          <h2
-            class="text-sm uppercase tracking-wide"
-            style="color: var(--z-text-md)"
+          <NuxtLink
+            to="/parties/new"
+            class="block p-5 rounded text-center hover:opacity-90 transition-opacity"
+            style="background: var(--z-green-700); color: var(--z-green-100); border: 1px solid var(--z-green-300)"
           >
-            Crea una nuova party
-          </h2>
-          <form
-            class="space-y-3"
-            @submit.prevent="onCreate"
-          >
-            <div>
-              <input
-                v-model="displayName"
-                type="text"
-                required
-                minlength="2"
-                maxlength="24"
-                placeholder="Il tuo display name nella party"
-                class="w-full px-3 py-2 rounded font-mono-z text-sm"
-                style="background: var(--z-bg-800); border: 1px solid var(--z-border); color: var(--z-text-hi); outline: none"
-              >
-              <p
-                class="text-xs mt-1"
-                style="color: var(--z-text-lo)"
-              >
-                Verrai inserito come master della nuova party con questo nome.
-              </p>
+            <div class="text-2xl mb-1">
+              ✚
             </div>
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label
-                  class="block text-xs uppercase tracking-wide mb-1"
-                  style="color: var(--z-text-md)"
-                >Visibilità</label>
-                <select
-                  v-model="visibility"
-                  class="w-full px-2 py-2 rounded text-sm"
-                  style="background: var(--z-bg-800); border: 1px solid var(--z-border); color: var(--z-text-hi)"
-                >
-                  <option value="private">
-                    Privata
-                  </option>
-                  <option value="public">
-                    Pubblica
-                  </option>
-                </select>
-              </div>
-              <div>
-                <label
-                  class="block text-xs uppercase tracking-wide mb-1"
-                  style="color: var(--z-text-md)"
-                >Accesso</label>
-                <select
-                  v-model="joinPolicy"
-                  class="w-full px-2 py-2 rounded text-sm"
-                  style="background: var(--z-bg-800); border: 1px solid var(--z-border); color: var(--z-text-hi)"
-                >
-                  <option value="request">
-                    Richiesta
-                  </option>
-                  <option value="auto">
-                    Automatico
-                  </option>
-                </select>
-              </div>
-            </div>
-            <UButton
-              type="submit"
-              color="primary"
-              :loading="creating"
-              :disabled="!canCreate"
-              block
-            >
+            <div class="text-sm font-semibold">
               Crea party
-            </UButton>
-          </form>
-        </section>
-
-        <section
-          class="space-y-2 pt-4"
-          style="border-top: 1px solid var(--z-border)"
-        >
-          <h2
-            class="text-sm uppercase tracking-wide"
-            style="color: var(--z-text-md)"
-          >
-            Sfoglia party esistenti
-          </h2>
-          <p
-            class="text-xs"
-            style="color: var(--z-text-lo)"
-          >
-            Cerca party pubbliche, entra direttamente o richiedi l'accesso
-            alle party con join su richiesta.
-          </p>
+            </div>
+            <p
+              class="text-xs mt-1 opacity-80"
+            >
+              Diventi master, scegli visibilita' e ingresso.
+            </p>
+          </NuxtLink>
           <NuxtLink
             to="/parties"
-            class="inline-block px-4 py-2 rounded text-sm"
-            style="background: var(--z-bg-700); color: var(--z-text-hi)"
+            class="block p-5 rounded text-center hover:opacity-90 transition-opacity"
+            style="background: var(--z-bg-800); color: var(--z-text-hi); border: 1px solid var(--z-border)"
           >
-            Vai al browser party
+            <div class="text-2xl mb-1">
+              🔍
+            </div>
+            <div class="text-sm font-semibold">
+              Sfoglia party
+            </div>
+            <p
+              class="text-xs mt-1"
+              style="color: var(--z-text-md)"
+            >
+              Entra in un party pubblico o chiedi accesso.
+            </p>
           </NuxtLink>
         </section>
       </template>

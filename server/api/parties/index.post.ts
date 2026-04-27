@@ -40,6 +40,8 @@ export default defineEventHandler(async (event) => {
       userId: me.id,
       displayName: body.displayName,
       cityName: body.cityName,
+      mapName: body.mapName,
+      mapTypeId: body.mapTypeId,
       visibility: body.visibility,
       joinPolicy: body.joinPolicy
     })

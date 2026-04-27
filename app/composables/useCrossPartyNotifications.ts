@@ -6,11 +6,11 @@
  * party "in primo piano" (rotta corrente `/party/<seed>`), incrementiamo
  * un contatore di unread per la tab e — se è un messaggio diretto al
  * giocatore (dm o whisper a me) — emettiamo un toast con click handler che
- * naviga alla party + suono di notifica.
+ * naviga alil party + suono di notifica.
  *
  * Singleton modulo-level: tutte le connection scrivono qui via
  * `bumpUnread`/`bumpDirect`, la tab bar legge via `unreadFor`/`directFor`,
- * la party page chiama `clear(seed)` quando entra in foreground.
+ * il party page chiama `clear(seed)` quando entra in foreground.
  */
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -99,7 +99,7 @@ export function useCrossPartyNotifications(): CrossPartyNotifications {
     if (cityName) setCityName(seed, cityName)
     const fg = _foregroundSeed()
     // I dm/whisper diretti li notifichiamo sempre (a meno che siano
-    // sulla party in primo piano, che li gestisce in chat).
+    // sulil party in primo piano, che li gestisce in chat).
     if (fg === seed) return
     directs.value = { ...directs.value, [seed]: (directs.value[seed] ?? 0) + 1 }
     if (settings.notificationsEnabled) playNotificationSound('dm')

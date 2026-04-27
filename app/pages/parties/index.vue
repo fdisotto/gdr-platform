@@ -213,7 +213,7 @@ const canRender = computed(() => authStore.isUser)
         color="primary"
         @click="openCreate"
       >
-        Crea nuova party
+        Crea nuovo party
       </UButton>
     </header>
 
@@ -348,7 +348,7 @@ const canRender = computed(() => authStore.isUser)
         class="text-sm italic text-center py-4"
         style="color: var(--z-text-lo)"
       >
-        Nessuna party trovata.
+        Nessun party trovata.
       </li>
       <li
         ref="sentinel"
@@ -367,7 +367,7 @@ const canRender = computed(() => authStore.isUser)
       class="text-sm italic"
       style="color: var(--z-text-md)"
     >
-      Devi essere autenticato per sfogliare le party.
+      Devi essere autenticato per sfogliare i party.
       <NuxtLink
         to="/login"
         style="color: var(--z-green-300); text-decoration: underline"
@@ -458,7 +458,7 @@ const canRender = computed(() => authStore.isUser)
           class="font-semibold"
           style="color: var(--z-green-300)"
         >
-          Crea nuova party
+          Crea nuovo party
         </h2>
         <div>
           <label

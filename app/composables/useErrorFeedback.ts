@@ -1,7 +1,7 @@
 import { useFeedbackStore, type ToastLevel, type BlockingError } from '~/stores/feedback'
 
 // Mappa codici server → presentazione utente in italiano.
-// Alcuni codici sono "bloccanti": chiudono la party con modal fullscreen.
+// Alcuni codici sono "bloccanti": chiudono il party con modal fullscreen.
 // Gli altri sono toast non-bloccanti.
 
 interface ToastSpec {
@@ -29,7 +29,7 @@ const TOAST_MAP: Record<string, ToastSpec> = {
   weak_password: { level: 'warn', title: 'Password troppo debole (minimo 8 caratteri)' },
   invalid_username: { level: 'warn', title: 'Username non valido' },
   must_reset_first: { level: 'warn', title: 'Devi cambiare password prima di continuare' },
-  not_member: { level: 'warn', title: 'Non sei membro di questa party' },
+  not_member: { level: 'warn', title: 'Non sei membro di questo party' },
   // v2b: multi-party
   private_party: { level: 'warn', title: 'Party privata, serve un invito' },
   request_required: { level: 'info', title: 'Devi richiedere l\'accesso' },
@@ -59,12 +59,12 @@ interface BlockingSpec {
 const BLOCKING_MAP: Record<string, BlockingSpec> = {
   session_invalid: {
     title: 'Sessione non valida',
-    body: 'La tua sessione locale non è più riconosciuta. Torna alla home e rientra nella party.',
+    body: 'La tua sessione locale non è più riconosciuta. Torna alla home e rientra nelil party.',
     cta: 'Torna alla home'
   },
   session_superseded: {
     title: 'Sessione sostituita',
-    body: 'Hai aperto la party in un\'altra finestra: questa sessione è stata chiusa.',
+    body: 'Hai aperto il party in un\'altra finestra: questa sessione è stata chiusa.',
     cta: 'Torna alla home'
   },
   session_expired: {
@@ -74,17 +74,17 @@ const BLOCKING_MAP: Record<string, BlockingSpec> = {
   },
   kicked: {
     title: 'Sei stato espulso',
-    body: 'Il master ti ha rimosso dalla party.',
+    body: 'Il master ti ha rimosso dal party.',
     cta: 'Torna alla home'
   },
   banned: {
     title: 'Sei stato bannato',
-    body: 'Il master ha bandito questo nickname dalla party. Non puoi rientrare con lo stesso nickname.',
+    body: 'Il master ha bandito questo nickname dal party. Non puoi rientrare con lo stesso nickname.',
     cta: 'Torna alla home'
   },
   // v2b: party archiviata (auto-archive 30g o azione master).
   archived: {
-    title: 'Party archiviata',
+    title: 'Party archiviato',
     body: 'Questa party non è più attiva. Solo un superadmin può ripristinarla.',
     cta: 'Torna alla home'
   },

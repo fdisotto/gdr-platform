@@ -65,11 +65,11 @@ function toggleFog() {
 
 // ── Archive ───────────────────────────────────────────────────────────
 async function archive() {
-  if (!confirm('Archiviare questa party? Verrà chiusa per tutti e non sarà più visibile.')) return
+  if (!confirm('Archiviare questo party? Verrà chiusa per tutti e non sarà più visibile.')) return
   archiving.value = true
   try {
     await $fetch(`/api/parties/${seed}/archive`, { method: 'POST' })
-    feedbackStore.pushToast({ level: 'info', title: 'Party archiviata' })
+    feedbackStore.pushToast({ level: 'info', title: 'Party archiviato' })
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gdr:my-parties-changed'))
     }
@@ -84,7 +84,7 @@ async function archive() {
 
 <template>
   <div class="space-y-6">
-    <!-- ── Identità della party ────────────────────────────────────────── -->
+    <!-- ── Identità del party ────────────────────────────────────────── -->
     <section>
       <header
         class="flex items-center gap-2 mb-2 pb-1.5"
@@ -196,7 +196,7 @@ async function archive() {
         class="text-xs italic mt-2"
         style="color: var(--z-text-lo)"
       >
-        Visibilità e politica di ingresso sono fissati alla creazione della party.
+        Visibilità e politica di ingresso sono fissati alla creazione del party.
       </p>
     </section>
 
@@ -259,7 +259,7 @@ async function archive() {
           class="text-xs flex-1"
           style="color: var(--z-text-md)"
         >
-          Archivia la party: chiusa per tutti i giocatori connessi e rimossa dal browser. Operazione permanente.
+          Archivia il party: chiusa per tutti i giocatori connessi e rimossa dal browser. Operazione permanente.
         </p>
         <UButton
           color="error"

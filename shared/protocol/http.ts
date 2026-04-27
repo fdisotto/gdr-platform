@@ -18,7 +18,12 @@ export type PartyJoinPolicy = z.infer<typeof PartyJoinPolicy>
 
 export const CreatePartyBody = z.object({
   displayName: Nickname,
+  // Nome del party (visualizzato nell'header, default "Città" generato).
   cityName: z.string().min(1).max(64).optional(),
+  // Nome della prima mappa generata. Default "Mappa principale".
+  mapName: z.string().min(1).max(64).optional(),
+  // Tipo della prima mappa: city (default), country, wasteland.
+  mapTypeId: z.enum(['city', 'country', 'wasteland']).optional(),
   visibility: PartyVisibility.optional(),
   joinPolicy: PartyJoinPolicy.optional()
 })

@@ -94,7 +94,7 @@ const effectiveAreas = computed<readonly Area[]>(() => {
 })
 
 // v2d-roads: mappa coppia normalizzata "a::b" → roadKind override.
-// Popolata dagli adjacency overrides della party con kind='add' e
+// Popolata dagli adjacency overrides del party con kind='add' e
 // roadKind != null, filtrati per la mappa attiva.
 const roadKindsByPair = computed<Map<string, RoadKind>>(() => {
   const m = new Map<string, RoadKind>()

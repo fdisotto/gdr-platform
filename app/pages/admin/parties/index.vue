@@ -224,7 +224,7 @@ function fmtDate(ms: number): string {
       class="text-xs italic"
       style="color: var(--z-text-lo)"
     >
-      Nessuna party.
+      Nessun party.
     </p>
     <p
       v-else

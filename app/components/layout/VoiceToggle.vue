@@ -198,7 +198,7 @@ if (typeof window !== 'undefined') {
         class="text-xs uppercase tracking-wide mb-2"
         style="color: var(--z-text-md)"
       >
-        {{ isMasterGlobal ? 'Voci — tutta la party' : 'Voci nell area' }}
+        {{ isMasterGlobal ? 'Voci — tutta il party' : 'Voci nell area' }}
       </h4>
       <div
         v-if="party.me?.role === 'master'"
@@ -212,7 +212,7 @@ if (typeof window !== 'undefined') {
           :style="settings.masterVoiceScope === scope
             ? 'background: var(--z-blood-700); color: var(--z-blood-300)'
             : 'background: var(--z-bg-800); color: var(--z-text-md)'"
-          :title="scope === 'zone' ? 'Parla solo nella zona corrente' : 'Parla con tutta la party'"
+          :title="scope === 'zone' ? 'Parla solo nella zona corrente' : 'Parla con tutta il party'"
           @click="settings.setMasterVoiceScope(scope)"
         >
           {{ scope === 'zone' ? 'Zona' : 'Globale' }}
@@ -316,7 +316,7 @@ if (typeof window !== 'undefined') {
         class="text-xs italic"
         style="color: var(--z-text-lo)"
       >
-        {{ isMasterGlobal ? 'Nessun altro player nella party.' : 'Nessun altro player nell area corrente.' }}
+        {{ isMasterGlobal ? 'Nessun altro player nelil party.' : 'Nessun altro player nell area corrente.' }}
       </p>
     </div>
   </div>

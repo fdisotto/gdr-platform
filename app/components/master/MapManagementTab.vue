@@ -6,7 +6,7 @@ import { useErrorFeedback } from '~/composables/useErrorFeedback'
 import CreateMapModal from '~/components/master/CreateMapModal.vue'
 import TransitionsModal from '~/components/master/TransitionsModal.vue'
 
-// v2d: pannello master per gestire le mappe della party.
+// v2d: pannello master per gestire le mappe del party.
 // La lista mappe è caricata via $fetch su `/api/parties/:seed/maps` per
 // garantire dati aggiornati sui conteggi (members, zombies). Lo store
 // `partyStore.maps` dipende dal payload state:init via WS e potrebbe avere
@@ -109,7 +109,7 @@ function onCreated() {
 
 <template>
   <div class="space-y-6">
-    <!-- ── Mappe della party ─────────────────────────────────────────── -->
+    <!-- ── Mappe del party ─────────────────────────────────────────── -->
     <section>
       <header
         class="flex items-center gap-2 mb-2 pb-1.5"

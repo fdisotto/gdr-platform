@@ -42,11 +42,11 @@ async function profile() {
 
 async function leaveParty() {
   if (leaving.value) return
-  if (!confirm('Esci dalla party? Potrai rientrare se è pubblica.')) return
+  if (!confirm('Esci dal party? Potrai rientrare se è pubblica.')) return
   leaving.value = true
   try {
     await $fetch(`/api/parties/${seed}/leave`, { method: 'POST' })
-    feedbackStore.pushToast({ level: 'info', title: 'Uscito dalla party' })
+    feedbackStore.pushToast({ level: 'info', title: 'Uscito dal party' })
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gdr:my-parties-changed'))
     }
@@ -155,7 +155,7 @@ if (typeof window !== 'undefined') {
           name="i-lucide-log-out"
           class="size-4"
         />
-        Esci da questa party
+        Esci da questo party
       </button>
       <button
         type="button"

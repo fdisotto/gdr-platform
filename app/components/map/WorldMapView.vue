@@ -10,7 +10,7 @@ import { generate } from '~~/shared/map/generators'
 import type { GeneratedMap } from '~~/shared/map/generators/types'
 import type { PartyMapPublic } from '~~/shared/protocol/ws'
 
-// v2d-world: vista mondo. Tile per ogni mappa della party con miniatura
+// v2d-world: vista mondo. Tile per ogni mappa del party con miniatura
 // Voronoi a bassa risoluzione (200×140), nome, tipo, badge isSpawn,
 // linee tratteggiate per le transition cross-map. Fog of war:
 // - master: vede tutte le mappe e tutte le aree.
@@ -196,7 +196,7 @@ function selectTile(idx: number) {
           style="color: var(--z-text-md)"
         >
           {{ party.maps.length }} mappe ·
-          {{ isMaster ? 'visione master (no fog)' : 'mappe esplorate dalla party' }}
+          {{ isMaster ? 'visione master (no fog)' : 'mappe esplorate dal party' }}
         </p>
       </div>
       <UButton

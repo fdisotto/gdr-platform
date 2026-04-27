@@ -85,7 +85,7 @@ describe('useErrorFeedback', () => {
     expect(fb.toasts).toHaveLength(0)
     expect(fb.blocking).not.toBeNull()
     expect(fb.blocking!.code).toBe('archived')
-    expect(fb.blocking!.title).toMatch(/archiviata/i)
+    expect(fb.blocking!.title).toMatch(/archiviat[oa]/i)
   })
 
   it('party_limit (v2b) → toast warn', () => {

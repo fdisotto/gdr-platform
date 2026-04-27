@@ -59,7 +59,7 @@ async function doJoin() {
       method: 'POST',
       body: { displayName: joinDisplayName.value }
     })
-    feedbackStore.pushToast({ level: 'info', title: 'Ti sei unito alla party' })
+    feedbackStore.pushToast({ level: 'info', title: 'Ti sei unito alil party' })
     // Dopo close 4003 la connection è in stato 'closed' con closedFlag=true;
     // bisogna prima rimuoverla dalla mappa per poter riaprirne una pulita.
     conns.close(seed)
@@ -87,7 +87,7 @@ onBeforeRouteLeave(() => {
 
 <template>
   <div class="flex flex-col h-full overflow-hidden">
-    <!-- Form "unisciti a questa party" (only se il server ha risposto not_member) -->
+    <!-- Form "unisciti a questo party" (only se il server ha risposto not_member) -->
     <main
       v-if="connection.notMember.value"
       class="flex-1 flex items-center justify-center p-8"
@@ -98,13 +98,13 @@ onBeforeRouteLeave(() => {
             class="text-2xl font-bold"
             style="color: var(--z-green-300)"
           >
-            Unisciti alla party
+            Unisciti alil party
           </h1>
           <p
             class="text-sm"
             style="color: var(--z-text-md)"
           >
-            Non sei ancora membro di questa party. Scegli un display name
+            Non sei ancora membro di questo party. Scegli un display name
             per entrare.
           </p>
         </header>
@@ -132,7 +132,7 @@ onBeforeRouteLeave(() => {
               class="text-xs mt-1"
               style="color: var(--z-text-lo)"
             >
-              2–24 caratteri; come ti vedranno gli altri in questa party.
+              2–24 caratteri; come ti vedranno gli altri in questo party.
             </p>
           </div>
           <UButton

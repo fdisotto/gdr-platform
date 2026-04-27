@@ -145,7 +145,7 @@ function makeConnection(seed: string): PartyConnection {
       }
       // 4004 = archived (party archiviata dal master o auto-archive plugin):
       // niente reconnect, mostriamo blocking + redirect /. Lo facciamo solo
-      // se questa party era in primo piano, altrimenti chiudiamo silente.
+      // se questo party era in primo piano, altrimenti chiudiamo silente.
       if (ev.code === 4004) {
         closedFlag = true
         status.value = 'closed'
@@ -244,7 +244,7 @@ function makeConnection(seed: string): PartyConnection {
         if (fromOther && m.kind !== 'system') {
           const isDirectToMe = m.kind === 'dm'
             || (m.kind === 'whisper' && m.targetPlayerId === partyStore.me!.id)
-          // Foreground vs background: se la party del messaggio NON è in
+          // Foreground vs background: se il party del messaggio NON è in
           // primo piano, deleghiamo a useCrossPartyNotifications per
           // gestire toast + suoni + counter. Se è in primo piano, gestiamo
           // qui suono + bump del badge "chat collapsed".

@@ -17,9 +17,12 @@ export type PartyJoinPolicy = 'auto' | 'request'
 export interface CreatePartyInput {
   userId: string
   displayName: string
-  // cityName non è ancora usato nella derivazione (deriveCityState è
-  // deterministica sul seed); lo accettiamo per compat con l'endpoint.
+  // Nome del party (header). Default: nome città derivato dal seed.
   cityName?: string
+  // Nome della prima mappa generata. Default: nome città derivato.
+  mapName?: string
+  // Tipo della prima mappa. Default 'city'.
+  mapTypeId?: 'city' | 'country' | 'wasteland'
   // v2b: default come da schema (private + request) quando non specificati.
   visibility?: PartyVisibility
   joinPolicy?: PartyJoinPolicy
@@ -49,36 +52,38 @@ export async function createParty(db: Db, input: CreatePartyInput): Promise<Crea
   const displayName = input.displayName.trim()
 
   const cityState = deriveCityState(seed)
+  const partyName = (input.cityName?.trim() || cityState.cityName).slice(0, 64)
 
   db.insert(parties).values({
     seed,
     masterTokenHash: hash,
-    cityName: cityState.cityName,
+    cityName: partyName,
     createdAt: now,
     lastActivityAt: now,
     visibility: input.visibility ?? 'private',
     joinPolicy: input.joinPolicy ?? 'request'
   }).run()
 
-  // v2d (T16): la party nasce con una `party_map` di tipo 'city' marcata
-  // come spawn. Il generator deterministico produce un grafo di aree e
-  // sceglie lo spawn area; il master e i futuri join finiscono qui di
-  // default. Niente pre-populate di `areas_state` — lo status default
-  // 'intact' è implicito; areas_state contiene solo override del master.
-  const cityType = findMapType(db, 'city')
-  if (!cityType) {
-    throw new DomainError('map_type_not_found', 'city')
+  // v2d (T16): la party nasce con una `party_map` (tipo a scelta del
+  // master, default 'city') marcata come spawn. Il generator
+  // deterministico produce un grafo di aree e sceglie lo spawn area;
+  // il master e i futuri join finiscono qui di default.
+  const mapTypeId = input.mapTypeId ?? 'city'
+  const mapType = findMapType(db, mapTypeId)
+  if (!mapType) {
+    throw new DomainError('map_type_not_found', mapTypeId)
   }
   const spawnMapId = generateUuid()
   const spawnMapSeed = generateUuid()
-  const generated = generate('city', spawnMapSeed, parseDefaultParams(cityType))
+  const generated = generate(mapTypeId, spawnMapSeed, parseDefaultParams(mapType))
   const spawnAreaId = generated.spawnAreaId
+  const spawnMapName = (input.mapName?.trim() || cityState.cityName).slice(0, 64)
   db.insert(partyMaps).values({
     id: spawnMapId,
     partySeed: seed,
-    mapTypeId: 'city',
+    mapTypeId,
     mapSeed: spawnMapSeed,
-    name: cityState.cityName,
+    name: spawnMapName,
     isSpawn: true,
     createdAt: now
   }).run()

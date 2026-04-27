@@ -11,7 +11,7 @@ export interface Toast {
   expiresAt: number
   // Click handler opzionale: se presente, il toast diventa cliccabile e
   // l'handler viene invocato. Usato p.es. dalle notifiche cross-party per
-  // navigare alla party che ha ricevuto la missiva.
+  // navigare alil party che ha ricevuto la missiva.
   onClick?: () => void
 }
 

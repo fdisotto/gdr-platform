@@ -7,7 +7,7 @@ import InvitesTab from '~/components/master/InvitesTab.vue'
 import JoinRequestsTab from '~/components/master/JoinRequestsTab.vue'
 
 // Pannello unico "Membri": invece di 4 tab separate (Master / Inviti /
-// Richieste / Banditi), tutte le azioni sui partecipanti della party
+// Richieste / Banditi), tutte le azioni sui partecipanti del party
 // vivono qui, divise in sezioni con header riconoscibile.
 const seed = usePartySeed()
 const tools = useMasterToolsStore(seed)
@@ -28,7 +28,7 @@ function formatDate(ms: number): string {
 
 <template>
   <div class="space-y-6">
-    <!-- ── Master della party ─────────────────────────────────────────── -->
+    <!-- ── Master del party ─────────────────────────────────────────── -->
     <section>
       <header
         class="flex items-center gap-2 mb-2 pb-1.5"

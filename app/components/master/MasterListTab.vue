@@ -87,11 +87,11 @@ async function demote(m: MasterMember) {
 
 async function leaveParty() {
   if (leaveBusy.value) return
-  if (!confirm('Uscire dalla party? Potrai rientrare se è pubblica o se ricevi un nuovo invito.')) return
+  if (!confirm('Uscire dal party? Potrai rientrare se è pubblica o se ricevi un nuovo invito.')) return
   leaveBusy.value = true
   try {
     await $fetch(`/api/parties/${seed}/leave`, { method: 'POST' })
-    feedbackStore.pushToast({ level: 'info', title: 'Uscito dalla party' })
+    feedbackStore.pushToast({ level: 'info', title: 'Uscito dal party' })
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gdr:my-parties-changed'))
     }
@@ -107,7 +107,7 @@ async function leaveParty() {
 <template>
   <!-- Reso dentro MembersTab che già fornisce l'header '👑 Master':
        qua dentro mostriamo solo lista master + lista giocatori, e in
-       coda un piccolo footer 'Esci dalla party' come azione personale. -->
+       coda un piccolo footer 'Esci dal party' come azione personale. -->
   <div class="space-y-3">
     <ul class="space-y-1.5 text-sm">
       <li
@@ -175,7 +175,7 @@ async function leaveParty() {
       </ul>
     </div>
 
-    <!-- Esci dalla party: azione personale, separata visivamente. -->
+    <!-- Esci dal party: azione personale, separata visivamente. -->
     <div
       class="flex items-center justify-between gap-3 pt-2"
       style="border-top: 1px dashed var(--z-border)"
@@ -184,7 +184,7 @@ async function leaveParty() {
         class="text-xs flex-1"
         style="color: var(--z-text-md)"
       >
-        Lascia la party. Se sei l'ultimo master devi prima promuovere
+        Lascia il party. Se sei l'ultimo master devi prima promuovere
         qualcun altro o archiviare.
       </p>
       <UButton
@@ -194,7 +194,7 @@ async function leaveParty() {
         :loading="leaveBusy"
         @click="leaveParty"
       >
-        Esci dalla party
+        Esci dal party
       </UButton>
     </div>
   </div>

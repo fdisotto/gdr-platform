@@ -97,16 +97,16 @@ async function transferMaster() {
 }
 
 async function archiveParty() {
-  if (!confirm('Archiviare la party? I membri online verranno disconnessi.')) return
+  if (!confirm('Archiviare il party? I membri online verranno disconnessi.')) return
   try {
     await adminPost(`/api/admin/parties/${seed.value}/archive`)
-    toast.pushToast({ level: 'info', title: 'Party archiviata' })
+    toast.pushToast({ level: 'info', title: 'Party archiviato' })
     await loadDetail()
   } catch { /* report già fatto */ }
 }
 
 async function restoreParty() {
-  if (!confirm('Ripristinare la party?')) return
+  if (!confirm('Ripristinare il party?')) return
   try {
     await adminPost(`/api/admin/parties/${seed.value}/restore`)
     toast.pushToast({ level: 'info', title: 'Party ripristinata' })
@@ -115,7 +115,7 @@ async function restoreParty() {
 }
 
 async function deleteParty() {
-  const v = prompt('Per eliminare definitivamente la party scrivi DELETE in maiuscolo:')
+  const v = prompt('Per eliminare definitivamente il party scrivi DELETE in maiuscolo:')
   if (v !== 'DELETE') {
     if (v !== null) toast.pushToast({ level: 'warn', title: 'Conferma non valida' })
     return
@@ -143,7 +143,7 @@ function fmtDate(ms: number): string {
           class="text-xs"
           style="color: var(--z-text-md); text-decoration: underline"
         >
-          ← Tutte le party
+          ← Tutte i party
         </NuxtLink>
         <h1
           class="text-lg font-semibold mt-1"
@@ -439,7 +439,7 @@ function fmtDate(ms: number): string {
         class="text-xs"
         style="color: var(--z-text-md)"
       >
-        Azioni distruttive sulla party. L'archive disconnette i membri online.
+        Azioni distruttive sulil party. L'archive disconnette i membri online.
         Delete è irreversibile.
       </p>
       <div class="flex gap-2 flex-wrap">

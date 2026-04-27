@@ -34,14 +34,14 @@ const SECTIONS: Section[] = [
     title: 'Limiti',
     defs: [
       { key: 'limits.maxPartiesPerUser', label: 'Max party per utente', description: 'Numero massimo di party a cui un utente può partecipare contemporaneamente.', kind: 'int', defaultValue: 5, min: 1, max: 50 },
-      { key: 'limits.maxMembersPerParty', label: 'Max membri per party', description: 'Tetto rigido sui membri attivi di una party.', kind: 'int', defaultValue: 30, min: 1, max: 500 },
+      { key: 'limits.maxMembersPerParty', label: 'Max membri per party', description: 'Tetto rigido sui membri attivi di un party.', kind: 'int', defaultValue: 30, min: 1, max: 500 },
       { key: 'limits.maxTotalParties', label: 'Max party totali', description: 'Limite globale di party esistenti sulla piattaforma.', kind: 'int', defaultValue: 100, min: 1, max: 10000 },
-      { key: 'limits.partyInactivityArchiveDays', label: 'Giorni inattività auto-archive', description: 'Soglia di inattività oltre la quale una party viene archiviata.', kind: 'int', defaultValue: 30, min: 1, max: 365 },
+      { key: 'limits.partyInactivityArchiveDays', label: 'Giorni inattività auto-archive', description: 'Soglia di inattività oltre la quale un party viene archiviata.', kind: 'int', defaultValue: 30, min: 1, max: 365 },
       { key: 'limits.inviteTtlDays', label: 'TTL invito (giorni)', description: 'Validità di un link invito generato dal master.', kind: 'int', defaultValue: 7, min: 1, max: 60 },
       { key: 'limits.loginRateMaxFailures', label: 'Login fallimenti max', description: 'Massimo tentativi falliti consecutivi prima del lockout.', kind: 'int', defaultValue: 5, min: 1, max: 100 },
       { key: 'limits.loginRateWindowMinutes', label: 'Login finestra (minuti)', description: 'Finestra temporale del rate limiter login.', kind: 'int', defaultValue: 15, min: 1, max: 1440 },
       { key: 'limits.registerRateMaxPerHour', label: 'Registrazioni max/ora', description: 'Massimo numero di nuove registrazioni per indirizzo IP all\'ora.', kind: 'int', defaultValue: 3, min: 1, max: 100 },
-      { key: 'limits.maxMapsPerParty', label: 'Max mappe per party', description: 'Tetto rigido sulle mappe (party_maps) di una singola party.', kind: 'int', defaultValue: 10, min: 1, max: 50 }
+      { key: 'limits.maxMapsPerParty', label: 'Max mappe per party', description: 'Tetto rigido sulle mappe (party_maps) di una singoil party.', kind: 'int', defaultValue: 10, min: 1, max: 50 }
     ]
   },
   {
