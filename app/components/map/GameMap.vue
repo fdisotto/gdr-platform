@@ -235,14 +235,6 @@ const viewBox = computed(() => `0 0 ${containerW.value} ${containerH.value}`)
 const contentScale = computed(() =>
   Math.min(containerW.value / LOGICAL_W, containerH.value / LOGICAL_H)
 )
-// Larghezza del fade ai bordi: piccola (~2% del lato corto, clamp
-// 14-36 px) e con stop gradient concentrati vicino al bordo →
-// solo i pixel piu' esterni sfumano, il resto del contenuto resta
-// pieno.
-const fadePx = computed(() => {
-  const minSide = Math.min(containerW.value, containerH.value)
-  return Math.max(14, Math.min(36, Math.round(minSide * 0.02)))
-})
 const contentTransform = computed(() => {
   const s = contentScale.value
   const tx = (containerW.value - LOGICAL_W * s) / 2
@@ -1142,48 +1134,56 @@ function onSvgClickCapture(e: MouseEvent) {
             stop-opacity="0"
           />
         </linearGradient>
+        <!-- Mask in coord LOGICAL (1000x700): fade ai bordi del rect
+             logico cosi' le celle voronoi vicine al bordo sfumano nel
+             bg solid invece di terminare con la linea netta del LOGICAL.
+             Applicata al gruppo contentTransform (sotto userTransform):
+             user-space = LOGICAL. Fade di 60 unita' LOGICAL per lato. -->
         <mask
           id="map-soft-edge"
           maskUnits="userSpaceOnUse"
           x="0"
           y="0"
-          :width="containerW"
-          :height="containerH"
+          :width="LOGICAL_W"
+          :height="LOGICAL_H"
         >
           <rect
-            :width="containerW"
-            :height="containerH"
+            :width="LOGICAL_W"
+            :height="LOGICAL_H"
             fill="white"
           />
           <rect
-            :width="containerW"
-            :height="fadePx"
+            :width="LOGICAL_W"
+            height="60"
             fill="url(#mask-fade-top)"
           />
           <rect
-            :y="containerH - fadePx"
-            :width="containerW"
-            :height="fadePx"
+            :y="LOGICAL_H - 60"
+            :width="LOGICAL_W"
+            height="60"
             fill="url(#mask-fade-bottom)"
           />
           <rect
-            :width="fadePx"
-            :height="containerH"
+            width="60"
+            :height="LOGICAL_H"
             fill="url(#mask-fade-left)"
           />
           <rect
-            :x="containerW - fadePx"
-            :width="fadePx"
-            :height="containerH"
+            :x="LOGICAL_W - 60"
+            width="60"
+            :height="LOGICAL_H"
             fill="url(#mask-fade-right)"
           />
         </mask>
       </defs>
-      <!-- Bg + grain riempiono l'intero viewBox dinamico: no più letterbox -->
+      <!-- Bg solid identico al body bg: con meet il LOGICAL ha
+           letterbox laterali, e con questo colore identico al
+           contenitore esterno il bordo del LOGICAL diventa invisibile.
+           Niente piu' "quadratone". -->
       <rect
         :width="containerW"
         :height="containerH"
-        fill="url(#map-bg)"
+        fill="#0b0d0c"
       />
       <rect
         :width="containerW"
@@ -1195,8 +1195,12 @@ function onSvgClickCapture(e: MouseEvent) {
 
       <!-- User zoom/pan applicato sopra al fit-to-container -->
       <g :transform="userTransform">
-        <!-- Contenuto logico 1000x700 scalato uniformemente e centrato -->
-        <g :transform="contentTransform">
+        <!-- Contenuto logico 1000x700 scalato uniformemente e centrato.
+             mask: sfuma i bordi del LOGICAL nel bg solid sottostante. -->
+        <g
+          :transform="contentTransform"
+          mask="url(#map-soft-edge)"
+        >
           <!-- v2d-shape-B: layer base — poligoni Voronoi (o rect MVP) come
                sfondo cliccabile, sotto strade/decor/avatar/marker. -->
           <g
